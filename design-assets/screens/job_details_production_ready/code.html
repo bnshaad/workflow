@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Job Details - Workflow</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "on-tertiary-container": "#ffede6",
+                "on-secondary-fixed-variant": "#404754",
+                "on-error-container": "#93000a",
+                "surface-bright": "#faf8ff",
+                "tertiary": "#943700",
+                "on-secondary": "#ffffff",
+                "tertiary-fixed-dim": "#ffb596",
+                "surface-tint": "#0053db",
+                "primary-fixed": "#dbe1ff",
+                "on-primary": "#ffffff",
+                "tertiary-fixed": "#ffdbcd",
+                "primary-fixed-dim": "#b4c5ff",
+                "on-primary-fixed-variant": "#003ea8",
+                "secondary-fixed": "#dce2f3",
+                "inverse-surface": "#2e3039",
+                "error-container": "#ffdad6",
+                "warning": "#F59E0B",
+                "surface-container-high": "#e7e7f3",
+                "on-primary-container": "#eeefff",
+                "inverse-primary": "#b4c5ff",
+                "background": "#F9FAFB",
+                "surface-variant": "#e1e2ed",
+                "on-surface-variant": "#434655",
+                "surface": "#FFFFFF",
+                "on-tertiary": "#ffffff",
+                "on-secondary-container": "#5e6572",
+                "on-surface": "#191b23",
+                "danger": "#EF4444",
+                "surface-container-highest": "#e1e2ed",
+                "success": "#10B981",
+                "inverse-on-surface": "#f0f0fb",
+                "surface-container-low": "#f3f3fe",
+                "outline": "#737686",
+                "text-secondary": "#6B7280",
+                "text-primary": "#111827",
+                "primary": "#004ac6",
+                "on-background": "#191b23",
+                "primary-container": "#2563eb",
+                "on-secondary-fixed": "#151c27",
+                "secondary-container": "#dce2f3",
+                "secondary-fixed-dim": "#c0c7d6",
+                "on-primary-fixed": "#00174b",
+                "on-tertiary-fixed-variant": "#7d2d00",
+                "on-tertiary-fixed": "#360f00",
+                "outline-variant": "#c3c6d7",
+                "error": "#ba1a1a",
+                "border": "#E5E7EB",
+                "secondary": "#585f6c",
+                "surface-container-lowest": "#ffffff",
+                "surface-container": "#ededf9",
+                "tertiary-container": "#bc4800",
+                "on-error": "#ffffff",
+                "surface-dim": "#d9d9e5"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.125rem",
+                "lg": "0.25rem",
+                "xl": "0.5rem",
+                "full": "0.75rem"
+        },
+        "spacing": {
+                "stack-sm": "0.5rem",
+                "container-padding": "2rem",
+                "max-content-width": "1440px",
+                "stack-md": "1rem",
+                "gutter": "1.5rem",
+                "sidebar-width": "240px"
+        },
+        "fontFamily": {
+                "caption": [
+                        "Inter"
+                ],
+                "label-caps": [
+                        "Geist"
+                ],
+                "section-header": [
+                        "Geist"
+                ],
+                "body-sm": [
+                        "Inter"
+                ],
+                "display-md": [
+                        "Geist"
+                ],
+                "display-lg": [
+                        "Geist"
+                ],
+                "body-base": [
+                        "Inter"
+                ]
+        },
+        "fontSize": {
+                "caption": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "label-caps": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.02em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "section-header": [
+                        "18px",
+                        {
+                                "lineHeight": "26px",
+                                "fontWeight": "500"
+                        }
+                ],
+                "body-sm": [
+                        "13px",
+                        {
+                                "lineHeight": "18px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "display-md": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "display-lg": [
+                        "30px",
+                        {
+                                "lineHeight": "38px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-base": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "fontWeight": "400"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c3c6d7;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #737686;
+        }
+        
+        .nav-active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 60%;
+            width: 3px;
+            background-color: #004ac6;
+            border-radius: 0 4px 4px 0;
+        }
+    </style>
+</head>
+<body class="bg-background text-text-primary font-body-base antialiased flex">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col w-[240px] h-screen py-stack-md px-stack-sm bg-surface border-r border-border fixed left-0 top-0 z-50">
+<div class="flex items-center px-4 py-2 mb-8 gap-3">
+<div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-on-primary font-display-md text-display-md">W</div>
+<div>
+<h1 class="font-display-md text-display-md font-bold text-primary leading-tight">Workflow</h1>
+<p class="font-caption text-caption text-text-secondary">Service Pros</p>
+</div>
+</div>
+<button class="mb-6 mx-2 bg-primary text-on-primary font-label-caps text-label-caps py-2 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-on-primary-fixed-variant transition-colors shadow-sm">
+<span class="material-symbols-outlined" style="font-size: 18px;">add</span>
+            New Job
+        </button>
+<ul class="flex-1 space-y-1">
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-md text-text-secondary hover:bg-surface-container-low hover:text-text-primary transition-colors duration-200 ease-in-out font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                    Dashboard
+                </a>
+</li>
+<li class="relative">
+<a class="nav-active flex items-center gap-3 px-4 py-2.5 rounded-md text-primary font-semibold bg-primary-container/10 transition-colors duration-200 ease-in-out font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">assignment</span>
+                    Jobs
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-md text-text-secondary hover:bg-surface-container-low hover:text-text-primary transition-colors duration-200 ease-in-out font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined">group</span>
+                    Team
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-md text-text-secondary hover:bg-surface-container-low hover:text-text-primary transition-colors duration-200 ease-in-out font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined">settings</span>
+                    Settings
+                </a>
+</li>
+</ul>
+<div class="mt-auto pt-4 border-t border-border">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-md text-text-secondary hover:bg-surface-container-low hover:text-text-primary transition-colors duration-200 ease-in-out font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined">help</span>
+                        Support
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-md text-text-secondary hover:bg-surface-container-low hover:text-text-primary transition-colors duration-200 ease-in-out font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined">info</span>
+                        Help
+                    </a>
+</li>
+</ul>
+</div>
+</nav>
+<div class="flex-1 ml-0 md:ml-[240px] flex flex-col min-h-screen">
+<!-- TopNavBar -->
+<header class="sticky top-0 z-40 w-full bg-surface border-b border-border flex justify-between items-center h-16 px-gutter max-w-max-content-width mx-auto">
+<div class="flex items-center gap-6">
+<button class="md:hidden text-text-secondary hover:text-text-primary">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<div class="relative w-64 hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" style="font-size: 18px;">search</span>
+<input class="w-full bg-surface-container-low border border-border rounded-lg pl-9 pr-4 py-1.5 font-body-sm text-body-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" placeholder="Search jobs..." type="text"/>
+</div>
+</div>
+<nav class="hidden md:flex gap-6">
+<a class="text-text-secondary hover:text-text-primary font-body-sm text-body-sm transition-all duration-200 py-5 border-b-2 border-transparent" href="#">Schedule</a>
+<a class="text-text-secondary hover:text-text-primary font-body-sm text-body-sm transition-all duration-200 py-5 border-b-2 border-transparent" href="#">Reports</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="text-text-secondary hover:text-text-primary transition-all duration-200 w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-low">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-text-secondary hover:text-text-primary transition-all duration-200 w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-low">
+<span class="material-symbols-outlined">apps</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-border">
+<img class="w-full h-full object-cover" data-alt="Professional user" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRLri4NGJmimyURx28zXu9rqcGu3bnLZmqLBYeik-b-K6XRnLepMjqHOXTHca9n6U8BVB9_5Z1rEPbIy1epdZT4Fbxu4SO2NLstbty8LutDPdW8kquQBWhP0O3MujZd_-rqjg3ASWU2zDpRLCoUAGSAEnJFp4yBeljrbntFcKTyxxmHxxijjspJk8uifaGL0k0Q8m70sxiIoS8wTOy9fsAfNJ8_vBAOsjy5HDkZHSR2iexAwQDQs6znsZCuRHFnziiEkURYiZvNNpa"/>
+</div>
+<button class="hidden lg:block bg-primary text-on-primary font-label-caps text-label-caps py-1.5 px-4 rounded hover:bg-on-primary-fixed-variant transition-colors">
+                    Create Job
+                </button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 p-gutter max-w-max-content-width w-full mx-auto">
+<!-- Breadcrumbs -->
+<nav class="flex items-center gap-2 font-body-sm text-body-sm text-text-secondary mb-4">
+<a class="hover:text-text-primary transition-colors" href="#">Jobs</a>
+<span class="material-symbols-outlined" style="font-size: 16px;">chevron_right</span>
+<a class="hover:text-text-primary transition-colors" href="#">Maintenance</a>
+<span class="material-symbols-outlined" style="font-size: 16px;">chevron_right</span>
+<span class="text-text-primary font-medium">JOB-4829</span>
+</nav>
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+<div>
+<h1 class="font-display-lg text-display-lg text-text-primary">Annual HVAC Inspection</h1>
+<div class="flex items-center gap-3 mt-2">
+<span class="bg-warning/10 text-warning border border-warning/20 px-2.5 py-0.5 rounded-md font-label-caps text-label-caps flex items-center gap-1">
+<span class="material-symbols-outlined" style="font-size: 14px;">pending</span>
+                            Pending Assignment
+                        </span>
+<span class="font-caption text-caption text-text-secondary flex items-center gap-1">
+<span class="material-symbols-outlined" style="font-size: 14px;">event</span>
+                            Due: Oct 24, 2023
+                        </span>
+</div>
+</div>
+<div class="flex items-center gap-3 w-full md:w-auto">
+<button class="flex-1 md:flex-none px-4 py-2 border border-border bg-surface text-text-primary font-label-caps text-label-caps rounded hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" style="font-size: 16px;">edit</span>
+                        Edit Job
+                    </button>
+<button class="flex-1 md:flex-none px-4 py-2 border border-success text-success bg-surface hover:bg-success hover:text-on-primary font-label-caps text-label-caps rounded transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" style="font-size: 16px;">check_circle</span>
+                        Mark Complete
+                    </button>
+</div>
+</div>
+<!-- Main Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Left Column -->
+<div class="lg:col-span-2 flex flex-col gap-6">
+<!-- 1. Job Information -->
+<section class="bg-surface border border-border rounded-xl p-6">
+<h2 class="font-section-header text-section-header text-text-primary mb-6 border-b border-border pb-2">Job Information</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="space-y-6">
+<div>
+<h4 class="font-label-caps text-label-caps text-text-secondary mb-1">Description</h4>
+<p class="font-body-base text-body-base text-text-primary">Perform annual preventive maintenance on main residential AC unit. Check coolant levels, replace filters, inspect belts, and clear condensation lines. Verify thermostat communication.</p>
+</div>
+</div>
+<div class="space-y-6"></div>
+</div>
+</section>
+<!-- 2. Customer Information -->
+<section class="bg-surface border border-border rounded-xl p-6">
+<h2 class="font-section-header text-section-header text-text-primary mb-6 border-b border-border pb-2">Customer Information</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div>
+<h4 class="font-label-caps text-label-caps text-text-secondary mb-1">Customer Name</h4>
+<p class="font-body-base text-body-base text-text-primary font-medium">Sarah Jenkins</p>
+</div>
+<div>
+<h4 class="font-label-caps text-label-caps text-text-secondary mb-1">Phone</h4>
+<p class="font-body-base text-body-base text-text-primary flex items-center gap-1 mt-1">
+<span class="material-symbols-outlined text-text-secondary" style="font-size: 16px;">call</span> (555) 123-4567
+</p>
+</div>
+<div>
+<h4 class="font-label-caps text-label-caps text-text-secondary mb-1">Service Address</h4>
+<p class="font-body-base text-body-base text-text-primary flex items-start gap-1">
+<span class="material-symbols-outlined text-text-secondary mt-0.5" style="font-size: 16px;">location_on</span> 
+                                123 Maple Street<br/>Springfield, IL 62704
+                            </p>
+</div>
+<div>
+<h4 class="font-label-caps text-label-caps text-text-secondary mb-1">Job Type</h4>
+<p class="font-body-base text-body-base text-text-primary">Maintenance</p>
+</div>
+<div>
+<h4 class="font-label-caps text-label-caps text-text-secondary mb-1">Schedule Date</h4>
+<p class="font-body-base text-body-base text-text-primary">Oct 24, 2023 (13:00 - 17:00)</p>
+</div>
+<div>
+<h4 class="font-label-caps text-label-caps text-text-secondary mb-1">Estimated Duration</h4>
+<p class="font-body-base text-body-base text-text-primary">2.5h</p>
+</div>
+</div>
+</section>
+<!-- 3. Suggested Worker (Hero Section) -->
+<section class="bg-surface border-2 border-primary/20 shadow-md rounded-xl overflow-hidden relative">
+<div class="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-bl-full pointer-events-none"></div>
+<div class="p-8 border-b border-border flex justify-between items-start">
+<div class="flex items-center gap-6">
+<div class="w-16 h-16 rounded-full overflow-hidden border-2 border-primary/30 shadow-sm">
+<img class="w-full h-full object-cover" data-alt="Alex Rivera headshot" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCb_jc9Zzgkk7YET8v8s3AlB7GpZdw7qxDDCwkFrasgNhTcIYwbYDZXbGxDgm1_jdPrgiGXqRxqliwIQNXLNJT3EQb8Jh5-nKCX6CNrwcXR8Prjn0nTSax6TdHZ1N5lRwMM8h-tcPYB9on_bjggntGU1c-kdrrDQEM8F4jQ2PsrD6JrqsgbnlpM-ZvD6AvyPFOpJFN1ACc3ks68fnXovasAkzn9yIrlLKBbU5yozR0yc3s1B28FEH7qHZmQ1sFlVPFJl1aPler-js70"/>
+</div>
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="bg-primary/10 text-primary px-2 py-0.5 rounded font-label-caps text-label-caps flex items-center gap-1">
+<span class="material-symbols-outlined" style="font-size: 14px;">star</span> Suggested Worker
+                                            </span>
+</div>
+<h2 class="font-display-md text-display-md text-text-primary flex items-center gap-2">
+                                        Alex Rivera
+                                        <span class="material-symbols-outlined text-primary" style="font-size: 20px; font-variation-settings: 'FILL' 1;">verified</span>
+</h2>
+<p class="font-body-base text-body-base text-text-secondary">Senior HVAC Technician</p>
+</div>
+</div>
+<div class="text-right">
+<div class="text-4xl font-display-lg text-success font-bold tracking-tight">98%</div>
+<div class="font-label-caps text-label-caps text-text-secondary uppercase mt-1">Best Match</div>
+</div>
+</div>
+<div class="p-8 bg-surface-bright/50">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
+<div class="flex items-center gap-2 font-body-base text-text-primary">
+<span class="text-success font-bold">✓</span> Required skills
+                            </div>
+<div class="flex items-center gap-2 font-body-base text-text-primary">
+<span class="text-success font-bold">✓</span> Available now
+                            </div>
+<div class="flex items-center gap-2 font-body-base text-text-primary">
+<span class="text-success font-bold">✓</span> Nearby
+                            </div>
+<div class="flex items-center gap-2 font-body-base text-text-primary">
+<span class="text-success font-bold">✓</span> Low workload
+                            </div>
+<div class="flex items-center gap-2 font-body-base text-text-primary">
+<span class="text-success font-bold">✓</span> Strong completion history
+                            </div>
+</div>
+</div>
+<div class="p-6 border-t border-border bg-surface flex justify-end gap-4">
+<button class="px-6 py-2.5 border border-border text-text-secondary hover:text-text-primary font-label-caps text-label-caps rounded-lg transition-colors bg-surface hover:bg-surface-container-low font-medium">
+                                Choose Another Worker
+                            </button>
+<button class="px-6 py-2.5 bg-primary text-on-primary font-label-caps text-label-caps rounded-lg hover:bg-on-primary-fixed-variant transition-colors shadow-sm flex items-center gap-2 font-medium">
+<span class="material-symbols-outlined" style="font-size: 18px;">person_add</span>
+                                Assign Worker
+                            </button>
+</div>
+</section>
+<!-- 4. Assigned Worker (Placeholder section as per request order, hidden/empty if unassigned) -->
+<section class="hidden bg-surface border border-border border-dashed rounded-xl p-8 flex items-center justify-center">
+<div class="text-center">
+<span class="material-symbols-outlined text-text-secondary mb-2" style="font-size: 48px;">person_off</span>
+<p class="font-body-base text-text-secondary">No worker assigned yet.</p>
+</div>
+</section>
+<!-- 5. Job Location -->
+<section class="bg-surface border border-border rounded-xl p-6">
+<h2 class="font-section-header text-section-header text-text-primary mb-6 border-b border-border pb-2">Job Location</h2>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+<div class="col-span-2">
+<h4 class="font-label-caps text-label-caps text-text-secondary mb-1">Facility Name / Details</h4>
+<p class="font-body-base text-body-base text-text-primary">Jenkins Residence (Main Unit)</p>
+</div>
+<div>
+<h4 class="font-label-caps text-label-caps text-text-secondary mb-1">Travel Time</h4>
+<p class="font-body-base text-body-base text-text-primary">15 mins</p>
+</div>
+<div>
+<h4 class="font-label-caps text-label-caps text-text-secondary mb-1">Priority</h4>
+<p class="font-body-base text-body-base text-text-primary">Normal</p>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column -->
+<div class="flex flex-col gap-6">
+<!-- 6. Timeline -->
+<section class="bg-surface border border-border rounded-xl p-6">
+<h2 class="font-section-header text-section-header text-text-primary mb-6">Timeline</h2>
+<div class="relative border-l-2 border-border ml-3 space-y-6">
+<div class="relative pl-6">
+<div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-success ring-4 ring-surface"></div>
+<p class="font-body-base text-body-base text-text-primary font-medium">Job Created</p>
+<p class="font-body-sm text-body-sm text-text-secondary mt-0.5">Today, 08:30 AM</p>
+</div>
+<div class="relative pl-6">
+<div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-primary ring-4 ring-surface"></div>
+<p class="font-body-base text-body-base text-text-primary font-medium">Worker Suggested</p>
+<p class="font-body-sm text-body-sm text-text-secondary mt-0.5">Today, 08:31 AM</p>
+</div>
+<div class="relative pl-6 opacity-50">
+<div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-surface border-2 border-border"></div>
+<p class="font-body-base text-body-base text-text-primary">Worker Assigned</p>
+<p class="font-body-sm text-body-sm text-text-secondary mt-0.5">Pending</p>
+</div>
+<div class="relative pl-6 opacity-50">
+<div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-surface border-2 border-border"></div>
+<p class="font-body-base text-body-base text-text-primary">Work Started</p>
+<p class="font-body-sm text-body-sm text-text-secondary mt-0.5">Pending</p>
+</div>
+<div class="relative pl-6 opacity-50">
+<div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-surface border-2 border-border"></div>
+<p class="font-body-base text-body-base text-text-primary">Proof Uploaded</p>
+<p class="font-body-sm text-body-sm text-text-secondary mt-0.5">Pending</p>
+</div>
+<div class="relative pl-6 opacity-50">
+<div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-surface border-2 border-border"></div>
+<p class="font-body-base text-body-base text-text-primary">Reviewed</p>
+<p class="font-body-sm text-body-sm text-text-secondary mt-0.5">Pending</p>
+</div>
+<div class="relative pl-6 opacity-50">
+<div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-surface border-2 border-border"></div>
+<p class="font-body-base text-body-base text-text-primary">Completed</p>
+<p class="font-body-sm text-body-sm text-text-secondary mt-0.5">Pending</p>
+</div>
+</div>
+</section>
+<!-- 7. Work Proof (Comparison Layout) -->
+<section class="bg-surface border border-border rounded-xl p-6">
+<div class="flex justify-between items-center mb-4">
+<h2 class="font-section-header text-section-header text-text-primary">Work Proof</h2>
+<span class="font-caption text-caption text-text-secondary px-2 py-1 bg-surface-container-low rounded">Required</span>
+</div>
+<div class="flex gap-4 mb-4">
+<div class="flex-1">
+<p class="font-label-caps text-label-caps text-text-secondary mb-2 text-center uppercase">Before Photo</p>
+<div class="aspect-[4/3] rounded border border-dashed border-outline-variant bg-surface-container-lowest flex flex-col items-center justify-center text-text-secondary hover:bg-surface-container-low transition-colors cursor-pointer">
+<span class="material-symbols-outlined mb-1">add_photo_alternate</span>
+</div>
+</div>
+<div class="flex-1">
+<p class="font-label-caps text-label-caps text-text-secondary mb-2 text-center uppercase">After Photo</p>
+<div class="aspect-[4/3] rounded border border-dashed border-outline-variant bg-surface-container-lowest flex flex-col items-center justify-center text-text-secondary hover:bg-surface-container-low transition-colors cursor-pointer">
+<span class="material-symbols-outlined mb-1">add_photo_alternate</span>
+</div>
+</div>
+</div>
+<div class="space-y-2 mt-4">
+<div>
+<span class="font-label-caps text-text-secondary">Completion Notes: </span>
+<span class="font-body-sm text-text-primary">Pending</span>
+</div>
+<div>
+<span class="font-label-caps text-text-secondary">Uploaded Time: </span>
+<span class="font-body-sm text-text-primary">Pending</span>
+</div>
+<div>
+<span class="font-label-caps text-text-secondary">Verification Status: </span>
+<span class="font-body-sm text-text-primary">Pending</span>
+</div>
+</div>
+</section>
+<!-- 8. Job Issues -->
+<section class="bg-surface border border-warning/30 rounded-xl p-6">
+<h2 class="font-section-header text-section-header text-text-primary mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-warning">warning</span> Job Issues
+                    </h2>
+<div class="space-y-3">
+<div class="p-3 bg-warning/5 border border-warning/20 rounded-lg">
+<p class="font-body-sm text-body-sm text-text-primary font-medium">Customer unavailable</p>
+<p class="font-caption text-caption text-text-secondary mt-1">Customer is not answering the door or phone calls. (Reported 5 mins ago)</p>
+</div>
+<div class="p-3 bg-primary/5 border border-primary/20 rounded-lg">
+<p class="font-body-sm text-body-sm text-text-primary font-medium">Waiting for spare parts</p>
+<p class="font-caption text-caption text-text-secondary mt-1">Specialized filter for Model X-2000 is currently out of stock. (System status)</p>
+</div>
+</div>
+</section>
+</div>
+</div>
+<!-- 9. Activity History -->
+<section class="mt-6 bg-surface border border-border rounded-xl overflow-hidden">
+<div class="p-4 border-b border-border bg-surface-bright flex justify-between items-center">
+<h2 class="font-section-header text-section-header text-text-primary">Activity History</h2>
+<button class="text-primary hover:text-on-primary-fixed-variant font-label-caps text-label-caps flex items-center gap-1 transition-colors">
+                        Export History <span class="material-symbols-outlined" style="font-size: 16px;">download</span>
+</button>
+</div>
+<div class="w-full overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-border bg-surface-container-lowest">
+<th class="py-3 px-6 font-label-caps text-label-caps text-text-secondary font-medium">Timestamp</th>
+<th class="py-3 px-6 font-label-caps text-label-caps text-text-secondary font-medium">User / System</th>
+<th class="py-3 px-6 font-label-caps text-label-caps text-text-secondary font-medium">Action</th>
+<th class="py-3 px-6 font-label-caps text-label-caps text-text-secondary font-medium">Details</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm text-text-primary divide-y divide-border">
+<tr class="hover:bg-background transition-colors group">
+<td class="py-3 px-6 text-text-secondary whitespace-nowrap">Oct 23, 08:30:12</td>
+<td class="py-3 px-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-text-secondary" style="font-size: 16px;">memory</span>
+                                    System
+                                </td>
+<td class="py-3 px-6 font-medium">Job Created</td>
+<td class="py-3 px-6 text-text-secondary truncate max-w-xs">Generated from PM Template #HVAC-ANNUAL</td>
+</tr>
+<tr class="hover:bg-background transition-colors group">
+<td class="py-3 px-6 text-text-secondary whitespace-nowrap">Oct 23, 08:31:05</td>
+<td class="py-3 px-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-size: 16px;">psychology</span>
+                                    System
+                                </td>
+<td class="py-3 px-6 font-medium">Worker Suggested</td>
+<td class="py-3 px-6 text-text-secondary truncate max-w-xs">Evaluated available workers; Suggested A. Rivera</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</main>
+</div>
+</body></html>

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Workflow - Jobs</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Geist:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-container": "#bc4800",
+                      "text-secondary": "#6B7280",
+                      "on-primary": "#ffffff",
+                      "tertiary-fixed-dim": "#ffb596",
+                      "on-error": "#ffffff",
+                      "on-tertiary-container": "#ffede6",
+                      "on-primary-container": "#eeefff",
+                      "surface-container-lowest": "#ffffff",
+                      "success": "#10B981",
+                      "danger": "#EF4444",
+                      "on-error-container": "#93000a",
+                      "primary-container": "#2563eb",
+                      "text-primary": "#111827",
+                      "on-tertiary": "#ffffff",
+                      "on-background": "#191b23",
+                      "error": "#ba1a1a",
+                      "secondary": "#585f6c",
+                      "primary-fixed": "#dbe1ff",
+                      "warning": "#F59E0B",
+                      "secondary-fixed-dim": "#c0c7d6",
+                      "primary-fixed-dim": "#b4c5ff",
+                      "on-surface": "#191b23",
+                      "surface-variant": "#e1e2ed",
+                      "surface-container-high": "#e7e7f3",
+                      "on-tertiary-fixed": "#360f00",
+                      "border": "#E5E7EB",
+                      "outline-variant": "#c3c6d7",
+                      "error-container": "#ffdad6",
+                      "inverse-primary": "#b4c5ff",
+                      "primary": "#004ac6",
+                      "inverse-on-surface": "#f0f0fb",
+                      "tertiary-fixed": "#ffdbcd",
+                      "on-secondary-fixed": "#151c27",
+                      "surface-dim": "#d9d9e5",
+                      "background": "#F9FAFB",
+                      "secondary-container": "#dce2f3",
+                      "on-secondary": "#ffffff",
+                      "surface-bright": "#faf8ff",
+                      "tertiary": "#943700",
+                      "on-tertiary-fixed-variant": "#7d2d00",
+                      "secondary-fixed": "#dce2f3",
+                      "surface-container": "#ededf9",
+                      "on-secondary-fixed-variant": "#404754",
+                      "on-surface-variant": "#434655",
+                      "on-primary-fixed": "#00174b",
+                      "on-primary-fixed-variant": "#003ea8",
+                      "surface": "#FFFFFF",
+                      "surface-container-low": "#f3f3fe",
+                      "surface-container-highest": "#e1e2ed",
+                      "surface-tint": "#0053db",
+                      "inverse-surface": "#2e3039",
+                      "on-secondary-container": "#5e6572",
+                      "outline": "#737686"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "max-content-width": "1440px",
+                      "stack-sm": "0.5rem",
+                      "container-padding": "2rem",
+                      "stack-md": "1rem",
+                      "gutter": "1.5rem",
+                      "sidebar-width": "240px"
+              },
+              "fontFamily": {
+                      "body-base": ["Inter", "sans-serif"],
+                      "body-sm": ["Inter", "sans-serif"],
+                      "caption": ["Inter", "sans-serif"],
+                      "section-header": ["Geist", "sans-serif"],
+                      "display-lg": ["Geist", "sans-serif"],
+                      "display-md": ["Geist", "sans-serif"],
+                      "label-caps": ["Geist", "sans-serif"]
+              },
+              "fontSize": {
+                      "body-base": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                      "caption": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                      "section-header": ["18px", {"lineHeight": "26px", "fontWeight": "500"}],
+                      "display-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                      "display-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-text-primary font-body-base antialiased flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<nav class="bg-surface fixed left-0 top-0 h-screen w-sidebar-width border-r border-border flex flex-col py-stack-md px-stack-sm z-50 transition-colors duration-200 ease-in-out hidden md:flex">
+<div class="px-3 pb-6 flex items-center gap-3">
+<div class="w-8 h-8 rounded-md bg-primary-container text-on-primary-container flex items-center justify-center font-bold">
+                W
+            </div>
+<div>
+<h1 class="font-display-md text-display-md text-primary">Workflow</h1>
+<p class="font-caption text-caption text-text-secondary">Local Service Pro</p>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-text-secondary hover:bg-surface-container-low hover:text-text-primary transition-colors duration-200 ease-in-out font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span class="">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-primary font-semibold bg-primary-container/10 transition-colors duration-200 ease-in-out font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined text-[20px]" style='font-variation-settings: "FILL" 1;'>assignment</span>
+<span class="">Jobs</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-text-secondary hover:bg-surface-container-low hover:text-text-primary transition-colors duration-200 ease-in-out font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined text-[20px]">group</span>
+<span class="">Team</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-text-secondary hover:bg-surface-container-low hover:text-text-primary transition-colors duration-200 ease-in-out font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="">Settings</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col md:ml-[240px] h-screen overflow-hidden">
+<!-- TopNavBar -->
+<header class="bg-surface sticky top-0 z-40 w-full border-b border-border flex justify-between items-center h-16 px-gutter max-w-max-content-width transition-all duration-200 shrink-0">
+<div class="flex items-center gap-6">
+<!-- Search -->
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary text-[16px]">search</span>
+<input class="pl-9 pr-4 py-1.5 bg-background border border-border rounded-md text-body-sm font-body-sm w-64 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" placeholder="Search jobs..." type="text"/>
+</div>
+<nav class="hidden lg:flex gap-6 h-full">
+<a class="flex items-center h-full text-text-secondary hover:text-text-primary transition-all duration-200 font-body-sm text-body-sm border-b-2 border-transparent" href="#">Directives</a>
+<a class="flex items-center h-full text-text-secondary hover:text-text-primary transition-all duration-200 font-body-sm text-body-sm border-b-2 border-transparent" href="#">Reports</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="bg-primary text-on-primary hover:bg-primary/90 px-4 py-2 rounded-md font-body-sm text-body-sm font-medium transition-colors shadow-sm px-6">
+                    Create Job
+                </button>
+<div class="flex items-center gap-2 text-text-secondary border-l border-border pl-4">
+<button class="p-1.5 hover:bg-surface-container-low rounded-md transition-colors text-text-secondary hover:text-text-primary">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<button class="p-1.5 hover:bg-surface-container-low rounded-md transition-colors text-text-secondary hover:text-text-primary">
+<span class="material-symbols-outlined text-[20px]">apps</span>
+</button>
+<button class="w-8 h-8 rounded-full overflow-hidden ml-2 border border-border">
+<img alt="User Avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBS2_hkf2t8NNJZmfVGipYQ19qzTU9-RnBSM5V1ojJB1lh8opXbH2sE7fR9Xe0f6bz02J9n_VnL7hDgNsHIOaDmCj9G9SL95JhSsZSF6PP0AfUdwQZfqlr-MhlUgEFtakvjg3o2fyVE4kQKxIpjx5Lb3G80xqls15vok2_mUh8leUgSus9fSDfq8Q_rCcLCcAvkyLske6zOEBlkQP54MaJ1uZYyZkXLHBZH-zc_dcgnUkExTKiNdJzhXWvbsokI_QSQ-9znZosm5os6"/>
+</button>
+</div>
+</div>
+</header>
+<!-- Page Content -->
+<main class="flex-1 overflow-auto p-gutter max-w-max-content-width w-full mx-auto">
+<!-- Page Header -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+<div>
+<h2 class="font-display-lg text-display-lg text-text-primary mb-1">Jobs</h2>
+<p class="font-body-sm text-body-sm text-text-secondary">Track today's service jobs and team assignments.</p>
+</div>
+<!-- Filters -->
+<div class="flex flex-wrap items-center gap-2">
+<button class="flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-md text-body-sm font-body-sm text-text-primary hover:bg-background transition-colors">
+<span class="material-symbols-outlined text-[16px]">filter_list</span>
+                        Priority
+                    </button>
+<button class="flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-md text-body-sm font-body-sm text-text-primary hover:bg-background transition-colors">
+<span class="material-symbols-outlined text-[16px]">pending_actions</span>
+                        Status
+                    </button>
+<button class="flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-md text-body-sm font-body-sm text-text-primary hover:bg-background transition-colors">
+<span class="material-symbols-outlined text-[16px]">calendar_today</span>
+                        Date
+                    </button>
+</div>
+</div>
+<!-- Data Table Card -->
+<div class="bg-surface border border-border rounded-lg shadow-sm overflow-hidden flex flex-col mb-12">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-border bg-background">
+<th class="py-3 px-4 font-label-caps text-label-caps text-text-secondary whitespace-nowrap">Job</th>
+<th class="py-3 px-4 font-label-caps text-label-caps text-text-secondary whitespace-nowrap">Customer</th>
+<th class="py-3 px-4 font-label-caps text-label-caps text-text-secondary whitespace-nowrap">Location</th>
+<th class="py-3 px-4 font-label-caps text-label-caps text-text-secondary whitespace-nowrap">Assigned Worker</th>
+<th class="py-3 px-4 font-label-caps text-label-caps text-text-secondary whitespace-nowrap">Priority</th>
+<th class="py-3 px-4 font-label-caps text-label-caps text-text-secondary whitespace-nowrap">Status</th>
+<th class="py-3 px-4 font-label-caps text-label-caps text-text-secondary whitespace-nowrap">Due Time</th>
+<th class="py-3 px-4 font-label-caps text-label-caps text-text-secondary whitespace-nowrap text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm divide-y divide-border">
+<tr class="hover:bg-background transition-colors group cursor-pointer">
+<td class="py-4 px-4"><div class="font-medium text-text-primary">AC Installation</div></td>
+<td class="py-4 px-4"><div class="text-text-primary font-medium">Green Residency</div></td>
+<td class="py-4 px-4 text-text-secondary">124 Park Avenue</td>
+<td class="py-4 px-4"><div class="flex items-center gap-2"><span class="text-text-primary">Michael Chen</span></div></td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-error-container text-error border border-error/20">High</span>
+</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary-container/10 text-primary border border-primary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>In Progress
+                                    </span>
+</td>
+<td class="py-4 px-4 text-text-secondary">14:00</td>
+<td class="py-4 px-4 text-right">
+<button class="p-1 text-text-secondary hover:text-text-primary hover:bg-surface-container-low rounded transition-colors">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-background transition-colors group cursor-pointer">
+<td class="py-4 px-4"><div class="font-medium text-text-primary">Electrical Repair</div></td>
+<td class="py-4 px-4"><div class="text-text-primary font-medium">City Hospital</div></td>
+<td class="py-4 px-4 text-text-secondary">850 Health Blvd</td>
+<td class="py-4 px-4"><div class="flex items-center gap-2"><span class="text-text-secondary italic">Unassigned</span></div></td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-warning/10 text-warning border border-warning/20">Medium</span>
+</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface-container text-text-secondary border border-border">
+<span class="w-1.5 h-1.5 rounded-full bg-text-secondary/40"></span>Pending
+                                    </span>
+</td>
+<td class="py-4 px-4 text-text-secondary">15:30</td>
+<td class="py-4 px-4 text-right">
+<button class="p-1 text-text-secondary hover:text-text-primary hover:bg-surface-container-low rounded transition-colors">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-background transition-colors group cursor-pointer">
+<td class="py-4 px-4"><div class="font-medium text-text-primary">Plumbing Leak Fix</div></td>
+<td class="py-4 px-4"><div class="text-text-primary font-medium">Smith Residence</div></td>
+<td class="py-4 px-4 text-text-secondary">422 Oak St</td>
+<td class="py-4 px-4"><div class="flex items-center gap-2"><span class="text-text-primary">Sarah Jenkins</span></div></td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-secondary-container text-secondary border border-border">Low</span>
+</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-success/10 text-success border border-success/20">
+<span class="material-symbols-outlined text-[14px]">check</span>Completed
+                                    </span>
+</td>
+<td class="py-4 px-4 text-text-secondary">11:00</td>
+<td class="py-4 px-4 text-right">
+<button class="p-1 text-text-secondary hover:text-text-primary hover:bg-surface-container-low rounded transition-colors">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="border-t border-border px-4 py-3 bg-background flex items-center justify-between">
+<span class="font-body-sm text-body-sm text-text-secondary">Showing 1 to 3 of 48 jobs</span>
+<div class="flex items-center gap-1">
+<button class="px-2 py-1 border border-border rounded text-text-secondary hover:bg-surface disabled:opacity-50 transition-colors" disabled="">
+<span class="material-symbols-outlined text-[16px]">chevron_left</span>
+</button>
+<button class="px-2 py-1 border border-border rounded text-text-secondary hover:bg-surface transition-colors">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Empty State Section (Preview) -->
+<div class="mt-12">
+<h3 class="font-label-caps text-label-caps text-text-secondary mb-4 uppercase tracking-wider">Empty State Preview</h3>
+<div class="bg-surface border border-dashed border-border rounded-lg py-16 flex flex-col items-center justify-center text-center">
+<div class="w-16 h-16 bg-surface-container rounded-full flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-[32px] text-text-secondary">assignment_late</span>
+</div>
+<h4 class="font-display-md text-text-primary mb-2">No jobs yet</h4>
+<p class="font-body-base text-text-secondary mb-6 max-w-sm mx-auto">Create your first job to get started tracking your service tasks and team assignments.</p>
+<button class="bg-primary text-on-primary hover:bg-primary/90 px-6 py-2.5 rounded-md font-body-base font-medium transition-all shadow-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                        Create Your First Job
+                    </button>
+</div>
+</div>
+</main>
+</div>
+</body></html>
