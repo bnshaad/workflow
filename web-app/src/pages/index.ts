@@ -1,1 +1,7 @@
-export { HomePage } from './HomePage'
+export { DashboardPage } from './DashboardPage'
+export { JobDetailsPage } from './JobDetailsPage'
+export { JobsPage } from './JobsPage'
+export { LoginPage } from './LoginPage'
+export { SettingsPage } from './SettingsPage'
+export { TeamPage } from './TeamPage'
+export { UnauthorizedPage } from './UnauthorizedPage'
