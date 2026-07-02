@@ -2,10 +2,11 @@ import { cn } from '@/utils'
 
 type StatusBadgeProps = {
   children: string
-  tone?: 'default' | 'primary' | 'success' | 'warning'
+  tone?: 'danger' | 'default' | 'primary' | 'success' | 'warning'
 }
 
 const toneClass = {
+  danger: 'border-destructive/20 bg-destructive/10 text-destructive',
   default: 'border-border bg-muted text-foreground',
   primary: 'border-primary/20 bg-primary/10 text-primary',
   success: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600',
