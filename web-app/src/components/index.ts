@@ -1,1 +1,7 @@
+export { DataTable } from './DataTable'
+export { MetricCard } from './MetricCard'
+export { PageHeader } from './PageHeader'
+export { PagePlaceholder } from './PagePlaceholder'
+export { RecentActivityItem } from './RecentActivityItem'
 export { Sidebar } from './Sidebar'
+export { StatusBadge } from './StatusBadge'
