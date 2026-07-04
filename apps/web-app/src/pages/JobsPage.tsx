@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   Calendar,
   Check,
+  ChevronDown,
   ClipboardList,
   Filter,
   MoreHorizontal,
@@ -69,7 +70,11 @@ export function JobsPage() {
         if (isMounted) {
           setJobs(loadedJobs)
         }
-      } catch {
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('Failed to load jobs list.', error)
+        }
+
         if (isMounted) {
           setErrorMessage('Unable to load jobs. Please try again.')
         }
@@ -345,16 +350,20 @@ function FilterSelect({
   return (
     <label className="relative block">
       <span className="sr-only">{label}</span>
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+      <span className="pointer-events-none absolute left-3.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-muted-foreground">
         {icon}
       </span>
       <select
-        className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+        className="h-10 w-full appearance-none rounded-lg border border-border bg-background pl-10 pr-10 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >
         {children}
       </select>
+      <ChevronDown
+        aria-hidden="true"
+        className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+      />
     </label>
   )
 }

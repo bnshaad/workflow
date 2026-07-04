@@ -20,15 +20,24 @@ export interface JobAiRecommendation {
   summary: string
 }
 
-export type JobActivityType = 'employees_assigned' | 'status_changed'
+export type JobActivityType =
+  | 'employees_assigned'
+  | 'employees_reassigned'
+  | 'employees_unassigned'
+  | 'employee_completed_job'
+  | 'employee_started_job'
+  | 'status_changed'
 
 export interface JobActivity extends TenantDocument {
   jobId: string
   type: JobActivityType
   fromStatus?: JobStatus
   toStatus?: JobStatus
+  employeeId?: string
   employeeIds?: string[]
   employeeNames?: string[]
+  performedAt?: Timestamp
+  performedBy?: string
   createdBy: string
   description: string
 }
@@ -55,6 +64,8 @@ export interface Job extends TenantDocument {
   assignedEmployeeIds: string[]
   assignedAt: Timestamp | null
   assignedBy: string | null
+  startedAt: Timestamp | null
+  startedBy: string | null
   createdBy: string
   dueDate: Timestamp | null
   attachments: JobAttachment[]
@@ -64,6 +75,7 @@ export interface Job extends TenantDocument {
   manualOverride: boolean
   overrideReason: string | null
   completedAt: Timestamp | null
+  completedBy: string | null
 }
 
 export type CreateJobInput = Pick<

@@ -13,7 +13,7 @@ import {
 import { Link, useParams } from 'react-router-dom'
 import { StatusBadge } from '@/components'
 import { useAuth } from '@/hooks'
-import { canEditJob } from '@/permissions'
+import { canAssignWorker, canEditJob } from '@/permissions'
 import { jobService } from '@/services/jobs'
 import {
   getAllowedJobStatusTransitions,
@@ -49,13 +49,21 @@ export function JobDetailsPage() {
   const [assignableEmployees, setAssignableEmployees] = useState<UserProfile[]>([])
   const [assignmentErrorMessage, setAssignmentErrorMessage] = useState('')
   const [assignmentSearch, setAssignmentSearch] = useState('')
+  const [assignmentSuccessMessage, setAssignmentSuccessMessage] = useState('')
   const [job, setJob] = useState<Job | null>(null)
+  const [managedEmployeeIds, setManagedEmployeeIds] = useState<string[]>([])
+  const [manageAssignmentErrorMessage, setManageAssignmentErrorMessage] =
+    useState('')
+  const [manageAssignmentSearch, setManageAssignmentSearch] = useState('')
+  const [manageAssignmentSuccessMessage, setManageAssignmentSuccessMessage] =
+    useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [statusErrorMessage, setStatusErrorMessage] = useState('')
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([])
   const [selectedStatus, setSelectedStatus] = useState<JobStatus | ''>('')
   const [isAssigning, setIsAssigning] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isManagingAssignment, setIsManagingAssignment] = useState(false)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
   useEffect(() => {
@@ -69,6 +77,9 @@ export function JobDetailsPage() {
       setIsLoading(true)
       setErrorMessage('')
       setAssignmentErrorMessage('')
+      setAssignmentSuccessMessage('')
+      setManageAssignmentErrorMessage('')
+      setManageAssignmentSuccessMessage('')
       setStatusErrorMessage('')
 
       try {
@@ -90,6 +101,7 @@ export function JobDetailsPage() {
         }
 
         setJob(loadedJob)
+        setManagedEmployeeIds(loadedJob.assignedEmployeeIds)
         setActivities(loadedActivities)
         setAssignableEmployees(loadedEmployees)
       } catch {
@@ -133,11 +145,28 @@ export function JobDetailsPage() {
       )
     })
   }, [assignableEmployees, assignmentSearch])
+  const filteredManageableEmployees = useMemo(() => {
+    const normalizedSearch = manageAssignmentSearch.trim().toLowerCase()
+
+    if (normalizedSearch.length === 0) {
+      return assignableEmployees
+    }
+
+    return assignableEmployees.filter((employee) => {
+      return (
+        employee.displayName.toLowerCase().includes(normalizedSearch) ||
+        employee.email.toLowerCase().includes(normalizedSearch)
+      )
+    })
+  }, [assignableEmployees, manageAssignmentSearch])
   const assignedEmployeeNames = useMemo(() => {
     return getAssignedEmployeeNames(job?.assignedEmployeeIds ?? [], assignableEmployees)
   }, [assignableEmployees, job?.assignedEmployeeIds])
   const canAssignEmployees =
-    canUpdateStatus && job?.status === JobStatuses.Open
+    Boolean(profile && canAssignWorker(profile)) && job?.status === JobStatuses.Open
+  const canManageAssignment =
+    Boolean(profile && canAssignWorker(profile)) &&
+    job?.status === JobStatuses.Assigned
 
   async function handleStatusUpdate() {
     if (!profile || !job || !selectedStatus) {
@@ -175,6 +204,7 @@ export function JobDetailsPage() {
 
     setIsAssigning(true)
     setAssignmentErrorMessage('')
+    setAssignmentSuccessMessage('')
 
     try {
       const result = await jobService.assignEmployeesToJob(
@@ -191,6 +221,12 @@ export function JobDetailsPage() {
       ])
       setSelectedEmployeeIds([])
       setAssignmentSearch('')
+      setAssignmentSuccessMessage(
+        `${result.assignedEmployees.length} employee${
+          result.assignedEmployees.length === 1 ? '' : 's'
+        } assigned.`,
+      )
+      setManagedEmployeeIds(result.job.assignedEmployeeIds)
     } catch {
       setAssignmentErrorMessage('Unable to assign employees. Please try again.')
     } finally {
@@ -198,8 +234,93 @@ export function JobDetailsPage() {
     }
   }
 
+  async function handleUpdateAssignedEmployees() {
+    if (!profile || !job) {
+      return
+    }
+
+    setIsManagingAssignment(true)
+    setManageAssignmentErrorMessage('')
+    setManageAssignmentSuccessMessage('')
+
+    try {
+      const result = await jobService.updateAssignedEmployees(
+        profile,
+        job.id,
+        job.organizationId,
+        managedEmployeeIds,
+      )
+
+      setJob(result.job)
+      setActivities((currentActivities) => [
+        result.activity,
+        ...currentActivities,
+      ])
+      setManagedEmployeeIds(result.job.assignedEmployeeIds)
+      setManageAssignmentSearch('')
+      setManageAssignmentSuccessMessage('Assignment updated.')
+    } catch {
+      setManageAssignmentErrorMessage(
+        'Unable to update assignment. Please try again.',
+      )
+    } finally {
+      setIsManagingAssignment(false)
+    }
+  }
+
+  async function handleUnassignAllEmployees() {
+    if (!profile || !job) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      'Remove all assigned employees from this job?',
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setIsManagingAssignment(true)
+    setManageAssignmentErrorMessage('')
+    setManageAssignmentSuccessMessage('')
+
+    try {
+      const result = await jobService.unassignEmployeesFromJob(
+        profile,
+        job.id,
+        job.organizationId,
+      )
+
+      setJob(result.job)
+      setActivities((currentActivities) => [
+        result.activity,
+        ...currentActivities,
+      ])
+      setManagedEmployeeIds([])
+      setManageAssignmentSearch('')
+      setManageAssignmentSuccessMessage('All employees removed.')
+    } catch {
+      setManageAssignmentErrorMessage(
+        'Unable to unassign employees. Please try again.',
+      )
+    } finally {
+      setIsManagingAssignment(false)
+    }
+  }
+
   function toggleEmployeeSelection(employeeId: string) {
     setSelectedEmployeeIds((currentIds) => {
+      if (currentIds.includes(employeeId)) {
+        return currentIds.filter((currentId) => currentId !== employeeId)
+      }
+
+      return [...currentIds, employeeId]
+    })
+  }
+
+  function toggleManagedEmployeeSelection(employeeId: string) {
+    setManagedEmployeeIds((currentIds) => {
       if (currentIds.includes(employeeId)) {
         return currentIds.filter((currentId) => currentId !== employeeId)
       }
@@ -326,87 +447,200 @@ export function JobDetailsPage() {
         <aside className="space-y-6">
           <InfoCard title="Manual Assignment">
             <div className="space-y-4">
-              {job.status === JobStatuses.Open ? (
+              {job.status === JobStatuses.Assigned ? (
                 <p className="text-sm text-muted-foreground">
-                  Select active employees from this organization.
+                  Use Manage Assignment to update assigned employees.
                 </p>
-              ) : (
+              ) : job.status !== JobStatuses.Open ? (
                 <p className="text-sm text-muted-foreground">
                   Assignment is available only while the job is open.
                 </p>
-              )}
-
-              <div className="relative">
-                <Search
-                  aria-hidden="true"
-                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                />
-                <input
-                  className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={!canAssignEmployees || isAssigning}
-                  onChange={(event) => setAssignmentSearch(event.target.value)}
-                  placeholder="Search employees..."
-                  type="search"
-                  value={assignmentSearch}
-                />
-              </div>
-
-              <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-border bg-background p-2">
-                {filteredAssignableEmployees.length === 0 ? (
-                  <p className="px-2 py-4 text-center text-sm text-muted-foreground">
-                    No eligible employees found.
+              ) : canAssignEmployees ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Select active employees from this organization.
                   </p>
-                ) : (
-                  filteredAssignableEmployees.map((employee) => (
-                    <label
-                      className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 text-sm transition hover:bg-muted has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
-                      key={employee.id}
-                    >
-                      <input
-                        checked={selectedEmployeeIds.includes(employee.id)}
-                        className="mt-1 size-4"
-                        disabled={!canAssignEmployees || isAssigning}
-                        onChange={() => toggleEmployeeSelection(employee.id)}
-                        type="checkbox"
-                      />
-                      <span>
-                        <span className="block font-medium text-foreground">
-                          {employee.displayName}
-                        </span>
-                        <span className="block text-xs text-muted-foreground">
-                          {employee.email}
-                        </span>
-                        {employee.skills.length > 0 ? (
-                          <span className="mt-1 block text-xs text-muted-foreground">
-                            {employee.skills.join(', ')}
-                          </span>
-                        ) : null}
-                      </span>
-                    </label>
-                  ))
-                )}
-              </div>
 
-              <button
-                className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={
-                  !canAssignEmployees ||
-                  selectedEmployeeIds.length === 0 ||
-                  isAssigning
-                }
-                onClick={handleAssignEmployees}
-                type="button"
-              >
-                {isAssigning ? 'Assigning...' : 'Assign Employees'}
-              </button>
+                  <div className="relative">
+                    <Search
+                      aria-hidden="true"
+                      className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                    />
+                    <input
+                      className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={isAssigning}
+                      onChange={(event) => setAssignmentSearch(event.target.value)}
+                      placeholder="Search employees..."
+                      type="search"
+                      value={assignmentSearch}
+                    />
+                  </div>
+
+                  <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-border bg-background p-2">
+                    {filteredAssignableEmployees.length === 0 ? (
+                      <p className="px-2 py-4 text-center text-sm text-muted-foreground">
+                        No eligible employees found.
+                      </p>
+                    ) : (
+                      filteredAssignableEmployees.map((employee) => (
+                        <label
+                          className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 text-sm transition hover:bg-muted has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
+                          key={employee.id}
+                        >
+                          <input
+                            checked={selectedEmployeeIds.includes(employee.id)}
+                            className="mt-1 size-4"
+                            disabled={isAssigning}
+                            onChange={() => toggleEmployeeSelection(employee.id)}
+                            type="checkbox"
+                          />
+                          <span>
+                            <span className="block font-medium text-foreground">
+                              {employee.displayName}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              {employee.email}
+                            </span>
+                            {employee.skills.length > 0 ? (
+                              <span className="mt-1 block text-xs text-muted-foreground">
+                                {employee.skills.join(', ')}
+                              </span>
+                            ) : null}
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+
+                  <button
+                    className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={selectedEmployeeIds.length === 0 || isAssigning}
+                    onClick={handleAssignEmployees}
+                    type="button"
+                  >
+                    {isAssigning ? 'Assigning...' : 'Assign Employees'}
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Assignment is available to Admin and Manager users.
+                </p>
+              )}
 
               {assignmentErrorMessage ? (
                 <p className="text-sm font-medium text-destructive">
                   {assignmentErrorMessage}
                 </p>
               ) : null}
+              {assignmentSuccessMessage ? (
+                <p className="text-sm font-medium text-emerald-600">
+                  {assignmentSuccessMessage}
+                </p>
+              ) : null}
             </div>
           </InfoCard>
+
+          {job.status === JobStatuses.Assigned ? (
+            <InfoCard title="Manage Assignment">
+              <div className="space-y-4">
+                {canManageAssignment ? (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Add or remove active employees assigned to this job.
+                    </p>
+                    <div className="relative">
+                      <Search
+                        aria-hidden="true"
+                        className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                      />
+                      <input
+                        className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isManagingAssignment}
+                        onChange={(event) =>
+                          setManageAssignmentSearch(event.target.value)
+                        }
+                        placeholder="Search employees..."
+                        type="search"
+                        value={manageAssignmentSearch}
+                      />
+                    </div>
+                    <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-border bg-background p-2">
+                      {filteredManageableEmployees.length === 0 ? (
+                        <p className="px-2 py-4 text-center text-sm text-muted-foreground">
+                          No eligible employees found.
+                        </p>
+                      ) : (
+                        filteredManageableEmployees.map((employee) => (
+                          <label
+                            className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 text-sm transition hover:bg-muted has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
+                            key={employee.id}
+                          >
+                            <input
+                              checked={managedEmployeeIds.includes(employee.id)}
+                              className="mt-1 size-4"
+                              disabled={isManagingAssignment}
+                              onChange={() =>
+                                toggleManagedEmployeeSelection(employee.id)
+                              }
+                              type="checkbox"
+                            />
+                            <span>
+                              <span className="block font-medium text-foreground">
+                                {employee.displayName}
+                              </span>
+                              <span className="block text-xs text-muted-foreground">
+                                {employee.email}
+                              </span>
+                              {employee.skills.length > 0 ? (
+                                <span className="mt-1 block text-xs text-muted-foreground">
+                                  {employee.skills.join(', ')}
+                                </span>
+                              ) : null}
+                            </span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <button
+                        className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={
+                          managedEmployeeIds.length === 0 ||
+                          isManagingAssignment
+                        }
+                        onClick={handleUpdateAssignedEmployees}
+                        type="button"
+                      >
+                        {isManagingAssignment ? 'Saving...' : 'Save Changes'}
+                      </button>
+                      <button
+                        className="inline-flex h-10 items-center justify-center rounded-lg border border-destructive/30 bg-card px-4 text-sm font-medium text-destructive shadow-sm transition hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isManagingAssignment}
+                        onClick={handleUnassignAllEmployees}
+                        type="button"
+                      >
+                        Unassign All
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Assignment changes are available to Admin and Manager users.
+                  </p>
+                )}
+                {manageAssignmentErrorMessage ? (
+                  <p className="text-sm font-medium text-destructive">
+                    {manageAssignmentErrorMessage}
+                  </p>
+                ) : null}
+                {manageAssignmentSuccessMessage ? (
+                  <p className="text-sm font-medium text-emerald-600">
+                    {manageAssignmentSuccessMessage}
+                  </p>
+                ) : null}
+              </div>
+            </InfoCard>
+          ) : null}
 
           <InfoCard title="Status Management">
             <div className="space-y-4">
@@ -604,6 +838,14 @@ function formatNullableTimestamp(timestamp: Job['dueDate']) {
 function getActivityTitle(activity: JobActivity) {
   if (activity.type === 'employees_assigned') {
     return 'Employees assigned'
+  }
+
+  if (activity.type === 'employees_reassigned') {
+    return 'Employees reassigned'
+  }
+
+  if (activity.type === 'employees_unassigned') {
+    return 'Employees unassigned'
   }
 
   return activity.toStatus

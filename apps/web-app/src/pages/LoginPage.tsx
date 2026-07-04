@@ -2,28 +2,48 @@ import { useState, type FormEvent } from 'react'
 import { FirebaseError } from 'firebase/app'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { LockKeyhole } from 'lucide-react'
+import {
+  EMPLOYEE_WEB_PORTAL_NOTICE,
+  EMPLOYEE_WEB_PORTAL_NOTICE_STORAGE_KEY,
+} from '@/constants/authConstants'
 import { useAuth } from '@/hooks'
+import { canAccessWebPortal } from '@/permissions'
+
+const DEFAULT_PORTAL_ROUTE = '/dashboard'
+const BLOCKED_REDIRECT_PATHS = new Set([
+  '/login',
+  '/profile-setup-required',
+  '/unauthorized',
+])
 
 export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { loading: authLoading, signIn, user } = useAuth()
+  const { loading: authLoading, profile, signIn, user } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState(getStoredEmployeeWebPortalNotice)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const redirectTo =
-    (location.state as { from?: { pathname?: string } } | null)?.from
-      ?.pathname ?? '/dashboard'
+  const redirectTo = getSafeRedirectPath(location.state)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
+    setNotice('')
     setIsSubmitting(true)
 
     try {
-      await signIn(email, password)
+      const result = await signIn(email, password)
+
+      if (result.status === 'employee-web-portal-blocked') {
+        setNotice(EMPLOYEE_WEB_PORTAL_NOTICE)
+        setPassword('')
+        navigate('/login', { replace: true })
+        return
+      }
+
       navigate(redirectTo, { replace: true })
     } catch (caughtError) {
       if (caughtError instanceof FirebaseError) {
@@ -46,8 +66,16 @@ export function LoginPage() {
     )
   }
 
-  if (user) {
+  if (user && profile && canAccessWebPortal(profile)) {
     return <Navigate replace to={redirectTo} />
+  }
+
+  if (user && profile) {
+    return <Navigate replace to="/unauthorized" />
+  }
+
+  if (user && !profile) {
+    return <Navigate replace to="/profile-setup-required" />
   }
 
   const isDisabled = isSubmitting || email.length === 0 || password.length === 0
@@ -111,6 +139,12 @@ export function LoginPage() {
             </div>
           ) : null}
 
+          {notice.length > 0 ? (
+            <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground">
+              {notice}
+            </div>
+          ) : null}
+
           <button
             className="flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isDisabled}
@@ -122,6 +156,39 @@ export function LoginPage() {
       </section>
     </main>
   )
+}
+
+function getSafeRedirectPath(state: unknown) {
+  const pathname = (state as { from?: { pathname?: unknown } } | null)?.from
+    ?.pathname
+
+  if (
+    typeof pathname !== 'string' ||
+    !pathname.startsWith('/') ||
+    BLOCKED_REDIRECT_PATHS.has(pathname)
+  ) {
+    return DEFAULT_PORTAL_ROUTE
+  }
+
+  return pathname
+}
+
+function getStoredEmployeeWebPortalNotice() {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+
+  const storedNotice = window.sessionStorage.getItem(
+    EMPLOYEE_WEB_PORTAL_NOTICE_STORAGE_KEY,
+  )
+
+  if (!storedNotice) {
+    return ''
+  }
+
+  window.sessionStorage.removeItem(EMPLOYEE_WEB_PORTAL_NOTICE_STORAGE_KEY)
+
+  return storedNotice
 }
 
 function getAuthErrorMessage(code: string) {
