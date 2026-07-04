@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks'
 
 export function ProtectedRoute() {
   const location = useLocation()
-  const { loading, user } = useAuth()
+  const { loading, profile, user } = useAuth()
 
   if (loading) {
     return (
@@ -17,6 +17,10 @@ export function ProtectedRoute() {
 
   if (!user) {
     return <Navigate replace state={{ from: location }} to="/login" />
+  }
+
+  if (!profile) {
+    return <Navigate replace to="/profile-setup-required" />
   }
 
   return <Outlet />

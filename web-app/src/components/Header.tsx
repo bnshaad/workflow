@@ -13,12 +13,13 @@ import { useAuth } from '@/hooks'
 
 export function Header() {
   const navigate = useNavigate()
-  const { signOut, user } = useAuth()
+  const { loading, profile, signOut } = useAuth()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
-  const userEmail = user?.email ?? 'Signed in'
+  const displayName = profile?.displayName ?? 'Workflow user'
+  const roleLabel = profile ? formatRole(profile.role) : ''
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
@@ -106,7 +107,11 @@ export function Header() {
             <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-primary">
               <UserCircle aria-hidden="true" className="size-5" />
             </span>
-            <span className="hidden truncate sm:inline">{userEmail}</span>
+            {loading ? (
+              <span className="hidden h-4 w-28 rounded-full bg-muted sm:inline" />
+            ) : (
+              <span className="hidden truncate sm:inline">{displayName}</span>
+            )}
             <ChevronDown
               aria-hidden="true"
               className={`hidden size-4 text-muted-foreground transition sm:block ${
@@ -124,9 +129,23 @@ export function Header() {
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-primary">
                   <UserCircle aria-hidden="true" className="size-5" />
                 </span>
-                <span className="truncate text-sm font-medium text-foreground">
-                  {userEmail}
-                </span>
+                <div className="min-w-0">
+                  {loading ? (
+                    <div className="space-y-1.5">
+                      <div className="h-4 w-36 rounded-full bg-muted" />
+                      <div className="h-3 w-20 rounded-full bg-muted" />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {displayName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {roleLabel}
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
               <div className="my-1 border-t border-border" />
               <button
@@ -170,4 +189,8 @@ export function Header() {
       ) : null}
     </header>
   )
+}
+
+function formatRole(role: string) {
+  return role.charAt(0).toUpperCase() + role.slice(1)
 }
