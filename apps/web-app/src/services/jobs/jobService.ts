@@ -752,6 +752,7 @@ async function assignEmployeesToJob(
     entityId: jobId,
     entityType: 'job',
     metadata: {
+      assignmentMode: 'manual',
       employeeIds: uniqueEmployeeIds,
       employeeNames,
       fromStatus: currentJob.status,

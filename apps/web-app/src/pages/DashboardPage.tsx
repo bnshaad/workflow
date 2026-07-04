@@ -7,7 +7,9 @@ import {
   ClipboardList,
   Clock,
   ListChecks,
+  Percent,
   RefreshCcw,
+  Timer,
   UserPlus,
   UsersRound,
 } from 'lucide-react'
@@ -24,6 +26,10 @@ import {
   type DashboardSummary,
   type RecentDashboardActivity,
 } from '@/services/dashboard'
+import {
+  getManualAssignmentBaselineMetrics,
+  type ManualAssignmentBaselineMetrics,
+} from '@/services/evaluation'
 import { JobStatuses, JOB_STATUS_LABELS, type JobStatus } from '@/types'
 import type { JobPriority } from '@/types/jobPriority'
 
@@ -73,6 +79,8 @@ const priorityTone: Record<JobPriority, 'danger' | 'default' | 'warning'> = {
 export function DashboardPage() {
   const { profile } = useAuth()
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
+  const [baseline, setBaseline] =
+    useState<ManualAssignmentBaselineMetrics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -88,13 +96,14 @@ export function DashboardPage() {
       setErrorMessage('')
 
       try {
-        const dashboardSummary = await getDashboardSummary(
-          profile,
-          profile.organizationId,
-        )
+        const [dashboardSummary, baselineMetrics] = await Promise.all([
+          getDashboardSummary(profile, profile.organizationId),
+          getManualAssignmentBaselineMetrics(profile, profile.organizationId),
+        ])
 
         if (isMounted) {
           setSummary(dashboardSummary)
+          setBaseline(baselineMetrics)
         }
       } catch (error) {
         if (import.meta.env.DEV) {
@@ -104,6 +113,7 @@ export function DashboardPage() {
         if (isMounted) {
           setErrorMessage('Unable to load dashboard metrics. Please try again.')
           setSummary(null)
+          setBaseline(null)
         }
       } finally {
         if (isMounted) {
@@ -152,6 +162,8 @@ export function DashboardPage() {
             <EmployeeWorkload summary={summary} />
             <RecentActivity summary={summary} />
           </div>
+
+          {baseline ? <ManualAssignmentBaseline baseline={baseline} /> : null}
         </>
       ) : (
         <section className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
@@ -305,6 +317,138 @@ function RecentActivity({ summary }: { summary: DashboardSummary }) {
   )
 }
 
+function ManualAssignmentBaseline({
+  baseline,
+}: {
+  baseline: ManualAssignmentBaselineMetrics
+}) {
+  const topEmployees = baseline.assignmentCountByEmployee.slice(0, 6)
+
+  return (
+    <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-foreground">
+            Manual Assignment Baseline
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Descriptive outcomes for manager-selected initial assignments.
+          </p>
+        </div>
+        <StatusBadge tone="default">Manual</StatusBadge>
+      </div>
+
+      {baseline.totalManualAssignments > 0 ? (
+        <>
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <BaselineMetric
+              icon={UserPlus}
+              label="Manual Assignments"
+              value={String(baseline.totalManualAssignments)}
+            />
+            <BaselineMetric
+              icon={RefreshCcw}
+              label="Jobs Started"
+              value={String(baseline.jobsStarted)}
+            />
+            <BaselineMetric
+              icon={CheckCircle2}
+              label="Jobs Completed"
+              value={String(baseline.completedJobs)}
+            />
+            <BaselineMetric
+              icon={Percent}
+              label="Completion Rate"
+              value={formatPercent(baseline.completionRate)}
+            />
+            <BaselineMetric
+              icon={Timer}
+              label="Avg Assign to Start"
+              value={formatHours(baseline.averageAssignedToStartedHours)}
+            />
+            <BaselineMetric
+              icon={Clock}
+              label="Avg Assign to Complete"
+              value={formatHours(baseline.averageAssignedToCompletedHours)}
+            />
+            {baseline.jobsWithDueDate > 0 ? (
+              <BaselineMetric
+                icon={AlertTriangle}
+                label="Overdue Completions"
+                value={`${baseline.jobsCompletedOverdue} (${formatPercent(
+                  baseline.overdueCompletionRate ?? 0,
+                )})`}
+              />
+            ) : null}
+            <BaselineMetric
+              icon={UsersRound}
+              label="Distribution"
+              value={`${baseline.assignmentDistribution.lowest} / ${baseline.assignmentDistribution.highest} / ${formatNumber(
+                baseline.assignmentDistribution.average,
+              )}`}
+              helper="Low / high / avg"
+            />
+          </div>
+
+          <div className="mt-6 rounded-md border border-border bg-background p-4">
+            <h3 className="text-sm font-semibold text-foreground">
+              Assignment Count by Employee
+            </h3>
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {topEmployees.map((employee) => (
+                <div
+                  className="flex items-center justify-between gap-4 rounded-md border border-border bg-card px-4 py-3"
+                  key={employee.employeeId}
+                >
+                  <span className="min-w-0 truncate text-sm text-foreground">
+                    {employee.displayName}
+                  </span>
+                  <span className="shrink-0 text-sm font-semibold text-foreground">
+                    {employee.assignmentCount}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : (
+        <p className="mt-6 rounded-md border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+          No manual initial assignment audit events are available yet.
+        </p>
+      )}
+    </section>
+  )
+}
+
+function BaselineMetric({
+  helper,
+  icon: Icon,
+  label,
+  value,
+}: {
+  helper?: string
+  icon: ComponentType<SVGProps<SVGSVGElement>>
+  label: string
+  value: string
+}) {
+  return (
+    <div className="rounded-md border border-border bg-background p-4">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Icon aria-hidden="true" className="size-4 shrink-0" />
+        <p className="text-xs font-medium uppercase leading-5 tracking-[0.08em]">
+          {label}
+        </p>
+      </div>
+      <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+        {value}
+      </p>
+      {helper ? (
+        <p className="mt-1 text-xs text-muted-foreground">{helper}</p>
+      ) : null}
+    </div>
+  )
+}
+
 function DashboardLoadingState() {
   return (
     <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
@@ -375,4 +519,18 @@ function formatActivityTime(timestamp: { toDate: () => Date }) {
     minute: '2-digit',
     month: 'short',
   }).format(timestamp.toDate())
+}
+
+function formatPercent(value: number) {
+  return `${Math.round(value * 100)}%`
+}
+
+function formatHours(value: number | null) {
+  return value === null ? 'N/A' : `${formatNumber(value)}h`
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 1,
+  }).format(value)
 }

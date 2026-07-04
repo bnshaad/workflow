@@ -511,6 +511,7 @@ function createAssignmentAuditLog(job) {
     entityId: job.id,
     entityType: 'job',
     metadata: {
+      assignmentMode: 'manual',
       employeeIds: job.assignedEmployeeIds,
       employeeNames: job.assignedEmployeeIds,
       fromStatus: 'open',

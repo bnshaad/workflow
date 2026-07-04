@@ -347,8 +347,8 @@ service cloud.firestore {
 
     // Future auditLogs rules:
     // - Audit logs are append-only.
-    // - Rules will require sameOrganization(resource.data.organizationId).
-    // - Read access will be limited to Admin.
+    // - Rules require sameOrganization(resource.data.organizationId).
+    // - Read access is limited to Admin and Manager dashboard/reporting views.
     match /auditLogs/{auditLogId} {
       allow create: if (
         canManageWebJobs()
@@ -377,6 +377,7 @@ service cloud.firestore {
                   request.resource.data.action == 'job_employees_assigned'
                   && request.resource.data.metadata.fromStatus == 'open'
                   && request.resource.data.metadata.toStatus == 'assigned'
+                  && request.resource.data.metadata.assignmentMode == 'manual'
                   && request.resource.data.metadata.newEmployeeIds.size() > 0
                 )
                 || (
@@ -425,7 +426,10 @@ service cloud.firestore {
           )
           && sameOrganization(request.resource.data.organizationId)
       );
-      allow read, update, delete: if false;
+      allow get, list: if canManageWebJobs()
+        && resource.data.isActive == true
+        && sameOrganization(resource.data.organizationId);
+      allow update, delete: if false;
     }
 
     // Future notifications rules:

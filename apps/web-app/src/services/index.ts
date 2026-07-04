@@ -1,6 +1,7 @@
 export * from './auth'
 export * from './common'
 export * from './dashboard'
+export * from './evaluation'
 export * from './firestore'
 export * from './jobs'
 export * from './storage'
