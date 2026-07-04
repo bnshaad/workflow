@@ -39,6 +39,12 @@ service cloud.firestore {
       return isAdmin() || isManager();
     }
 
+    function isActiveEmployeeProfile(data) {
+      return data.isActive == true
+        && data.role == 'employee'
+        && data.organizationId is string;
+    }
+
     function hasStandardBusinessFields(data) {
       return data.id is string
         && data.organizationId is string
@@ -55,8 +61,13 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow get: if isOwnProfile(uid);
-      allow list: if false;
+      allow get: if isOwnProfile(uid)
+        || (canManageWebJobs()
+          && isActiveEmployeeProfile(resource.data)
+          && sameOrganization(resource.data.organizationId));
+      allow list: if canManageWebJobs()
+        && isActiveEmployeeProfile(resource.data)
+        && sameOrganization(resource.data.organizationId);
       allow create: if false;
       allow update: if isOwnProfile(uid)
         && request.resource.data.id == resource.data.id
@@ -83,6 +94,8 @@ service cloud.firestore {
         && request.resource.data.statusUpdatedAt == null
         && request.resource.data.statusUpdatedBy == null
         && request.resource.data.assignedEmployeeIds == []
+        && request.resource.data.assignedAt == null
+        && request.resource.data.assignedBy == null
         && request.resource.data.workProofCount == 0
         && request.resource.data.issueCount == 0
         && request.resource.data.manualOverride == false
@@ -94,16 +107,41 @@ service cloud.firestore {
         && request.resource.data.organizationId == resource.data.organizationId
         && request.resource.data.id == resource.data.id
         && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'status',
-          'statusUpdatedAt',
-          'statusUpdatedBy',
-          'updatedAt'
-        ])
-        && request.resource.data.statusUpdatedBy == request.auth.uid
-        && request.resource.data.statusUpdatedAt is timestamp
-        && request.resource.data.updatedAt is timestamp
-        && isAllowedStatusTransition(resource.data.status, request.resource.data.status);
+        && (
+          (
+            request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              'status',
+              'statusUpdatedAt',
+              'statusUpdatedBy',
+              'updatedAt'
+            ])
+            && request.resource.data.statusUpdatedBy == request.auth.uid
+            && request.resource.data.statusUpdatedAt is timestamp
+            && request.resource.data.updatedAt is timestamp
+            && request.resource.data.status != 'assigned'
+            && isAllowedStatusTransition(resource.data.status, request.resource.data.status)
+          )
+          || (
+            resource.data.status == 'open'
+            && request.resource.data.status == 'assigned'
+            && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              'assignedEmployeeIds',
+              'assignedAt',
+              'assignedBy',
+              'status',
+              'statusUpdatedAt',
+              'statusUpdatedBy',
+              'updatedAt'
+            ])
+            && request.resource.data.assignedEmployeeIds is list
+            && request.resource.data.assignedEmployeeIds.size() > 0
+            && request.resource.data.assignedAt is timestamp
+            && request.resource.data.assignedBy == request.auth.uid
+            && request.resource.data.statusUpdatedAt is timestamp
+            && request.resource.data.statusUpdatedBy == request.auth.uid
+            && request.resource.data.updatedAt is timestamp
+          )
+        );
       allow delete: if false;
     }
 
@@ -114,12 +152,23 @@ service cloud.firestore {
       allow create: if canManageWebJobs()
         && hasStandardBusinessFields(request.resource.data)
         && request.resource.data.id == activityId
-        && request.resource.data.type == 'status_changed'
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.jobId is string
-        && isAllowedStatusTransition(
-          request.resource.data.fromStatus,
-          request.resource.data.toStatus
+        && (
+          (
+            request.resource.data.type == 'status_changed'
+            && isAllowedStatusTransition(
+              request.resource.data.fromStatus,
+              request.resource.data.toStatus
+            )
+            && request.resource.data.toStatus != 'assigned'
+          )
+          || (
+            request.resource.data.type == 'employees_assigned'
+            && request.resource.data.employeeIds is list
+            && request.resource.data.employeeIds.size() > 0
+            && request.resource.data.employeeNames is list
+          )
         )
         && sameOrganization(request.resource.data.organizationId);
       allow update, delete: if false;
@@ -154,7 +203,10 @@ service cloud.firestore {
         && hasStandardBusinessFields(request.resource.data)
         && request.resource.data.id == auditLogId
         && request.resource.data.actorId == request.auth.uid
-        && request.resource.data.action == 'job.status_updated'
+        && (
+          request.resource.data.action == 'job.status_updated'
+          || request.resource.data.action == 'job_employees_assigned'
+        )
         && request.resource.data.entityType == 'job'
         && sameOrganization(request.resource.data.organizationId);
       allow read, update, delete: if false;

@@ -7,6 +7,7 @@ import {
   MapPin,
   Paperclip,
   Phone,
+  Search,
   UserRound,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
@@ -17,10 +18,12 @@ import { jobService } from '@/services/jobs'
 import {
   getAllowedJobStatusTransitions,
   JOB_STATUS_LABELS,
+  JobStatuses,
   type Job,
   type JobActivity,
   type JobPriority,
   type JobStatus,
+  type UserProfile,
 } from '@/types'
 
 const priorityTone: Record<JobPriority, 'danger' | 'default' | 'warning'> = {
@@ -43,10 +46,15 @@ export function JobDetailsPage() {
   const { jobId } = useParams()
   const { profile } = useAuth()
   const [activities, setActivities] = useState<JobActivity[]>([])
+  const [assignableEmployees, setAssignableEmployees] = useState<UserProfile[]>([])
+  const [assignmentErrorMessage, setAssignmentErrorMessage] = useState('')
+  const [assignmentSearch, setAssignmentSearch] = useState('')
   const [job, setJob] = useState<Job | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [statusErrorMessage, setStatusErrorMessage] = useState('')
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([])
   const [selectedStatus, setSelectedStatus] = useState<JobStatus | ''>('')
+  const [isAssigning, setIsAssigning] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
@@ -60,12 +68,14 @@ export function JobDetailsPage() {
 
       setIsLoading(true)
       setErrorMessage('')
+      setAssignmentErrorMessage('')
       setStatusErrorMessage('')
 
       try {
-        const [loadedJob, loadedActivities] = await Promise.all([
+        const [loadedJob, loadedActivities, loadedEmployees] = await Promise.all([
           jobService.getJob(profile, jobId, profile.organizationId),
           jobService.getJobActivities(profile, jobId, profile.organizationId),
+          jobService.listAssignableEmployees(profile, profile.organizationId),
         ])
 
         if (!isMounted) {
@@ -81,6 +91,7 @@ export function JobDetailsPage() {
 
         setJob(loadedJob)
         setActivities(loadedActivities)
+        setAssignableEmployees(loadedEmployees)
       } catch {
         if (isMounted) {
           setErrorMessage('Unable to load job details. Please try again.')
@@ -105,8 +116,28 @@ export function JobDetailsPage() {
     }
 
     return getAllowedJobStatusTransitions(job.status)
+      .filter((status) => status !== JobStatuses.Assigned)
   }, [job])
   const canUpdateStatus = profile ? canEditJob(profile) : false
+  const filteredAssignableEmployees = useMemo(() => {
+    const normalizedSearch = assignmentSearch.trim().toLowerCase()
+
+    if (normalizedSearch.length === 0) {
+      return assignableEmployees
+    }
+
+    return assignableEmployees.filter((employee) => {
+      return (
+        employee.displayName.toLowerCase().includes(normalizedSearch) ||
+        employee.email.toLowerCase().includes(normalizedSearch)
+      )
+    })
+  }, [assignableEmployees, assignmentSearch])
+  const assignedEmployeeNames = useMemo(() => {
+    return getAssignedEmployeeNames(job?.assignedEmployeeIds ?? [], assignableEmployees)
+  }, [assignableEmployees, job?.assignedEmployeeIds])
+  const canAssignEmployees =
+    canUpdateStatus && job?.status === JobStatuses.Open
 
   async function handleStatusUpdate() {
     if (!profile || !job || !selectedStatus) {
@@ -135,6 +166,46 @@ export function JobDetailsPage() {
     } finally {
       setIsUpdatingStatus(false)
     }
+  }
+
+  async function handleAssignEmployees() {
+    if (!profile || !job) {
+      return
+    }
+
+    setIsAssigning(true)
+    setAssignmentErrorMessage('')
+
+    try {
+      const result = await jobService.assignEmployeesToJob(
+        profile,
+        job.id,
+        job.organizationId,
+        selectedEmployeeIds,
+      )
+
+      setJob(result.job)
+      setActivities((currentActivities) => [
+        result.activity,
+        ...currentActivities,
+      ])
+      setSelectedEmployeeIds([])
+      setAssignmentSearch('')
+    } catch {
+      setAssignmentErrorMessage('Unable to assign employees. Please try again.')
+    } finally {
+      setIsAssigning(false)
+    }
+  }
+
+  function toggleEmployeeSelection(employeeId: string) {
+    setSelectedEmployeeIds((currentIds) => {
+      if (currentIds.includes(employeeId)) {
+        return currentIds.filter((currentId) => currentId !== employeeId)
+      }
+
+      return [...currentIds, employeeId]
+    })
   }
 
   if (isLoading) {
@@ -236,7 +307,9 @@ export function JobDetailsPage() {
 
           <InfoCard title="Assigned Employees">
             <div className="rounded-lg border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
-              {formatAssignedEmployees(job.assignedEmployeeIds)}
+              {assignedEmployeeNames.length === 0
+                ? 'Unassigned'
+                : assignedEmployeeNames.join(', ')}
             </div>
           </InfoCard>
 
@@ -251,6 +324,90 @@ export function JobDetailsPage() {
         </div>
 
         <aside className="space-y-6">
+          <InfoCard title="Manual Assignment">
+            <div className="space-y-4">
+              {job.status === JobStatuses.Open ? (
+                <p className="text-sm text-muted-foreground">
+                  Select active employees from this organization.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Assignment is available only while the job is open.
+                </p>
+              )}
+
+              <div className="relative">
+                <Search
+                  aria-hidden="true"
+                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                />
+                <input
+                  className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!canAssignEmployees || isAssigning}
+                  onChange={(event) => setAssignmentSearch(event.target.value)}
+                  placeholder="Search employees..."
+                  type="search"
+                  value={assignmentSearch}
+                />
+              </div>
+
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-border bg-background p-2">
+                {filteredAssignableEmployees.length === 0 ? (
+                  <p className="px-2 py-4 text-center text-sm text-muted-foreground">
+                    No eligible employees found.
+                  </p>
+                ) : (
+                  filteredAssignableEmployees.map((employee) => (
+                    <label
+                      className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 text-sm transition hover:bg-muted has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
+                      key={employee.id}
+                    >
+                      <input
+                        checked={selectedEmployeeIds.includes(employee.id)}
+                        className="mt-1 size-4"
+                        disabled={!canAssignEmployees || isAssigning}
+                        onChange={() => toggleEmployeeSelection(employee.id)}
+                        type="checkbox"
+                      />
+                      <span>
+                        <span className="block font-medium text-foreground">
+                          {employee.displayName}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {employee.email}
+                        </span>
+                        {employee.skills.length > 0 ? (
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            {employee.skills.join(', ')}
+                          </span>
+                        ) : null}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+
+              <button
+                className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={
+                  !canAssignEmployees ||
+                  selectedEmployeeIds.length === 0 ||
+                  isAssigning
+                }
+                onClick={handleAssignEmployees}
+                type="button"
+              >
+                {isAssigning ? 'Assigning...' : 'Assign Employees'}
+              </button>
+
+              {assignmentErrorMessage ? (
+                <p className="text-sm font-medium text-destructive">
+                  {assignmentErrorMessage}
+                </p>
+              ) : null}
+            </div>
+          </InfoCard>
+
           <InfoCard title="Status Management">
             <div className="space-y-4">
               <DetailItem label="Current Status">
@@ -339,7 +496,7 @@ export function JobDetailsPage() {
                   <TimelinePlaceholder
                     description={`${activity.description} ${formatTimestamp(activity.createdAt)}`}
                     key={activity.id}
-                    title={JOB_STATUS_LABELS[activity.toStatus]}
+                    title={getActivityTitle(activity)}
                   />
                 ))
               )}
@@ -436,20 +593,35 @@ function TimelinePlaceholder({
   )
 }
 
-function formatAssignedEmployees(assignedEmployeeIds: string[]) {
-  if (assignedEmployeeIds.length === 0) {
-    return 'Unassigned'
-  }
-
-  return assignedEmployeeIds.join(', ')
-}
-
 function formatNullableTimestamp(timestamp: Job['dueDate']) {
   if (!timestamp) {
     return 'No due date'
   }
 
   return formatTimestamp(timestamp)
+}
+
+function getActivityTitle(activity: JobActivity) {
+  if (activity.type === 'employees_assigned') {
+    return 'Employees assigned'
+  }
+
+  return activity.toStatus
+    ? JOB_STATUS_LABELS[activity.toStatus]
+    : 'Status updated'
+}
+
+function getAssignedEmployeeNames(
+  assignedEmployeeIds: string[],
+  employees: UserProfile[],
+) {
+  const employeeNameMap = new Map(
+    employees.map((employee) => [employee.id, employee.displayName]),
+  )
+
+  return assignedEmployeeIds.map((employeeId) => {
+    return employeeNameMap.get(employeeId) ?? employeeId
+  })
 }
 
 function formatTimestamp(timestamp: Job['createdAt']) {

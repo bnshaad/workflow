@@ -20,11 +20,15 @@ export interface JobAiRecommendation {
   summary: string
 }
 
+export type JobActivityType = 'employees_assigned' | 'status_changed'
+
 export interface JobActivity extends TenantDocument {
   jobId: string
-  type: 'status_changed'
-  fromStatus: JobStatus
-  toStatus: JobStatus
+  type: JobActivityType
+  fromStatus?: JobStatus
+  toStatus?: JobStatus
+  employeeIds?: string[]
+  employeeNames?: string[]
   createdBy: string
   description: string
 }
@@ -49,6 +53,8 @@ export interface Job extends TenantDocument {
   statusUpdatedBy: string | null
   requiredSkills: string[]
   assignedEmployeeIds: string[]
+  assignedAt: Timestamp | null
+  assignedBy: string | null
   createdBy: string
   dueDate: Timestamp | null
   attachments: JobAttachment[]

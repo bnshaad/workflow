@@ -14,7 +14,7 @@ import {
 import { firestore } from '@/services/firestore'
 import { requireActiveProfile, requireTenantAccess } from '@/services/common'
 import { DEFAULT_JOB_STATUS } from '@/constants/jobConstants'
-import { canEditJob } from '@/permissions'
+import { canAssignWorker, canEditJob } from '@/permissions'
 import type {
   CreateJobInput,
   Job,
@@ -23,6 +23,7 @@ import type {
 } from '@/types/job'
 import {
   canTransitionJobStatus,
+  JobStatuses,
   JOB_STATUS_LABELS,
   type JobStatus,
 } from '@/types/jobStatus'
@@ -45,6 +46,10 @@ export interface JobService {
     jobId: string,
     organizationId: string,
   ): Promise<Job | null>
+  listAssignableEmployees(
+    profile: UserProfile,
+    organizationId: string,
+  ): Promise<UserProfile[]>
   listJobs(
     profile: UserProfile,
     organizationId: string,
@@ -62,6 +67,12 @@ export interface JobService {
     organizationId: string,
     status: JobStatus,
   ): Promise<JobStatusUpdateResult>
+  assignEmployeesToJob(
+    profile: UserProfile,
+    jobId: string,
+    organizationId: string,
+    employeeIds: string[],
+  ): Promise<JobAssignmentResult>
   assignEmployees(
     profile: UserProfile,
     jobId: string,
@@ -79,6 +90,7 @@ export interface JobService {
 const JOBS_COLLECTION = 'jobs'
 const JOB_ACTIVITIES_COLLECTION = 'jobActivities'
 const AUDIT_LOGS_COLLECTION = 'auditLogs'
+const USERS_COLLECTION = 'users'
 const DEFAULT_JOBS_LIMIT = 25
 const DEFAULT_JOB_ACTIVITIES_LIMIT = 25
 
@@ -92,6 +104,12 @@ export type ListJobActivitiesOptions = {
 
 export type JobStatusUpdateResult = {
   activity: JobActivity
+  job: Job
+}
+
+export type JobAssignmentResult = {
+  activity: JobActivity
+  assignedEmployees: UserProfile[]
   job: Job
 }
 
@@ -141,6 +159,8 @@ export const jobService: JobService = {
       statusUpdatedBy: null,
       requiredSkills: input.requiredSkills,
       assignedEmployeeIds: [],
+      assignedAt: null,
+      assignedBy: null,
       createdBy: activeProfile.id,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -159,6 +179,24 @@ export const jobService: JobService = {
     await setDoc(jobReference, job)
 
     return job
+  },
+
+  async listAssignableEmployees(profile, organizationId) {
+    requireTenantAccess(profile, organizationId)
+
+    const employeesQuery = query(
+      collection(firestore, USERS_COLLECTION),
+      where('organizationId', '==', organizationId),
+      where('isActive', '==', true),
+      where('role', '==', 'employee'),
+    )
+    const snapshot = await getDocs(employeesQuery)
+
+    return snapshot.docs
+      .map((employeeDocument) => employeeDocument.data() as UserProfile)
+      .sort((firstEmployee, secondEmployee) =>
+        firstEmployee.displayName.localeCompare(secondEmployee.displayName),
+      )
   },
 
   async getJobActivities(profile, jobId, organizationId, options) {
@@ -228,15 +266,19 @@ export const jobService: JobService = {
     return updateJobStatus(profile, jobId, organizationId, status)
   },
 
+  async assignEmployeesToJob(profile, jobId, organizationId, employeeIds) {
+    return assignEmployeesToJob(profile, jobId, organizationId, employeeIds)
+  },
+
   async assignEmployees(profile, jobId, organizationId, employeeIds) {
-    requireTenantAccess(profile, organizationId)
-    requireJobId(jobId)
+    const result = await assignEmployeesToJob(
+      profile,
+      jobId,
+      organizationId,
+      employeeIds,
+    )
 
-    if (!Array.isArray(employeeIds)) {
-      throw new Error('Employee IDs must be a list.')
-    }
-
-    return throwNotImplemented()
+    return result.job
   },
 
   async updateStatus(profile, jobId, organizationId, status) {
@@ -262,6 +304,10 @@ async function updateJobStatus(
 
   if (!validateJobStatus(status)) {
     throw new Error('Job status is invalid.')
+  }
+
+  if (status === JobStatuses.Assigned) {
+    throw new Error('Use job assignment to move a job to assigned status.')
   }
 
   const jobReference = doc(firestore, JOBS_COLLECTION, jobId)
@@ -340,6 +386,132 @@ async function updateJobStatus(
 
   return {
     activity,
+    job: updatedJob,
+  }
+}
+
+async function assignEmployeesToJob(
+  profile: UserProfile,
+  jobId: string,
+  organizationId: string,
+  employeeIds: string[],
+) {
+  const activeProfile = requireActiveProfile(profile)
+  requireTenantAccess(activeProfile, organizationId)
+  requireJobId(jobId)
+
+  if (!canAssignWorker(activeProfile)) {
+    throw new Error('You do not have permission to assign employees.')
+  }
+
+  if (!Array.isArray(employeeIds)) {
+    throw new Error('Employee IDs must be a list.')
+  }
+
+  const uniqueEmployeeIds = Array.from(
+    new Set(employeeIds.map((employeeId) => employeeId.trim()).filter(Boolean)),
+  )
+
+  if (uniqueEmployeeIds.length === 0) {
+    throw new Error('Select at least one employee.')
+  }
+
+  const jobReference = doc(firestore, JOBS_COLLECTION, jobId)
+  const jobSnapshot = await getDoc(jobReference)
+
+  if (!jobSnapshot.exists()) {
+    throw new Error('Job not found.')
+  }
+
+  const currentJob = jobSnapshot.data() as Job
+
+  if (!currentJob.isActive || currentJob.organizationId !== organizationId) {
+    throw new Error('Job not found.')
+  }
+
+  requireTenantAccess(activeProfile, currentJob.organizationId)
+
+  if (currentJob.status !== JobStatuses.Open) {
+    throw new Error('Only open jobs can be assigned.')
+  }
+
+  const eligibleEmployees = await jobService.listAssignableEmployees(
+    activeProfile,
+    organizationId,
+  )
+  const eligibleEmployeeMap = new Map(
+    eligibleEmployees.map((employee) => [employee.id, employee]),
+  )
+  const assignedEmployees = uniqueEmployeeIds.map((employeeId) => {
+    const employee = eligibleEmployeeMap.get(employeeId)
+
+    if (!employee) {
+      throw new Error('One or more selected employees are not eligible.')
+    }
+
+    return employee
+  })
+
+  const timestamp = Timestamp.now()
+  const activityReference = doc(collection(firestore, JOB_ACTIVITIES_COLLECTION))
+  const auditLogReference = doc(collection(firestore, AUDIT_LOGS_COLLECTION))
+  const employeeNames = assignedEmployees.map((employee) => employee.displayName)
+  const activity: JobActivity = {
+    id: activityReference.id,
+    organizationId,
+    isActive: true,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    jobId,
+    type: 'employees_assigned',
+    employeeIds: uniqueEmployeeIds,
+    employeeNames,
+    createdBy: activeProfile.id,
+    description: `Assigned ${employeeNames.join(', ')}.`,
+  }
+  const updatedJob: Job = {
+    ...currentJob,
+    assignedEmployeeIds: uniqueEmployeeIds,
+    assignedAt: timestamp,
+    assignedBy: activeProfile.id,
+    status: JobStatuses.Assigned,
+    statusUpdatedAt: timestamp,
+    statusUpdatedBy: activeProfile.id,
+    updatedAt: timestamp,
+  }
+  const auditLog = {
+    id: auditLogReference.id,
+    organizationId,
+    isActive: true,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    actorId: activeProfile.id,
+    action: 'job_employees_assigned',
+    entityId: jobId,
+    entityType: 'job',
+    metadata: {
+      employeeIds: uniqueEmployeeIds,
+    },
+  }
+  const batch = writeBatch(firestore)
+
+  batch.update(jobReference, {
+    assignedEmployeeIds: uniqueEmployeeIds,
+    assignedAt: timestamp,
+    assignedBy: activeProfile.id,
+    status: JobStatuses.Assigned,
+    statusUpdatedAt: timestamp,
+    statusUpdatedBy: activeProfile.id,
+    updatedAt: timestamp,
+  })
+  batch.set(activityReference, activity)
+  batch.set(auditLogReference, auditLog)
+
+  await batch.commit()
+
+  return {
+    activity,
+    assignedEmployees,
     job: updatedJob,
   }
 }

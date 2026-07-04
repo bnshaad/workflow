@@ -4,6 +4,7 @@ export type {
   CreateJobValidationInput,
   Job,
   JobActivity,
+  JobActivityType,
   JobAiRecommendation,
   JobAttachment,
   UpdateJobInput,
