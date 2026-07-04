@@ -1,4 +1,5 @@
 export * from './auth'
+export * from './ai'
 export * from './common'
 export * from './dashboard'
 export * from './evaluation'

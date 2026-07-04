@@ -1,9 +1,14 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowLeft, Calendar, Paperclip, Save } from 'lucide-react'
+import { ArrowLeft, Calendar, Paperclip, Save, Sparkles } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components'
 import { DEFAULT_JOB_PRIORITY, JOB_PRIORITY_OPTIONS } from '@/constants/jobConstants'
 import { useAuth } from '@/hooks'
+import {
+  AiJobUnderstandingError,
+  jobUnderstandingService,
+  type AiJobDraftSuggestion,
+} from '@/services/ai'
 import { JobValidationError, jobService } from '@/services/jobs'
 import type { CreateJobInput } from '@/types'
 import type { JobPriority } from '@/types/jobPriority'
@@ -36,8 +41,62 @@ export function CreateJobPage() {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const [formState, setFormState] = useState(initialFormState)
+  const [customerRequest, setCustomerRequest] = useState('')
+  const [draftSuggestion, setDraftSuggestion] =
+    useState<AiJobDraftSuggestion | null>(null)
+  const [aiErrorMessage, setAiErrorMessage] = useState('')
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleGenerateDraft = async () => {
+    setAiErrorMessage('')
+    setIsGeneratingDraft(true)
+
+    if (!profile) {
+      setAiErrorMessage('Your profile is still loading. Please try again.')
+      setIsGeneratingDraft(false)
+      return
+    }
+
+    try {
+      const suggestion =
+        await jobUnderstandingService.generateJobDraftSuggestion(profile, {
+          customerRequest,
+        })
+
+      setDraftSuggestion(suggestion)
+    } catch (error) {
+      if (error instanceof AiJobUnderstandingError) {
+        setAiErrorMessage(error.message)
+      } else {
+        setAiErrorMessage('Unable to generate a job draft. Please try again.')
+      }
+    } finally {
+      setIsGeneratingDraft(false)
+    }
+  }
+
+  const applyDraftSuggestion = () => {
+    if (!draftSuggestion) {
+      return
+    }
+
+    setFormState((current) => ({
+      ...current,
+      title: draftSuggestion.title || current.title,
+      description: draftSuggestion.description || current.description,
+      customerName: draftSuggestion.customerName || current.customerName,
+      customerPhone: draftSuggestion.customerPhone || current.customerPhone,
+      serviceAddress: draftSuggestion.serviceAddress || current.serviceAddress,
+      location: draftSuggestion.location || current.location,
+      priority: draftSuggestion.priority || current.priority,
+      requiredSkillIds:
+        draftSuggestion.requiredSkills.length > 0
+          ? draftSuggestion.requiredSkills.join(', ')
+          : current.requiredSkillIds,
+    }))
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -92,6 +151,133 @@ export function CreateJobPage() {
           </Link>
         }
       />
+
+      <section className="rounded-xl border border-border bg-card shadow-sm">
+        <div className="border-b border-border p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+                <Sparkles aria-hidden="true" className="size-4 text-primary" />
+                Generate Job Draft
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                AI-generated suggestions must be reviewed and edited before creating a job.
+              </p>
+            </div>
+            {draftSuggestion ? (
+              <span className="inline-flex w-fit rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                AI-generated suggestion
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
+          <Field label="Natural-language customer request">
+            <textarea
+              className="min-h-36 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              onChange={(event) => setCustomerRequest(event.target.value)}
+              placeholder="Example: Customer name is Sarah Jenkins. AC is not cooling at 123 Maple Street and they need service today. Phone is 555-123-4567."
+              value={customerRequest}
+            />
+          </Field>
+
+          <div className="rounded-lg border border-border bg-background p-4">
+            {draftSuggestion ? (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Draft suggestion
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Development stub output. Review every field before using it.
+                  </p>
+                </div>
+                <dl className="grid gap-3 text-sm">
+                  <SuggestionRow label="Title" value={draftSuggestion.title} />
+                  <SuggestionRow
+                    label="Service Type"
+                    value={draftSuggestion.serviceType}
+                  />
+                  <SuggestionRow
+                    label="Priority"
+                    value={draftSuggestion.priority}
+                  />
+                  <SuggestionRow
+                    label="Skills"
+                    value={draftSuggestion.requiredSkills.join(', ')}
+                  />
+                  <SuggestionRow
+                    label="Customer"
+                    value={draftSuggestion.customerName}
+                  />
+                  <SuggestionRow
+                    label="Phone"
+                    value={draftSuggestion.customerPhone}
+                  />
+                  <SuggestionRow
+                    label="Address"
+                    value={draftSuggestion.serviceAddress}
+                  />
+                  <SuggestionRow
+                    label="Location"
+                    value={draftSuggestion.location}
+                  />
+                </dl>
+                {draftSuggestion.needsReview.length > 0 ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    <p className="font-medium">Needs review</p>
+                    <ul className="mt-1 list-disc space-y-1 pl-4">
+                      {draftSuggestion.needsReview.map((reviewItem) => (
+                        <li key={reviewItem}>{reviewItem}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="flex min-h-36 items-center text-sm text-muted-foreground">
+                Generated fields will appear here before you apply them to the editable job form.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4 border-t border-border p-6 sm:flex-row sm:items-center sm:justify-between">
+          {aiErrorMessage ? (
+            <p className="text-sm font-medium text-destructive">
+              {aiErrorMessage}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              This does not save a job or assign employees.
+            </p>
+          )}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isGeneratingDraft || customerRequest.trim().length === 0}
+              onClick={handleGenerateDraft}
+              type="button"
+            >
+              <Sparkles aria-hidden="true" className="size-4" />
+              {isGeneratingDraft
+                ? 'Generating...'
+                : draftSuggestion
+                  ? 'Retry'
+                  : 'Generate Draft'}
+            </button>
+            <button
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!draftSuggestion}
+              onClick={applyDraftSuggestion}
+              type="button"
+            >
+              Use Suggestion
+            </button>
+          </div>
+        </div>
+      </section>
 
       <form
         className="rounded-xl border border-border bg-card shadow-sm"
@@ -283,6 +469,25 @@ function Field({
       </span>
       {children}
     </label>
+  )
+}
+
+function SuggestionRow({
+  label,
+  value,
+}: {
+  label: string
+  value: string
+}) {
+  return (
+    <div className="grid gap-1 sm:grid-cols-[96px_minmax(0,1fr)]">
+      <dt className="text-xs font-medium uppercase text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="break-words text-foreground">
+        {value || <span className="text-muted-foreground">Needs review</span>}
+      </dd>
+    </div>
   )
 }
 
