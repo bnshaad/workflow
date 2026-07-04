@@ -1,4 +1,4 @@
-import type { Timestamp } from 'firebase/firestore'
+import type { TenantDocument } from './common'
 
 export type UserRole = 'admin' | 'manager' | 'employee'
 
@@ -10,9 +10,7 @@ export type UserAvailability =
   | 'Busy'
   | 'Leave'
 
-export interface UserProfile {
-  id: string
-  organizationId: string
+export interface UserProfile extends TenantDocument {
   email: string
   displayName: string
   role: UserRole
@@ -20,7 +18,4 @@ export interface UserProfile {
   availability: UserAvailability
   activeTaskCount: number
   performanceScore: number
-  isActive: boolean
-  createdAt: Timestamp
-  updatedAt: Timestamp
 }
