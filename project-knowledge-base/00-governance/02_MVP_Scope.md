@@ -398,3 +398,18 @@ Features that fail these conditions shall be deferred to future versions.
 This document represents the approved MVP scope.
 
 Unless formally revised, Codex and all future development activities shall implement only the functionality defined within this document.
+## AI Modules
+
+The MVP includes six AI modules:
+
+### Core AI
+- Intelligent Task Assignment
+- Explainable AI
+
+### Operational AI
+- Adaptive Learning Recommendation Engine
+- AI Decision Support Assistant
+
+### Productivity AI
+- Conversational AI
+- Knowledge Assistant (RAG)

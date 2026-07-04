@@ -251,3 +251,19 @@ These enhancements are outside the MVP and will not influence the current implem
 Workflow is not built to replace managers.
 
 Workflow is built to help managers make better operational decisions through explainable recommendations, structured workflows, and complete operational visibility.
+## AI Vision
+
+Workflow is an AI-powered workforce operations platform that combines six intelligent AI capabilities to assist managers throughout the operational lifecycle.
+
+The platform focuses on augmenting managerial decision-making rather than replacing it.
+
+The AI capabilities include:
+
+1. Intelligent Task Assignment
+2. Adaptive Learning Recommendation Engine
+3. Explainable AI
+4. AI Decision Support Assistant
+5. Conversational AI
+6. Knowledge Assistant (RAG)
+
+Managers always retain final control over operational decisions.

@@ -1,0 +1,173 @@
+import { useEffect, useRef, useState } from 'react'
+import {
+  Bell,
+  BriefcaseBusiness,
+  ChevronDown,
+  LogOut,
+  Search,
+  Settings,
+  UserCircle,
+} from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '@/hooks'
+
+export function Header() {
+  const navigate = useNavigate()
+  const { signOut, user } = useAuth()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
+  const menuRef = useRef<HTMLDivElement>(null)
+  const userEmail = user?.email ?? 'Signed in'
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setIsMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (signOutError.length === 0) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSignOutError('')
+    }, 4000)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [signOutError])
+
+  async function handleSignOut() {
+    setSignOutError('')
+    setIsSigningOut(true)
+
+    try {
+      await signOut()
+      setIsMenuOpen(false)
+      navigate('/login', { replace: true })
+    } catch {
+      setSignOutError('Unable to sign out. Please try again.')
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
+
+  return (
+    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-card px-6">
+      <div className="relative hidden w-full max-w-md sm:block">
+        <Search
+          aria-hidden="true"
+          className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        />
+        <input
+          className="h-9 w-full rounded-lg border border-border bg-background pl-9 pr-4 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+          placeholder="Search jobs, team..."
+          type="search"
+        />
+      </div>
+
+      <div className="ml-auto flex items-center gap-4">
+        <button
+          aria-label="Notifications"
+          className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          type="button"
+        >
+          <Bell aria-hidden="true" className="size-5" />
+          <span className="absolute right-2 top-2 size-2 rounded-full bg-destructive ring-2 ring-card" />
+        </button>
+
+        <div className="hidden items-center gap-2 border-l border-border pl-4 text-sm font-medium text-foreground sm:flex">
+          <BriefcaseBusiness
+            aria-hidden="true"
+            className="size-4 text-muted-foreground"
+          />
+          <span>Business Name</span>
+        </div>
+
+        <div className="relative" ref={menuRef}>
+          <button
+            aria-expanded={isMenuOpen}
+            aria-haspopup="menu"
+            className="flex max-w-[240px] items-center gap-2 rounded-full border border-border bg-card p-1 pr-3 text-sm font-medium text-foreground transition hover:bg-muted"
+            onClick={() => setIsMenuOpen((current) => !current)}
+            type="button"
+          >
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-primary">
+              <UserCircle aria-hidden="true" className="size-5" />
+            </span>
+            <span className="hidden truncate sm:inline">{userEmail}</span>
+            <ChevronDown
+              aria-hidden="true"
+              className={`hidden size-4 text-muted-foreground transition sm:block ${
+                isMenuOpen ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          {isMenuOpen ? (
+            <div
+              className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-border bg-card py-2 shadow-lg"
+              role="menu"
+            >
+              <div className="flex items-center gap-2 px-3 pb-2 pt-1">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-primary">
+                  <UserCircle aria-hidden="true" className="size-5" />
+                </span>
+                <span className="truncate text-sm font-medium text-foreground">
+                  {userEmail}
+                </span>
+              </div>
+              <div className="my-1 border-t border-border" />
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground"
+                disabled
+                role="menuitem"
+                type="button"
+              >
+                <UserCircle aria-hidden="true" className="size-4" />
+                Profile
+              </button>
+              <Link
+                className="flex items-center gap-2 px-3 py-2 text-sm text-foreground transition hover:bg-muted"
+                onClick={() => setIsMenuOpen(false)}
+                role="menuitem"
+                to="/settings"
+              >
+                <Settings aria-hidden="true" className="size-4" />
+                Settings
+              </Link>
+              <div className="my-1 border-t border-border" />
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-destructive transition hover:bg-destructive/5 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isSigningOut}
+                onClick={handleSignOut}
+                role="menuitem"
+                type="button"
+              >
+                <LogOut aria-hidden="true" className="size-4" />
+                {isSigningOut ? 'Signing out...' : 'Sign Out'}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {signOutError.length > 0 ? (
+        <div className="fixed right-6 top-20 rounded-lg border border-destructive/30 bg-card px-4 py-3 text-sm text-destructive shadow-lg">
+          {signOutError}
+        </div>
+      ) : null}
+    </header>
+  )
+}

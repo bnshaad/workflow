@@ -1,14 +1,11 @@
-import { Navigate, Outlet } from 'react-router-dom'
-import { mockAuthState, type MockRole } from '@/config'
+import { Outlet } from 'react-router-dom'
 
 type RoleRouteProps = {
-  allowedRoles: MockRole[]
+  allowedRoles: string[]
 }
 
-export function RoleRoute({ allowedRoles }: RoleRouteProps) {
-  if (!allowedRoles.includes(mockAuthState.role)) {
-    return <Navigate replace to="/unauthorized" />
-  }
+export function RoleRoute({ allowedRoles: _allowedRoles }: RoleRouteProps) {
+  void _allowedRoles
 
   return <Outlet />
 }

@@ -1,2 +1,6 @@
-export { mockAuthState } from './mockAuth'
-export type { MockRole } from './mockAuth'
+export {
+  firebaseApp,
+  firebaseAuth,
+  firebaseStorage,
+  firestore,
+} from './firebase'

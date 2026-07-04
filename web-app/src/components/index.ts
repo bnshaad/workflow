@@ -1,6 +1,7 @@
 export { AvailabilityBadge } from './AvailabilityBadge'
 export type { Availability } from './AvailabilityBadge'
 export { DataTable } from './DataTable'
+export { Header } from './Header'
 export { IssueCard } from './IssueCard'
 export { MetricCard } from './MetricCard'
 export { PageHeader } from './PageHeader'
