@@ -1,0 +1,124 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwnProfile(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function hasOrganization() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationId is string;
+    }
+
+    function isAdmin() {
+      return hasOrganization()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isManager() {
+      return hasOrganization()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'manager';
+    }
+
+    // Future tenant helper. Business documents must include organizationId, and future
+    // collection rules will compare that value with the authenticated user's profile.
+    function sameOrganization(organizationId) {
+      return hasOrganization()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationId == organizationId;
+    }
+
+    function canManageWebJobs() {
+      return isAdmin() || isManager();
+    }
+
+    function hasStandardBusinessFields(data) {
+      return data.id is string
+        && data.organizationId is string
+        && data.isActive is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /users/{uid} {
+      allow get: if isOwnProfile(uid);
+      allow list: if false;
+      allow create: if false;
+      allow update: if isOwnProfile(uid)
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.organizationId == resource.data.organizationId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.email == resource.data.email;
+      allow delete: if false;
+    }
+
+    // Jobs are stored in the jobs collection.
+    // Phase 13B allows Admin and Manager to create and list active jobs only
+    // within their own organization. Update, delete, assignment, audit log,
+    // notification, and AI workflow rules will be added in later phases.
+    // - Employee mobile access will be limited to assigned jobs only.
+    match /jobs/{jobId} {
+      allow get, list: if canManageWebJobs()
+        && resource.data.isActive == true
+        && sameOrganization(resource.data.organizationId);
+      allow create: if canManageWebJobs()
+        && hasStandardBusinessFields(request.resource.data)
+        && request.resource.data.id == jobId
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status == 'Pending'
+        && request.resource.data.assignedEmployeeIds == []
+        && request.resource.data.workProofCount == 0
+        && request.resource.data.issueCount == 0
+        && request.resource.data.manualOverride == false
+        && request.resource.data.isActive == true
+        && sameOrganization(request.resource.data.organizationId);
+      allow update, delete: if false;
+    }
+
+    // Future teams rules:
+    // - Team data is stored in users, not a separate teams collection.
+    // - Admin and Manager team access will be handled through scoped users queries.
+    // - Rules will enforce organizationId and RBAC before enabling list access.
+
+    // Future recommendations rules:
+    // - Rules will require sameOrganization(resource.data.organizationId).
+    // - Admin and Manager will read recommendation history for web assignment workflows.
+    match /recommendations/{recommendationId} {
+      allow read, write: if false;
+    }
+
+    // Future incidents rules:
+    // - Rules will require sameOrganization(resource.data.organizationId).
+    // - Employee mobile writes will be limited to issues for assigned jobs.
+    // - Admin and Manager will resolve incidents from the web portal.
+    match /incidents/{incidentId} {
+      allow read, write: if false;
+    }
+
+    // Future auditLogs rules:
+    // - Audit logs are append-only.
+    // - Rules will require sameOrganization(resource.data.organizationId).
+    // - Read access will be limited to Admin.
+    match /auditLogs/{auditLogId} {
+      allow read, write: if false;
+    }
+
+    // Future notifications rules:
+    // - Rules will require sameOrganization(resource.data.organizationId).
+    // - Users will read only their own notifications.
+    match /notifications/{notificationId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

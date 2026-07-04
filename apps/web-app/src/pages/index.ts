@@ -1,3 +1,4 @@
+export { CreateJobPage } from './CreateJobPage'
 export { DashboardPage } from './DashboardPage'
 export { JobDetailsPage } from './JobDetailsPage'
 export { JobsPage } from './JobsPage'

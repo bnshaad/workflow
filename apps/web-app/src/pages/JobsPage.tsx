@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   Calendar,
   Check,
@@ -9,59 +10,23 @@ import {
   Plus,
   Search,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { PageHeader, StatusBadge } from '@/components'
+import { useAuth } from '@/hooks'
+import { jobService } from '@/services/jobs'
+import type { Job, JobPriority, JobStatus } from '@/types'
 
-type JobRow = {
-  assignedWorker: string
-  customer: string
-  dueTime: string
-  id: string
-  job: string
-  location: string
-  priority: 'High' | 'Low' | 'Medium'
-  status: 'Completed' | 'In Progress' | 'Pending'
-}
-
-const jobs: JobRow[] = [
-  {
-    assignedWorker: 'Michael Chen',
-    customer: 'Green Residency',
-    dueTime: '14:00',
-    id: 'ac-installation',
-    job: 'AC Installation',
-    location: '124 Park Avenue',
-    priority: 'High',
-    status: 'In Progress',
-  },
-  {
-    assignedWorker: 'Unassigned',
-    customer: 'City Hospital',
-    dueTime: '15:30',
-    id: 'electrical-repair',
-    job: 'Electrical Repair',
-    location: '850 Health Blvd',
-    priority: 'Medium',
-    status: 'Pending',
-  },
-  {
-    assignedWorker: 'Sarah Jenkins',
-    customer: 'Smith Residence',
-    dueTime: '11:00',
-    id: 'plumbing-leak-fix',
-    job: 'Plumbing Leak Fix',
-    location: '422 Oak St',
-    priority: 'Low',
-    status: 'Completed',
-  },
-]
-
-const priorityTone: Record<JobRow['priority'], 'danger' | 'default' | 'warning'> = {
+const priorityTone: Record<JobPriority, 'danger' | 'default' | 'warning'> = {
   High: 'danger',
   Low: 'default',
   Medium: 'warning',
+  Urgent: 'danger',
 }
 
-const statusTone: Record<JobRow['status'], 'default' | 'primary' | 'success'> = {
+const statusTone: Record<JobStatus, 'default' | 'primary' | 'success' | 'warning'> = {
+  Accepted: 'primary',
+  Assigned: 'warning',
+  Cancelled: 'default',
   Completed: 'success',
   'In Progress': 'primary',
   Pending: 'default',
@@ -74,6 +39,49 @@ const filters = [
 ]
 
 export function JobsPage() {
+  const { profile } = useAuth()
+  const [jobs, setJobs] = useState<Job[]>([])
+  const [errorMessage, setErrorMessage] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadJobs() {
+      if (!profile) {
+        return
+      }
+
+      setIsLoading(true)
+      setErrorMessage('')
+
+      try {
+        const loadedJobs = await jobService.listJobs(
+          profile,
+          profile.organizationId,
+        )
+
+        if (isMounted) {
+          setJobs(loadedJobs)
+        }
+      } catch {
+        if (isMounted) {
+          setErrorMessage('Unable to load jobs. Please try again.')
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadJobs()
+
+    return () => {
+      isMounted = false
+    }
+  }, [profile])
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
@@ -103,13 +111,13 @@ export function JobsPage() {
               {filter.label}
             </button>
           ))}
-          <button
+          <Link
             className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
-            type="button"
+            to="/jobs/create"
           >
             <Plus aria-hidden="true" className="size-4" />
             Create Job
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -125,7 +133,7 @@ export function JobsPage() {
                   'Assigned Worker',
                   'Priority',
                   'Status',
-                  'Due Time',
+                  'Due Date',
                   'Actions',
                 ].map((header) => (
                   <th
@@ -138,57 +146,104 @@ export function JobsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border text-sm">
-              {jobs.map((job) => (
-                <tr className="transition hover:bg-background/60" key={job.id}>
-                  <td className="px-6 py-5 font-medium text-foreground">{job.job}</td>
-                  <td className="px-6 py-5 font-medium text-foreground">
-                    {job.customer}
-                  </td>
-                  <td className="px-6 py-5 text-muted-foreground">{job.location}</td>
-                  <td className="px-6 py-5">
-                    <span
-                      className={
-                        job.assignedWorker === 'Unassigned'
-                          ? 'italic text-muted-foreground'
-                          : 'text-foreground'
-                      }
-                    >
-                      {job.assignedWorker}
-                    </span>
-                  </td>
-                  <td className="px-6 py-5">
-                    <StatusBadge tone={priorityTone[job.priority]}>
-                      {job.priority}
-                    </StatusBadge>
-                  </td>
-                  <td className="px-6 py-5">
-                    <span className="inline-flex items-center gap-1.5">
-                      {job.status === 'Completed' ? (
-                        <Check aria-hidden="true" className="size-3.5 text-emerald-600" />
-                      ) : null}
-                      <StatusBadge tone={statusTone[job.status]}>
-                        {job.status}
-                      </StatusBadge>
-                    </span>
-                  </td>
-                  <td className="px-6 py-5 text-muted-foreground">{job.dueTime}</td>
-                  <td className="px-6 py-5 text-right">
-                    <button
-                      aria-label={`More actions for ${job.job}`}
-                      className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                      type="button"
-                    >
-                      <MoreHorizontal aria-hidden="true" className="size-4" />
-                    </button>
+              {isLoading ? (
+                <tr>
+                  <td
+                    className="px-6 py-10 text-center text-muted-foreground"
+                    colSpan={8}
+                  >
+                    Loading jobs...
                   </td>
                 </tr>
-              ))}
+              ) : null}
+
+              {!isLoading && errorMessage ? (
+                <tr>
+                  <td
+                    className="px-6 py-10 text-center text-destructive"
+                    colSpan={8}
+                  >
+                    {errorMessage}
+                  </td>
+                </tr>
+              ) : null}
+
+              {!isLoading && !errorMessage && jobs.length === 0 ? (
+                <tr>
+                  <td
+                    className="px-6 py-10 text-center text-muted-foreground"
+                    colSpan={8}
+                  >
+                    No jobs have been created yet.
+                  </td>
+                </tr>
+              ) : null}
+
+              {!isLoading && !errorMessage
+                ? jobs.map((job) => (
+                    <tr className="transition hover:bg-background/60" key={job.id}>
+                      <td className="px-6 py-5 font-medium text-foreground">
+                        {job.title}
+                      </td>
+                      <td className="px-6 py-5 font-medium text-foreground">
+                        {job.customerName}
+                      </td>
+                      <td className="px-6 py-5 text-muted-foreground">
+                        {job.location || job.serviceAddress}
+                      </td>
+                      <td className="px-6 py-5">
+                        <span
+                          className={
+                            job.assignedEmployeeIds.length === 0
+                              ? 'italic text-muted-foreground'
+                              : 'text-foreground'
+                          }
+                        >
+                          {formatAssignedWorkers(job.assignedEmployeeIds)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <StatusBadge tone={priorityTone[job.priority]}>
+                          {job.priority}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="inline-flex items-center gap-1.5">
+                          {job.status === 'Completed' ? (
+                            <Check
+                              aria-hidden="true"
+                              className="size-3.5 text-emerald-600"
+                            />
+                          ) : null}
+                          <StatusBadge tone={statusTone[job.status]}>
+                            {job.status}
+                          </StatusBadge>
+                        </span>
+                      </td>
+                      <td className="px-6 py-5 text-muted-foreground">
+                        {formatDueDate(job)}
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                        <button
+                          aria-label={`More actions for ${job.title}`}
+                          className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                          type="button"
+                        >
+                          <MoreHorizontal aria-hidden="true" className="size-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                : null}
             </tbody>
           </table>
         </div>
 
         <div className="flex items-center justify-between border-t border-border bg-background/50 px-6 py-4">
-          <p className="text-sm text-muted-foreground">Showing 1 to 3 of 48 jobs</p>
+          <p className="text-sm text-muted-foreground">
+            Showing {jobs.length === 0 ? 0 : 1} to {jobs.length} of {jobs.length}{' '}
+            jobs
+          </p>
           <div className="flex items-center gap-2">
             <button
               className="inline-flex size-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground opacity-50"
@@ -198,7 +253,8 @@ export function JobsPage() {
               <ChevronLeft aria-hidden="true" className="size-4" />
             </button>
             <button
-              className="inline-flex size-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              className="inline-flex size-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground opacity-50"
+              disabled
               type="button"
             >
               <ChevronRight aria-hidden="true" className="size-4" />
@@ -208,4 +264,23 @@ export function JobsPage() {
       </section>
     </div>
   )
+}
+
+function formatAssignedWorkers(assignedEmployeeIds: string[]) {
+  if (assignedEmployeeIds.length === 0) {
+    return 'Unassigned'
+  }
+
+  return `${assignedEmployeeIds.length} assigned`
+}
+
+function formatDueDate(job: Job) {
+  if (!job.dueDate) {
+    return 'No due date'
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(job.dueDate.toDate())
 }
