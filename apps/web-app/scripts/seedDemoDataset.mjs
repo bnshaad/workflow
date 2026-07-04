@@ -61,10 +61,15 @@ async function seedDemoDataset() {
 
   await commitInBatches(writes)
 
+  const manualAssignmentAuditLogs = getManualAssignmentAuditSummaries(
+    activityAndAudit.auditLogs,
+  )
+
   return {
     activities: activityAndAudit.activities.length,
     auditLogs: activityAndAudit.auditLogs.length,
     jobs: jobs.length,
+    manualAssignmentAuditLogs,
     organizations: 1,
     users: users.all.length,
   }
@@ -500,9 +505,17 @@ function createAssignmentActivity(job) {
 }
 
 function createAssignmentAuditLog(job) {
+  const employeeIds = job.assignedEmployeeIds
+  const fromStatus = 'open'
+  const toStatus = 'assigned'
+
   return {
     id: `${job.id}-audit-assigned`,
     organizationId: DEMO_ORGANIZATION_ID,
+    jobId: job.id,
+    employeeIds,
+    fromStatus,
+    toStatus,
     isActive: true,
     createdAt: job.assignedAt,
     updatedAt: job.assignedAt,
@@ -512,14 +525,14 @@ function createAssignmentAuditLog(job) {
     entityType: 'job',
     metadata: {
       assignmentMode: 'manual',
-      employeeIds: job.assignedEmployeeIds,
-      employeeNames: job.assignedEmployeeIds,
-      fromStatus: 'open',
+      employeeIds,
+      employeeNames: employeeIds,
+      fromStatus,
       jobId: job.id,
       previousEmployeeIds: [],
-      newEmployeeIds: job.assignedEmployeeIds,
-      newEmployeeNames: job.assignedEmployeeIds,
-      toStatus: 'assigned',
+      newEmployeeIds: employeeIds,
+      newEmployeeNames: employeeIds,
+      toStatus,
     },
   }
 }
@@ -594,6 +607,27 @@ function applyWorkloadCounts(user, jobs) {
     activeTaskCount,
     availability: activeTaskCount > 3 ? 'busy' : 'available',
   }
+}
+
+function getManualAssignmentAuditSummaries(auditLogs) {
+  return auditLogs
+    .filter(
+      (auditLog) =>
+        auditLog.action === 'job_employees_assigned' &&
+        auditLog.metadata?.assignmentMode === 'manual' &&
+        auditLog.isActive === true,
+    )
+    .map((auditLog) => ({
+      id: auditLog.id,
+      organizationId: auditLog.organizationId,
+      jobId: auditLog.jobId,
+      employeeIds: auditLog.employeeIds,
+      fromStatus: auditLog.fromStatus,
+      toStatus: auditLog.toStatus,
+      createdAt: auditLog.createdAt.toDate().toISOString(),
+      isActive: auditLog.isActive,
+      assignmentMode: auditLog.metadata.assignmentMode,
+    }))
 }
 
 async function commitInBatches(writes) {
@@ -813,6 +847,24 @@ async function main() {
     console.log(`Jobs written: ${counts.jobs}`)
     console.log(`Job activities written: ${counts.activities}`)
     console.log(`Audit logs written: ${counts.auditLogs}`)
+    console.log(
+      `Manual assignment audit logs written: ${counts.manualAssignmentAuditLogs.length}`,
+    )
+    for (const auditLog of counts.manualAssignmentAuditLogs) {
+      console.log(
+        [
+          `- ${auditLog.id}`,
+          `organizationId=${auditLog.organizationId}`,
+          `jobId=${auditLog.jobId}`,
+          `employeeIds=[${auditLog.employeeIds.join(', ')}]`,
+          `fromStatus=${auditLog.fromStatus}`,
+          `toStatus=${auditLog.toStatus}`,
+          `assignmentMode=${auditLog.assignmentMode}`,
+          `isActive=${auditLog.isActive}`,
+          `createdAt=${auditLog.createdAt}`,
+        ].join(' | '),
+      )
+    }
     console.log(
       `Seeded ${DEMO_ORGANIZATION_NAME} (${DEMO_ORGANIZATION_ID}) in Firebase project ${projectId}.`,
     )
