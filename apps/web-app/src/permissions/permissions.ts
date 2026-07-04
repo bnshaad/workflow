@@ -7,32 +7,38 @@ function hasRole(profile: UserProfile, roles: readonly string[]) {
   return profile.isActive && roles.includes(profile.role)
 }
 
+export function canAccessWebPortal(profile: UserProfile) {
+  return hasRole(profile, [Roles.Admin, Roles.Manager])
+}
+
 export function canViewDashboard(profile: UserProfile) {
-  return hasRole(profile, [Roles.Admin, Roles.Manager, Roles.Employee])
+  return canAccessWebPortal(profile)
 }
 
 export function canViewJobs(profile: UserProfile) {
-  return hasRole(profile, [Roles.Admin, Roles.Manager, Roles.Employee])
+  return canAccessWebPortal(profile)
 }
 
 export function canCreateJob(profile: UserProfile) {
-  return hasRole(profile, [Roles.Manager])
+  return hasRole(profile, [Roles.Admin, Roles.Manager])
 }
 
 export function canEditJob(profile: UserProfile) {
-  return hasRole(profile, [Roles.Manager])
+  return hasRole(profile, [Roles.Admin, Roles.Manager])
 }
 
 export function canDeleteJob(profile: UserProfile) {
-  return hasRole(profile, [Roles.Manager])
-}
-
-export function canAssignWorkers(profile: UserProfile) {
   return hasRole(profile, [Roles.Admin, Roles.Manager])
 }
+
+export function canAssignWorker(profile: UserProfile) {
+  return hasRole(profile, [Roles.Admin, Roles.Manager])
+}
+
+export const canAssignWorkers = canAssignWorker
 
 export function canViewTeam(profile: UserProfile) {
-  return hasRole(profile, [Roles.Admin, Roles.Manager])
+  return canAccessWebPortal(profile)
 }
 
 export function canManageTeam(profile: UserProfile) {
@@ -40,7 +46,7 @@ export function canManageTeam(profile: UserProfile) {
 }
 
 export function canAccessSettings(profile: UserProfile) {
-  return hasRole(profile, [Roles.Admin, Roles.Manager])
+  return canAccessWebPortal(profile)
 }
 
 export function canManageBusiness(profile: UserProfile) {

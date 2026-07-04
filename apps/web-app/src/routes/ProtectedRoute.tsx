@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks'
+import { canAccessWebPortal } from '@/permissions'
 
 export function ProtectedRoute() {
   const location = useLocation()
@@ -21,6 +22,10 @@ export function ProtectedRoute() {
 
   if (!profile) {
     return <Navigate replace to="/profile-setup-required" />
+  }
+
+  if (!canAccessWebPortal(profile)) {
+    return <Navigate replace to="/unauthorized" />
   }
 
   return <Outlet />
