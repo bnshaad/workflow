@@ -20,6 +20,15 @@ export interface JobAiRecommendation {
   summary: string
 }
 
+export interface JobActivity extends TenantDocument {
+  jobId: string
+  type: 'status_changed'
+  fromStatus: JobStatus
+  toStatus: JobStatus
+  createdBy: string
+  description: string
+}
+
 /**
  * Job is the central business entity in Workflow.
  *
@@ -36,6 +45,8 @@ export interface Job extends TenantDocument {
   location: string
   priority: JobPriority
   status: JobStatus
+  statusUpdatedAt: Timestamp | null
+  statusUpdatedBy: string | null
   requiredSkills: string[]
   assignedEmployeeIds: string[]
   createdBy: string

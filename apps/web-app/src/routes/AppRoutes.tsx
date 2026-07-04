@@ -39,10 +39,12 @@ export function AppRoutes() {
           </Route>
           <Route element={<RoleRoute canAccess={canViewJobs} />}>
             <Route path="/jobs" element={<JobsPage />} />
-            <Route path="/jobs/:jobId" element={<JobDetailsPage />} />
           </Route>
           <Route element={<RoleRoute canAccess={canCreateJob} />}>
             <Route path="/jobs/create" element={<CreateJobPage />} />
+          </Route>
+          <Route element={<RoleRoute canAccess={canViewJobs} />}>
+            <Route path="/jobs/:jobId" element={<JobDetailsPage />} />
           </Route>
           <Route element={<RoleRoute canAccess={canViewTeam} />}>
             <Route path="/team" element={<TeamPage />} />

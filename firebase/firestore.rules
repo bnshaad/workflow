@@ -47,6 +47,13 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isAllowedStatusTransition(fromStatus, toStatus) {
+      return (fromStatus == 'draft' && (toStatus == 'open' || toStatus == 'cancelled'))
+        || (fromStatus == 'open' && (toStatus == 'assigned' || toStatus == 'cancelled'))
+        || (fromStatus == 'assigned' && (toStatus == 'open' || toStatus == 'in_progress' || toStatus == 'cancelled'))
+        || (fromStatus == 'in_progress' && (toStatus == 'completed' || toStatus == 'cancelled'));
+    }
+
     match /users/{uid} {
       allow get: if isOwnProfile(uid);
       allow list: if false;
@@ -72,12 +79,48 @@ service cloud.firestore {
         && hasStandardBusinessFields(request.resource.data)
         && request.resource.data.id == jobId
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.status == 'Pending'
+        && request.resource.data.status == 'draft'
+        && request.resource.data.statusUpdatedAt == null
+        && request.resource.data.statusUpdatedBy == null
         && request.resource.data.assignedEmployeeIds == []
         && request.resource.data.workProofCount == 0
         && request.resource.data.issueCount == 0
         && request.resource.data.manualOverride == false
         && request.resource.data.isActive == true
+        && sameOrganization(request.resource.data.organizationId);
+      allow update: if canManageWebJobs()
+        && resource.data.isActive == true
+        && sameOrganization(resource.data.organizationId)
+        && request.resource.data.organizationId == resource.data.organizationId
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'status',
+          'statusUpdatedAt',
+          'statusUpdatedBy',
+          'updatedAt'
+        ])
+        && request.resource.data.statusUpdatedBy == request.auth.uid
+        && request.resource.data.statusUpdatedAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && isAllowedStatusTransition(resource.data.status, request.resource.data.status);
+      allow delete: if false;
+    }
+
+    match /jobActivities/{activityId} {
+      allow get, list: if canManageWebJobs()
+        && resource.data.isActive == true
+        && sameOrganization(resource.data.organizationId);
+      allow create: if canManageWebJobs()
+        && hasStandardBusinessFields(request.resource.data)
+        && request.resource.data.id == activityId
+        && request.resource.data.type == 'status_changed'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.jobId is string
+        && isAllowedStatusTransition(
+          request.resource.data.fromStatus,
+          request.resource.data.toStatus
+        )
         && sameOrganization(request.resource.data.organizationId);
       allow update, delete: if false;
     }
@@ -107,7 +150,14 @@ service cloud.firestore {
     // - Rules will require sameOrganization(resource.data.organizationId).
     // - Read access will be limited to Admin.
     match /auditLogs/{auditLogId} {
-      allow read, write: if false;
+      allow create: if canManageWebJobs()
+        && hasStandardBusinessFields(request.resource.data)
+        && request.resource.data.id == auditLogId
+        && request.resource.data.actorId == request.auth.uid
+        && request.resource.data.action == 'job.status_updated'
+        && request.resource.data.entityType == 'job'
+        && sameOrganization(request.resource.data.organizationId);
+      allow read, update, delete: if false;
     }
 
     // Future notifications rules:

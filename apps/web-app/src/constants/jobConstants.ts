@@ -9,7 +9,7 @@ import {
   type JobStatus,
 } from '@/types/jobStatus'
 
-export const DEFAULT_JOB_STATUS = JobStatuses.Pending
+export const DEFAULT_JOB_STATUS = JobStatuses.Draft
 export const DEFAULT_JOB_PRIORITY = JobPriorities.Medium
 
 export const JOB_STATUS_OPTIONS: readonly JobStatus[] = JOB_STATUS_VALUES

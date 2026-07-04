@@ -1,88 +1,373 @@
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
+  ArrowLeft,
   Calendar,
-  CheckCircle2,
   ChevronRight,
-  Download,
-  Edit3,
+  ClipboardList,
   MapPin,
+  Paperclip,
   Phone,
-  Settings2,
+  UserRound,
 } from 'lucide-react'
+import { Link, useParams } from 'react-router-dom'
+import { StatusBadge } from '@/components'
+import { useAuth } from '@/hooks'
+import { canEditJob } from '@/permissions'
+import { jobService } from '@/services/jobs'
 import {
-  DataTable,
-  IssueCard,
-  ProofGallery,
-  StatusBadge,
-  SuggestedWorkerCard,
-  Timeline,
-} from '@/components'
+  getAllowedJobStatusTransitions,
+  JOB_STATUS_LABELS,
+  type Job,
+  type JobActivity,
+  type JobPriority,
+  type JobStatus,
+} from '@/types'
 
-const job = {
-  assignedWorker: 'Pending assignment',
-  customer: {
-    address: '123 Maple Street, Springfield, IL 62704',
-    name: 'Sarah Jenkins',
-    phone: '(555) 123-4567',
-  },
-  description:
-    'Perform annual preventive maintenance on main residential AC unit. Check coolant levels, replace filters, inspect belts, and clear condensation lines. Verify thermostat communication.',
-  dueDate: 'Oct 24, 2023',
-  duration: '2.5h',
-  facility: 'Jenkins Residence (Main Unit)',
-  id: 'JOB-4829',
-  location: '123 Maple Street, Springfield, IL 62704',
-  priority: 'Normal',
-  scheduleDate: 'Oct 24, 2023 (13:00 - 17:00)',
-  title: 'Annual HVAC Inspection',
-  travelTime: '15 mins',
-  type: 'Maintenance',
+const priorityTone: Record<JobPriority, 'danger' | 'default' | 'warning'> = {
+  High: 'danger',
+  Low: 'default',
+  Medium: 'warning',
+  Urgent: 'danger',
 }
 
-const suggestedWorker = {
-  matchScore: 98,
-  name: 'Alex Rivera',
-  reasons: [
-    'Required skills',
-    'Available now',
-    'Nearby',
-    'Low workload',
-    'Strong completion history',
-  ],
-  role: 'Senior HVAC Technician',
+const statusTone: Record<JobStatus, 'default' | 'primary' | 'success' | 'warning'> = {
+  assigned: 'warning',
+  cancelled: 'default',
+  completed: 'success',
+  draft: 'default',
+  in_progress: 'primary',
+  open: 'primary',
 }
 
-const timelineItems = [
-  { state: 'done' as const, time: 'Today, 08:30 AM', title: 'Job Created' },
-  { state: 'current' as const, time: 'Today, 08:31 AM', title: 'Worker Suggested' },
-  { state: 'pending' as const, time: 'Pending', title: 'Worker Assigned' },
-  { state: 'pending' as const, time: 'Pending', title: 'Work Started' },
-  { state: 'pending' as const, time: 'Pending', title: 'Work Proof Uploaded' },
-  { state: 'pending' as const, time: 'Pending', title: 'Reviewed' },
-  { state: 'pending' as const, time: 'Pending', title: 'Completed' },
-]
+export function JobDetailsPage() {
+  const { jobId } = useParams()
+  const { profile } = useAuth()
+  const [activities, setActivities] = useState<JobActivity[]>([])
+  const [job, setJob] = useState<Job | null>(null)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [statusErrorMessage, setStatusErrorMessage] = useState('')
+  const [selectedStatus, setSelectedStatus] = useState<JobStatus | ''>('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
-const activityRows = [
-  {
-    action: 'Job Created',
-    details: 'Generated from PM Template #HVAC-ANNUAL',
-    id: 'created',
-    timestamp: 'Oct 23, 08:30:12',
-    user: 'System',
-  },
-  {
-    action: 'Worker Suggested',
-    details: 'Evaluated available workers; Suggested A. Rivera',
-    id: 'suggested',
-    timestamp: 'Oct 23, 08:31:05',
-    user: 'System',
-  },
-]
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadJob() {
+      if (!profile || !jobId) {
+        return
+      }
+
+      setIsLoading(true)
+      setErrorMessage('')
+      setStatusErrorMessage('')
+
+      try {
+        const [loadedJob, loadedActivities] = await Promise.all([
+          jobService.getJob(profile, jobId, profile.organizationId),
+          jobService.getJobActivities(profile, jobId, profile.organizationId),
+        ])
+
+        if (!isMounted) {
+          return
+        }
+
+        if (!loadedJob) {
+          setErrorMessage('Job not found.')
+          setJob(null)
+          setActivities([])
+          return
+        }
+
+        setJob(loadedJob)
+        setActivities(loadedActivities)
+      } catch {
+        if (isMounted) {
+          setErrorMessage('Unable to load job details. Please try again.')
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadJob()
+
+    return () => {
+      isMounted = false
+    }
+  }, [jobId, profile])
+
+  const allowedStatuses = useMemo(() => {
+    if (!job) {
+      return []
+    }
+
+    return getAllowedJobStatusTransitions(job.status)
+  }, [job])
+  const canUpdateStatus = profile ? canEditJob(profile) : false
+
+  async function handleStatusUpdate() {
+    if (!profile || !job || !selectedStatus) {
+      return
+    }
+
+    setIsUpdatingStatus(true)
+    setStatusErrorMessage('')
+
+    try {
+      const result = await jobService.updateJobStatus(
+        profile,
+        job.id,
+        job.organizationId,
+        selectedStatus,
+      )
+
+      setJob(result.job)
+      setActivities((currentActivities) => [
+        result.activity,
+        ...currentActivities,
+      ])
+      setSelectedStatus('')
+    } catch {
+      setStatusErrorMessage('Unable to update status. Please try again.')
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-10 text-center text-sm text-muted-foreground shadow-sm">
+        Loading job details...
+      </div>
+    )
+  }
+
+  if (errorMessage || !job) {
+    return (
+      <div className="space-y-6">
+        <BackLink />
+        <div className="rounded-xl border border-border bg-card p-10 text-center text-sm text-muted-foreground shadow-sm">
+          {errorMessage || 'Job not found.'}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-8">
+      <nav className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link className="transition hover:text-foreground" to="/jobs">
+          Jobs
+        </Link>
+        <ChevronRight aria-hidden="true" className="size-4" />
+        <span className="font-medium text-foreground">{job.title}</span>
+      </nav>
+
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+            {job.title}
+          </h1>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <StatusBadge tone={statusTone[job.status]}>
+              {JOB_STATUS_LABELS[job.status]}
+            </StatusBadge>
+            <StatusBadge tone={priorityTone[job.priority]}>
+              {job.priority}
+            </StatusBadge>
+            <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Calendar aria-hidden="true" className="size-4" />
+              Created {formatTimestamp(job.createdAt)}
+            </span>
+          </div>
+        </div>
+        <BackLink />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div className="space-y-6 xl:col-span-2">
+          <InfoCard title="Job Information">
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <DetailItem label="Description">{job.description}</DetailItem>
+              </div>
+              <DetailItem label="Priority">
+                <StatusBadge tone={priorityTone[job.priority]}>
+                  {job.priority}
+                </StatusBadge>
+              </DetailItem>
+              <DetailItem label="Status">
+                <StatusBadge tone={statusTone[job.status]}>
+                  {JOB_STATUS_LABELS[job.status]}
+                </StatusBadge>
+              </DetailItem>
+              <DetailItem label="Required Skills">
+                <SkillList skills={job.requiredSkills} />
+              </DetailItem>
+              <DetailItem label="Location">
+                {job.location || 'No location note'}
+              </DetailItem>
+            </div>
+          </InfoCard>
+
+          <InfoCard title="Customer Information">
+            <div className="grid gap-6 md:grid-cols-3">
+              <DetailItem label="Customer Name">{job.customerName}</DetailItem>
+              <DetailItem label="Phone">
+                <span className="inline-flex items-center gap-2">
+                  <Phone aria-hidden="true" className="size-4 text-muted-foreground" />
+                  {job.customerPhone}
+                </span>
+              </DetailItem>
+              <DetailItem label="Service Address">
+                <span className="inline-flex items-start gap-2">
+                  <MapPin
+                    aria-hidden="true"
+                    className="mt-1 size-4 shrink-0 text-muted-foreground"
+                  />
+                  {job.serviceAddress}
+                </span>
+              </DetailItem>
+            </div>
+          </InfoCard>
+
+          <InfoCard title="Assigned Employees">
+            <div className="rounded-lg border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
+              {formatAssignedEmployees(job.assignedEmployeeIds)}
+            </div>
+          </InfoCard>
+
+          <InfoCard title="Attachments">
+            <div className="flex min-h-20 items-center gap-3 rounded-lg border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
+              <Paperclip aria-hidden="true" className="size-4" />
+              {job.attachments.length === 0
+                ? 'No attachments uploaded yet.'
+                : `${job.attachments.length} attachment metadata records`}
+            </div>
+          </InfoCard>
+        </div>
+
+        <aside className="space-y-6">
+          <InfoCard title="Status Management">
+            <div className="space-y-4">
+              <DetailItem label="Current Status">
+                <StatusBadge tone={statusTone[job.status]}>
+                  {JOB_STATUS_LABELS[job.status]}
+                </StatusBadge>
+              </DetailItem>
+              {canUpdateStatus ? (
+                <div className="space-y-3">
+                  <select
+                    className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    disabled={allowedStatuses.length === 0 || isUpdatingStatus}
+                    onChange={(event) =>
+                      setSelectedStatus(event.target.value as JobStatus | '')
+                    }
+                    value={selectedStatus}
+                  >
+                    <option value="">
+                      {allowedStatuses.length === 0
+                        ? 'No transitions available'
+                        : 'Select next status'}
+                    </option>
+                    {allowedStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {JOB_STATUS_LABELS[status]}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!selectedStatus || isUpdatingStatus}
+                    onClick={handleStatusUpdate}
+                    type="button"
+                  >
+                    {isUpdatingStatus ? 'Updating...' : 'Update Status'}
+                  </button>
+                  {statusErrorMessage ? (
+                    <p className="text-sm font-medium text-destructive">
+                      {statusErrorMessage}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Status updates are available to Admin and Manager users.
+                </p>
+              )}
+            </div>
+          </InfoCard>
+
+          <InfoCard title="Job Metadata">
+            <div className="space-y-5">
+              <DetailItem label="Created By">
+                <span className="inline-flex items-center gap-2">
+                  <UserRound
+                    aria-hidden="true"
+                    className="size-4 text-muted-foreground"
+                  />
+                  {job.createdBy}
+                </span>
+              </DetailItem>
+              <DetailItem label="Created Date">
+                {formatTimestamp(job.createdAt)}
+              </DetailItem>
+              <DetailItem label="Due Date">
+                {formatNullableTimestamp(job.dueDate)}
+              </DetailItem>
+              <DetailItem label="Status Updated">
+                {formatNullableTimestamp(job.statusUpdatedAt)}
+              </DetailItem>
+              <DetailItem label="Status Updated By">
+                {job.statusUpdatedBy || 'No status update yet'}
+              </DetailItem>
+            </div>
+          </InfoCard>
+
+          <InfoCard title="Status Activity">
+            <div className="space-y-4">
+              {activities.length === 0 ? (
+                <TimelinePlaceholder
+                  description="No status changes have been recorded yet."
+                  title="No activity"
+                />
+              ) : (
+                activities.map((activity) => (
+                  <TimelinePlaceholder
+                    description={`${activity.description} ${formatTimestamp(activity.createdAt)}`}
+                    key={activity.id}
+                    title={JOB_STATUS_LABELS[activity.toStatus]}
+                  />
+                ))
+              )}
+            </div>
+          </InfoCard>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+function BackLink() {
+  return (
+    <Link
+      className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted"
+      to="/jobs"
+    >
+      <ArrowLeft aria-hidden="true" className="size-4" />
+      Back to Jobs
+    </Link>
+  )
+}
 
 function InfoCard({
   children,
   title,
 }: {
-  children: React.ReactNode
+  children: ReactNode
   title: string
 }) {
   return (
@@ -99,7 +384,7 @@ function DetailItem({
   children,
   label,
 }: {
-  children: React.ReactNode
+  children: ReactNode
   label: string
 }) {
   return (
@@ -112,151 +397,64 @@ function DetailItem({
   )
 }
 
-export function JobDetailsPage() {
+function SkillList({ skills }: { skills: string[] }) {
+  if (skills.length === 0) {
+    return <span className="text-muted-foreground">No required skills</span>
+  }
+
   return (
-    <div className="space-y-8">
-      <nav className="flex items-center gap-2 text-sm text-muted-foreground">
-        <span>Jobs</span>
-        <ChevronRight aria-hidden="true" className="size-4" />
-        <span>{job.type}</span>
-        <ChevronRight aria-hidden="true" className="size-4" />
-        <span className="font-medium text-foreground">{job.id}</span>
-      </nav>
-
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            {job.title}
-          </h1>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <StatusBadge tone="warning">Pending Assignment</StatusBadge>
-            <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Calendar aria-hidden="true" className="size-4" />
-              Due: {job.dueDate}
-            </span>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <button
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted"
-            type="button"
-          >
-            <Edit3 aria-hidden="true" className="size-4" />
-            Edit Job
-          </button>
-          <button
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-500 bg-card px-4 text-sm font-medium text-emerald-600 shadow-sm transition hover:bg-emerald-50"
-            type="button"
-          >
-            <CheckCircle2 aria-hidden="true" className="size-4" />
-            Mark Complete
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">
-          <InfoCard title="Job Information">
-            <DetailItem label="Description">{job.description}</DetailItem>
-          </InfoCard>
-
-          <InfoCard title="Customer Information">
-            <div className="grid gap-6 md:grid-cols-3">
-              <DetailItem label="Customer Name">{job.customer.name}</DetailItem>
-              <DetailItem label="Phone">
-                <span className="inline-flex items-center gap-2">
-                  <Phone aria-hidden="true" className="size-4 text-muted-foreground" />
-                  {job.customer.phone}
-                </span>
-              </DetailItem>
-              <DetailItem label="Service Address">
-                <span className="inline-flex items-start gap-2">
-                  <MapPin
-                    aria-hidden="true"
-                    className="mt-1 size-4 shrink-0 text-muted-foreground"
-                  />
-                  {job.customer.address}
-                </span>
-              </DetailItem>
-              <DetailItem label="Job Type">{job.type}</DetailItem>
-              <DetailItem label="Schedule Date">{job.scheduleDate}</DetailItem>
-              <DetailItem label="Estimated Duration">{job.duration}</DetailItem>
-            </div>
-          </InfoCard>
-
-          <SuggestedWorkerCard {...suggestedWorker} />
-
-          <InfoCard title="Assigned Worker">
-            <div className="rounded-lg border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
-              {job.assignedWorker}
-            </div>
-          </InfoCard>
-
-          <InfoCard title="Location">
-            <div className="grid gap-6 md:grid-cols-4">
-              <div className="md:col-span-2">
-                <DetailItem label="Facility Name / Details">{job.facility}</DetailItem>
-              </div>
-              <DetailItem label="Travel Time">{job.travelTime}</DetailItem>
-              <DetailItem label="Priority">{job.priority}</DetailItem>
-            </div>
-          </InfoCard>
-        </div>
-
-        <aside className="space-y-6">
-          <Timeline items={timelineItems} />
-          <ProofGallery
-            notes="Pending"
-            uploadedTime="Pending"
-            verificationStatus="Pending"
-          />
-          <section className="rounded-xl border border-amber-500/30 bg-card p-6 shadow-sm">
-            <h2 className="mb-5 flex items-center gap-2 text-lg font-semibold text-foreground">
-              <Settings2 aria-hidden="true" className="size-5 text-amber-500" />
-              Job Issues
-            </h2>
-            <div className="space-y-3">
-              <IssueCard
-                title="Customer unavailable"
-                description="Customer is not answering the door or phone calls. Reported 5 mins ago."
-              />
-              <IssueCard
-                tone="primary"
-                title="Waiting for spare parts"
-                description="Specialized filter for Model X-2000 is currently out of stock. System status."
-              />
-            </div>
-          </section>
-        </aside>
-      </div>
-
-      <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-        <div className="flex items-center justify-between border-b border-border bg-background/40 px-6 py-4">
-          <h2 className="text-lg font-semibold text-foreground">Activity</h2>
-          <button
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary"
-            type="button"
-          >
-            Export History
-            <Download aria-hidden="true" className="size-4" />
-          </button>
-        </div>
-        <DataTable
-          rows={activityRows}
-          columns={[
-            { header: 'Timestamp', key: 'timestamp' },
-            { header: 'User / System', key: 'user' },
-            { header: 'Action', key: 'action' },
-            {
-              header: 'Details',
-              key: 'details',
-              render: (row) => (
-                <span className="text-muted-foreground">{row.details}</span>
-              ),
-            },
-          ]}
-        />
-      </section>
+    <div className="flex flex-wrap gap-2">
+      {skills.map((skill) => (
+        <span
+          className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground"
+          key={skill}
+        >
+          {skill}
+        </span>
+      ))}
     </div>
   )
+}
+
+function TimelinePlaceholder({
+  description,
+  title,
+}: {
+  description: string
+  title: string
+}) {
+  return (
+    <div className="flex gap-3">
+      <span className="mt-1 inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-background">
+        <ClipboardList aria-hidden="true" className="size-3.5 text-muted-foreground" />
+      </span>
+      <div>
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  )
+}
+
+function formatAssignedEmployees(assignedEmployeeIds: string[]) {
+  if (assignedEmployeeIds.length === 0) {
+    return 'Unassigned'
+  }
+
+  return assignedEmployeeIds.join(', ')
+}
+
+function formatNullableTimestamp(timestamp: Job['dueDate']) {
+  if (!timestamp) {
+    return 'No due date'
+  }
+
+  return formatTimestamp(timestamp)
+}
+
+function formatTimestamp(timestamp: Job['createdAt']) {
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(timestamp.toDate())
 }

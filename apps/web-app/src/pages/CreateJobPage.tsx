@@ -252,7 +252,7 @@ export function CreateJobPage() {
             <p className="text-sm font-medium text-destructive">{errorMessage}</p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Jobs are created as pending until assignment is implemented.
+              Jobs are created as drafts until status management moves them forward.
             </p>
           )}
           <button
