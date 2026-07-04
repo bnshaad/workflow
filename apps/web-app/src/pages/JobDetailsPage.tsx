@@ -8,14 +8,22 @@ import {
   Paperclip,
   Phone,
   Search,
+  Sparkles,
   UserRound,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { StatusBadge } from '@/components'
 import { useAuth } from '@/hooks'
 import { canAssignWorker, canEditJob } from '@/permissions'
+import {
+  AssignmentRecommendationError,
+  assignmentRecommendationService,
+} from '@/services/recommendations'
 import { jobService } from '@/services/jobs'
 import {
+  type AssignmentRecommendation,
+  type AssignmentRecommendationCandidate,
+  type AssignmentScoreBreakdown,
   getAllowedJobStatusTransitions,
   JOB_STATUS_LABELS,
   JobStatuses,
@@ -58,10 +66,16 @@ export function JobDetailsPage() {
   const [manageAssignmentSuccessMessage, setManageAssignmentSuccessMessage] =
     useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const [recommendation, setRecommendation] =
+    useState<AssignmentRecommendation | null>(null)
+  const [recommendationErrorMessage, setRecommendationErrorMessage] =
+    useState('')
   const [statusErrorMessage, setStatusErrorMessage] = useState('')
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([])
   const [selectedStatus, setSelectedStatus] = useState<JobStatus | ''>('')
   const [isAssigning, setIsAssigning] = useState(false)
+  const [isGeneratingRecommendation, setIsGeneratingRecommendation] =
+    useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isManagingAssignment, setIsManagingAssignment] = useState(false)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
@@ -80,6 +94,8 @@ export function JobDetailsPage() {
       setAssignmentSuccessMessage('')
       setManageAssignmentErrorMessage('')
       setManageAssignmentSuccessMessage('')
+      setRecommendation(null)
+      setRecommendationErrorMessage('')
       setStatusErrorMessage('')
 
       try {
@@ -164,9 +180,40 @@ export function JobDetailsPage() {
   }, [assignableEmployees, job?.assignedEmployeeIds])
   const canAssignEmployees =
     Boolean(profile && canAssignWorker(profile)) && job?.status === JobStatuses.Open
+  const canGenerateRecommendations = canAssignEmployees
   const canManageAssignment =
     Boolean(profile && canAssignWorker(profile)) &&
     job?.status === JobStatuses.Assigned
+
+  async function handleGenerateRecommendations() {
+    if (!profile || !job) {
+      return
+    }
+
+    setIsGeneratingRecommendation(true)
+    setRecommendationErrorMessage('')
+
+    try {
+      const result =
+        await assignmentRecommendationService.generateAssignmentRecommendations(
+          profile,
+          job.organizationId,
+          job.id,
+        )
+
+      setRecommendation(result.recommendation)
+    } catch (error) {
+      if (error instanceof AssignmentRecommendationError) {
+        setRecommendationErrorMessage(error.message)
+      } else {
+        setRecommendationErrorMessage(
+          'Unable to generate recommendations. Please try again.',
+        )
+      }
+    } finally {
+      setIsGeneratingRecommendation(false)
+    }
+  }
 
   async function handleStatusUpdate() {
     if (!profile || !job || !selectedStatus) {
@@ -445,6 +492,72 @@ export function JobDetailsPage() {
         </div>
 
         <aside className="space-y-6">
+          {job.status === JobStatuses.Open ? (
+            <InfoCard title="AI Assignment Recommendations">
+              <div className="space-y-5">
+                <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground">
+                  <span className="font-medium">
+                    AI-assisted recommendation — manager approval required.
+                  </span>
+                  <span className="mt-1 block text-muted-foreground">
+                    Recommendations are advisory and do not assign employees.
+                  </span>
+                  <span className="mt-1 block text-muted-foreground">
+                    Location contributes 0/10 until employee service-area data exists.
+                  </span>
+                </div>
+
+                {canGenerateRecommendations ? (
+                  <button
+                    className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isGeneratingRecommendation}
+                    onClick={handleGenerateRecommendations}
+                    type="button"
+                  >
+                    <Sparkles aria-hidden="true" className="size-4" />
+                    {isGeneratingRecommendation
+                      ? 'Generating...'
+                      : recommendation
+                        ? 'Retry Recommendations'
+                        : 'Generate Recommendations'}
+                  </button>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Recommendations are available to Admin and Manager users.
+                  </p>
+                )}
+
+                {recommendationErrorMessage ? (
+                  <p className="text-sm font-medium text-destructive">
+                    {recommendationErrorMessage}
+                  </p>
+                ) : null}
+
+                {recommendation ? (
+                  recommendation.candidates.length > 0 ? (
+                    <div className="space-y-3">
+                      {recommendation.candidates.map((candidate) => (
+                        <RecommendationCandidateCard
+                          candidate={candidate}
+                          key={candidate.employeeId}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-lg border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+                      No eligible employees were found for this recommendation.
+                    </p>
+                  )
+                ) : (
+                  <p className="rounded-lg border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+                    Generate recommendations to see ranked employees, score
+                    breakdowns, and explanation reasons.
+                  </p>
+                )}
+              </div>
+            </InfoCard>
+          ) : null}
+
           <InfoCard title="Manual Assignment">
             <div className="space-y-4">
               {job.status === JobStatuses.Assigned ? (
@@ -804,6 +917,64 @@ function SkillList({ skills }: { skills: string[] }) {
         </span>
       ))}
     </div>
+  )
+}
+
+const scoreBreakdownLabels: Record<keyof AssignmentScoreBreakdown, string> = {
+  availability: 'Availability',
+  locationRelevance: 'Location',
+  performance: 'Performance',
+  skillMatch: 'Skills',
+  workload: 'Workload',
+}
+
+function RecommendationCandidateCard({
+  candidate,
+}: {
+  candidate: AssignmentRecommendationCandidate
+}) {
+  const breakdownEntries = Object.entries(candidate.scoreBreakdown) as Array<
+    [keyof AssignmentScoreBreakdown, number]
+  >
+
+  return (
+    <article className="rounded-lg border border-border bg-background p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-foreground">
+            #{candidate.rank} {candidate.employeeName}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Model score: {candidate.totalScore} points
+          </p>
+        </div>
+        <span className="inline-flex w-fit rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+          {candidate.totalScore} pts
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-2">
+        {breakdownEntries.map(([scoreKey, scoreValue]) => (
+          <div
+            className="grid grid-cols-[minmax(80px,1fr)_48px] gap-3 text-xs"
+            key={scoreKey}
+          >
+            <span className="text-muted-foreground">
+              {scoreBreakdownLabels[scoreKey]}
+            </span>
+            <span className="text-right font-medium text-foreground">
+              {scoreValue}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <ul className="mt-4 list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">
+        {candidate.explanationReasons.map((reason) => (
+          <li key={reason}>{reason}</li>
+        ))}
+      </ul>
+    </article>
   )
 }
 

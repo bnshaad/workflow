@@ -330,11 +330,26 @@ service cloud.firestore {
     // - Admin and Manager team access will be handled through scoped users queries.
     // - Rules will enforce organizationId and RBAC before enabling list access.
 
-    // Future recommendations rules:
-    // - Rules will require sameOrganization(resource.data.organizationId).
-    // - Admin and Manager will read recommendation history for web assignment workflows.
+    // Recommendation history is append-only in Phase 13K.
+    // Admin and Manager can create/read recommendation records for their organization.
+    // Employees cannot access recommendation history in the web phase.
     match /recommendations/{recommendationId} {
-      allow read, write: if false;
+      allow get, list: if canManageWebJobs()
+        && resource.data.isActive == true
+        && sameOrganization(resource.data.organizationId);
+      allow create: if canManageWebJobs()
+        && hasStandardBusinessFields(request.resource.data)
+        && request.resource.data.id == recommendationId
+        && request.resource.data.jobId is string
+        && request.resource.data.generatedBy == request.auth.uid
+        && request.resource.data.generatedAt is timestamp
+        && request.resource.data.algorithmVersion == 'rule-based-v1'
+        && request.resource.data.assignmentMode == 'ai_recommendation'
+        && request.resource.data.status == 'generated'
+        && request.resource.data.candidates is list
+        && request.resource.data.candidates.size() <= 5
+        && sameOrganization(request.resource.data.organizationId);
+      allow update, delete: if false;
     }
 
     // Future incidents rules:
@@ -357,6 +372,7 @@ service cloud.firestore {
           && request.resource.data.actorId == request.auth.uid
           && (
             request.resource.data.action == 'job.status_updated'
+            || request.resource.data.action == 'assignment_recommendations_generated'
             || request.resource.data.action == 'job_employees_assigned'
             || request.resource.data.action == 'job_employees_reassigned'
             || request.resource.data.action == 'job_employees_unassigned'
@@ -364,33 +380,51 @@ service cloud.firestore {
           && request.resource.data.entityType == 'job'
           && (
             !(
-              request.resource.data.action == 'job_employees_assigned'
+              request.resource.data.action == 'assignment_recommendations_generated'
+              || request.resource.data.action == 'job_employees_assigned'
               || request.resource.data.action == 'job_employees_reassigned'
               || request.resource.data.action == 'job_employees_unassigned'
             )
             || (
-              request.resource.data.metadata.jobId == request.resource.data.entityId
-              && request.resource.data.metadata.previousEmployeeIds is list
-              && request.resource.data.metadata.newEmployeeIds is list
+              request.resource.data.action == 'assignment_recommendations_generated'
+              && request.resource.data.metadata.jobId == request.resource.data.entityId
+              && request.resource.data.metadata.recommendationId is string
+              && request.resource.data.metadata.algorithmVersion == 'rule-based-v1'
+              && request.resource.data.metadata.assignmentMode == 'ai_recommendation'
+              && request.resource.data.metadata.candidateCount is int
+              && request.resource.data.metadata.candidateCount >= 0
+              && request.resource.data.metadata.candidateCount <= 5
+            )
+            || (
+              (
+                request.resource.data.action == 'job_employees_assigned'
+                || request.resource.data.action == 'job_employees_reassigned'
+                || request.resource.data.action == 'job_employees_unassigned'
+              )
               && (
-                (
-                  request.resource.data.action == 'job_employees_assigned'
-                  && request.resource.data.metadata.fromStatus == 'open'
-                  && request.resource.data.metadata.toStatus == 'assigned'
-                  && request.resource.data.metadata.assignmentMode == 'manual'
-                  && request.resource.data.metadata.newEmployeeIds.size() > 0
-                )
-                || (
-                  request.resource.data.action == 'job_employees_reassigned'
-                  && request.resource.data.metadata.fromStatus == 'assigned'
-                  && request.resource.data.metadata.toStatus == 'assigned'
-                  && request.resource.data.metadata.newEmployeeIds.size() > 0
-                )
-                || (
-                  request.resource.data.action == 'job_employees_unassigned'
-                  && request.resource.data.metadata.fromStatus == 'assigned'
-                  && request.resource.data.metadata.toStatus == 'open'
-                  && request.resource.data.metadata.newEmployeeIds == []
+                request.resource.data.metadata.jobId == request.resource.data.entityId
+                && request.resource.data.metadata.previousEmployeeIds is list
+                && request.resource.data.metadata.newEmployeeIds is list
+                && (
+                  (
+                    request.resource.data.action == 'job_employees_assigned'
+                    && request.resource.data.metadata.fromStatus == 'open'
+                    && request.resource.data.metadata.toStatus == 'assigned'
+                    && request.resource.data.metadata.assignmentMode == 'manual'
+                    && request.resource.data.metadata.newEmployeeIds.size() > 0
+                  )
+                  || (
+                    request.resource.data.action == 'job_employees_reassigned'
+                    && request.resource.data.metadata.fromStatus == 'assigned'
+                    && request.resource.data.metadata.toStatus == 'assigned'
+                    && request.resource.data.metadata.newEmployeeIds.size() > 0
+                  )
+                  || (
+                    request.resource.data.action == 'job_employees_unassigned'
+                    && request.resource.data.metadata.fromStatus == 'assigned'
+                    && request.resource.data.metadata.toStatus == 'open'
+                    && request.resource.data.metadata.newEmployeeIds == []
+                  )
                 )
               )
             )

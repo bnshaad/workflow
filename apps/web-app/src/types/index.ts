@@ -11,6 +11,14 @@ export type {
 } from './job'
 export { JobPriorities, JOB_PRIORITY_VALUES } from './jobPriority'
 export type { JobPriority } from './jobPriority'
+export type {
+  AssignmentAlgorithmVersion,
+  AssignmentRecommendation,
+  AssignmentRecommendationCandidate,
+  AssignmentRecommendationMode,
+  AssignmentRecommendationStatus,
+  AssignmentScoreBreakdown,
+} from './recommendation'
 export {
   canTransitionJobStatus,
   getAllowedJobStatusTransitions,
