@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Bell,
   BriefcaseBusiness,
   ChevronDown,
   LogOut,
-  Search,
+  Menu,
   Settings,
   UserCircle,
 } from 'lucide-react'
@@ -12,7 +11,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks'
 import { canAccessSettings } from '@/permissions'
 
-export function Header() {
+type HeaderProps = {
+  onOpenNavigation: () => void
+}
+
+export function Header({ onOpenNavigation }: HeaderProps) {
   const navigate = useNavigate()
   const { loading, profile, signOut } = useAuth()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -67,42 +70,31 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-card px-6">
-      <div className="relative hidden w-full max-w-md sm:block">
-        <Search
-          aria-hidden="true"
-          className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-        />
-        <input
-          className="h-9 w-full rounded-lg border border-border bg-background pl-9 pr-4 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-          placeholder="Search jobs, team..."
-          type="search"
-        />
-      </div>
-
-      <div className="ml-auto flex items-center gap-4">
+    <header className="z-40 flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6">
+      <div className="flex min-w-0 items-center gap-3">
         <button
-          aria-label="Notifications"
-          className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          aria-label="Open navigation menu"
+          className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 md:hidden"
+          onClick={onOpenNavigation}
           type="button"
         >
-          <Bell aria-hidden="true" className="size-5" />
-          <span className="absolute right-2 top-2 size-2 rounded-full bg-destructive ring-2 ring-card" />
+          <Menu aria-hidden="true" className="size-5" />
         </button>
-
-        <div className="hidden items-center gap-2 border-l border-border pl-4 text-sm font-medium text-foreground sm:flex">
+        <div className="hidden min-w-0 items-center gap-2 text-sm font-medium text-foreground sm:flex">
           <BriefcaseBusiness
             aria-hidden="true"
-            className="size-4 text-muted-foreground"
+            className="size-4 shrink-0 text-muted-foreground"
           />
-          <span>Business Name</span>
+          <span className="truncate">Business Name</span>
         </div>
+      </div>
 
+      <div className="ml-auto flex items-center gap-3">
         <div className="relative" ref={menuRef}>
           <button
             aria-expanded={isMenuOpen}
             aria-haspopup="menu"
-            className="flex max-w-[240px] items-center gap-2 rounded-full border border-border bg-card p-1 pr-3 text-sm font-medium text-foreground transition hover:bg-muted"
+            className="flex max-w-[240px] items-center gap-2 rounded-full border border-border bg-card p-1 pr-3 text-sm font-medium text-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
             onClick={() => setIsMenuOpen((current) => !current)}
             type="button"
           >
@@ -161,7 +153,7 @@ export function Header() {
               </button>
               {showSettingsLink ? (
                 <Link
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground transition hover:bg-muted"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
                   onClick={() => setIsMenuOpen(false)}
                   role="menuitem"
                   to="/settings"
@@ -172,7 +164,7 @@ export function Header() {
               ) : null}
               <div className="my-1 border-t border-border" />
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-destructive transition hover:bg-destructive/5 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-destructive transition hover:bg-destructive/5 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isSigningOut}
                 onClick={handleSignOut}
                 role="menuitem"
