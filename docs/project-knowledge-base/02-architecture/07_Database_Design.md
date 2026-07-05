@@ -41,11 +41,12 @@ Workflow uses only these top-level collections:
 ```text
 organizations
 users
-tasks
+jobs
 recommendations
 incidents
 notifications
 auditLogs
+jobActivities
 ```
 
 Do not create additional top-level collections without approval.
@@ -179,19 +180,17 @@ Notes:
 
 ---
 
-# 8. Tasks Collection
+# 8. Jobs Collection
 
 Collection:
 
 ```text
-tasks
+jobs
 ```
 
 Purpose:
 
 Stores operational jobs.
-
-The UI term is Jobs. The internal Firestore collection remains `tasks`.
 
 Fields:
 
@@ -206,8 +205,7 @@ Fields:
 | requiredSkills | Array | Yes |
 | location | String | Optional |
 | dueDate | Timestamp | Optional |
-| assignedUserId | String | Optional |
-| assignedUserName | String | Optional |
+| assignedEmployeeIds | Array | Yes |
 | recommendationId | String | Optional |
 | assignment | Object | Optional |
 | proof | Object | Optional |
@@ -225,9 +223,11 @@ Embedded objects:
 - Proof
 - Recommendation Summary
 - Incident Summary
-- Timeline
+- Job Activity references
 
 Embedding these objects reduces reads for job details and list views.
+
+Detailed job timeline events are stored in `jobActivities`.
 
 ---
 
@@ -249,7 +249,7 @@ Fields:
 |-------|------|----------|
 | id | String | Yes |
 | organizationId | String | Yes |
-| taskId | String | Yes |
+| jobId | String | Yes |
 | recommendedUserId | String | Yes |
 | recommendedUserName | String | Yes |
 | score | Number | Yes |
@@ -268,7 +268,7 @@ accepted
 overridden
 ```
 
-Adaptive Learning in the MVP stores:
+Manager Recommendation Feedback stores:
 
 - Accepted recommendation
 - Overridden recommendation
@@ -296,7 +296,7 @@ Fields:
 |-------|------|----------|
 | id | String | Yes |
 | organizationId | String | Yes |
-| taskId | String | Yes |
+| jobId | String | Yes |
 | reportedBy | String | Yes |
 | title | String | Yes |
 | description | String | Yes |
@@ -366,7 +366,38 @@ Fields:
 
 ---
 
-# 13. AI Data Model
+# 13. Job Activities Collection
+
+Collection:
+
+```text
+jobActivities
+```
+
+Purpose:
+
+Stores job timeline events and field execution activity.
+
+Fields:
+
+| Field | Type | Required |
+|-------|------|----------|
+| id | String | Yes |
+| organizationId | String | Yes |
+| jobId | String | Yes |
+| type | String | Yes |
+| description | String | Yes |
+| performedBy | String | Optional |
+| metadata | Map | Optional |
+| isActive | Boolean | Yes |
+| createdAt | Timestamp | Yes |
+| updatedAt | Timestamp | Yes |
+
+Job activities support job detail timelines, dashboard recent activity, and evaluation metrics.
+
+---
+
+# 14. AI Data Model
 
 The MVP reuses existing operational collections.
 
@@ -385,9 +416,9 @@ Optional task field:
 Stored in:
 
 - recommendations
-- tasks.recommendationSummary
+- jobs.recommendationSummary
 
-## Adaptive Learning
+## Manager Recommendation Feedback
 
 Stored in:
 
@@ -395,45 +426,93 @@ Stored in:
 - recommendations.overrideReason
 - recommendations.selectedUserId
 
+Feedback is stored for evaluation and future insight generation.
+
 The MVP does not store or update ML weights.
 
-## Decision Support
+Feedback must not be described as automatic model retraining or automatic weight adjustment.
+
+## AI-Assisted Assignment Evaluation
+
+Status:
+
+- Planned next phase
+
+Evaluation uses valid available data from:
+
+- recommendations
+- jobs
+- users
+- incidents
+- auditLogs
+- jobActivities
+
+Planned descriptive metrics include recommendations generated, accepted recommendations, acceptance rate, overrides, common override reasons, completion rate, assignment-to-start time, assignment-to-completion time, and workload distribution.
+
+Evaluation compares the manual assignment baseline with AI-assisted assignment outcomes.
+
+Do not claim statistical significance or prediction accuracy without sufficient evidence.
+
+## Decision Support Alerts and Feedback Insights
 
 Uses existing operational data:
 
-- tasks
+- jobs
 - users
 - recommendations
 - incidents
 
-No dedicated Decision Support collection is required for MVP.
+No dedicated Decision Support Alerts collection is required for MVP.
 
-## Conversational AI
+## Controlled Conversational Workflow Assistant
 
 Uses existing application services.
 
-AI Job Summary is part of Conversational AI and may be stored as task activity or task notes only when confirmed by the user.
+The Controlled Conversational Workflow Assistant is planned for limited manager-safe requests such as showing urgent unassigned jobs, finding available technicians, summarizing open jobs, creating a job draft, and opening assignment review.
 
-## Knowledge Assistant
+It must confirm before any write action and open existing review or action flows rather than silently changing data.
 
-Retrieves from approved documentation:
+It is not a general-purpose autonomous chatbot.
 
-- SOP
-- User Guide
-- FAQ
-- Product Documentation
-- Equipment Manuals
+AI Job Summary is part of the controlled assistant workflow and may be stored as `jobActivities` or task notes only when confirmed by the user.
+
+## Grounded Knowledge Assistant
+
+The Grounded Knowledge Assistant retrieves from approved documentation:
+
+- SOPs
+- AC/electronics service manuals
+- Safety instructions
+- Installation guides
+- FAQs
+- Customer visit checklists
 
 A Firestore knowledge collection is not required for the MVP.
 
+Responses must cite or show trusted source references.
+
+If no trusted answer exists, the assistant must clearly state that.
+
+Web crawling, unrestricted document ingestion, and multi-agent retrieval are outside MVP scope.
+
+## Gemini Boundary
+
+Gemini is planned only for AI Job Understanding, the Controlled Conversational Workflow Assistant, and the Grounded RAG Knowledge Assistant.
+
+Gemini is not the employee assignment engine.
+
+Production Gemini integration must use a secure backend or trusted runtime path.
+
+API keys must never be placed in frontend code, localStorage, sessionStorage, or commits.
+
 ---
 
-# 14. Query Strategy
+# 15. Query Strategy
 
 Dashboard:
 
 - Organization dashboardStats
-- Recent tasks
+- Recent jobs
 - Recent notifications
 
 Jobs:
@@ -450,7 +529,7 @@ Team:
 Employee mobile assigned jobs:
 
 - `organizationId == currentOrganization`
-- `assignedUserId == currentUser`
+- `assignedEmployeeIds array-contains currentUser`
 - `isActive == true`
 
 Notifications:
@@ -460,7 +539,7 @@ Notifications:
 
 ---
 
-# 15. Security Strategy
+# 16. Security Strategy
 
 Firestore Security Rules must enforce:
 
@@ -472,7 +551,7 @@ Firestore Security Rules must enforce:
 
 ---
 
-# 16. Firebase Spark Compatibility
+# 17. Firebase Spark Compatibility
 
 The design remains Spark compatible by:
 
@@ -486,16 +565,16 @@ The design remains Spark compatible by:
 
 ---
 
-# 17. Future Enhancements
+# 18. Future Enhancements
 
 Future versions may add:
 
-- Adaptive scoring
 - Offline synchronization
 - Push notifications
 - Route optimization
 - Advanced reporting
 - Inventory
 - ERP integration
+- Automatic learning or automatic model-weight adjustment
 
 These features are excluded from the MVP.

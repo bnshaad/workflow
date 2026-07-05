@@ -60,8 +60,8 @@ Permissions:
 - Manage organization settings
 - Manage users
 - View audit logs
-- View Decision Support insights
-- Use Knowledge Assistant
+- View Action Needed alerts and feedback insights
+- Use Grounded Knowledge Assistant
 
 Restrictions:
 
@@ -91,8 +91,8 @@ Permissions:
 - Override recommendations with a reason
 - Verify work proof
 - Resolve job issues
-- View Decision Support insights
-- Use Knowledge Assistant
+- View Action Needed alerts and feedback insights
+- Use Grounded Knowledge Assistant
 
 Restrictions:
 
@@ -123,8 +123,7 @@ Permissions:
 - Report issues
 - View notifications
 - Use Quick Actions
-- Use Conversational AI for field workflow actions
-- Use Knowledge Assistant
+- Use Grounded Knowledge Assistant
 
 Restrictions:
 
@@ -150,10 +149,11 @@ Restrictions:
 | AI Job Understanding | ✓ | ✓ | — |
 | Intelligent Task Assignment | ✓ | ✓ | View assigned outcome only |
 | Explainable AI | ✓ | ✓ | View assigned-job context only |
-| Adaptive Learning Feedback | ✓ | ✓ | — |
-| Decision Support | ✓ | ✓ | — |
-| Conversational AI | ✓ | ✓ | ✓ |
-| Knowledge Assistant | ✓ | ✓ | ✓ |
+| Manager Recommendation Feedback | ✓ | ✓ | — |
+| AI-Assisted Assignment Evaluation | ✓ | ✓ | — |
+| Decision Support Alerts | ✓ | ✓ | — |
+| Controlled Conversational Workflow Assistant | ✓ | ✓ | — |
+| Grounded Knowledge Assistant | ✓ | ✓ | ✓ |
 | Work Proof Upload | — | Review only | ✓ |
 | Issue Reporting | — | Resolve only | ✓ |
 | Notifications | ✓ | ✓ | ✓ |

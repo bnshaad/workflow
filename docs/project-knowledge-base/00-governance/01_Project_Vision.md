@@ -54,7 +54,7 @@ Purpose:
 - Upload work proof
 - Report job issues
 - Receive notifications
-- Use Conversational AI and Knowledge Assistant within approved workflows
+- Use the Controlled Conversational Workflow Assistant and Grounded Knowledge Assistant within approved workflows
 
 Both applications share:
 
@@ -112,30 +112,41 @@ The approved AI capabilities are:
 1. AI Job Understanding
 2. Intelligent Task Assignment
 3. Explainable AI
-4. Adaptive Learning
-5. Decision Support
-6. Conversational AI
-7. Knowledge Assistant
+4. Manager Recommendation Feedback
+5. AI-Assisted Assignment Evaluation
+6. Explainable Hybrid MCDM Assignment Model
+7. Secure Gemini Job Understanding Integration
+8. Controlled Conversational Workflow Assistant
+9. Grounded RAG Knowledge Assistant
+10. Decision Support Alerts
+11. Feedback Insights
 
-AI Job Summary is not a standalone AI module. Any job summarization belongs inside the Conversational AI workflow when a user asks for or confirms a summary.
+AI Job Summary is not a standalone AI module. Any job summarization belongs inside the Controlled Conversational Workflow Assistant when a user asks for or confirms a summary.
 
-Decision Support provides dashboard insights, operational recommendations, and natural-language operational queries grounded in Workflow data.
+Decision Support Alerts provide limited Action Needed operational alerts and descriptive feedback insights grounded in Workflow data.
 
-Adaptive Learning in the MVP stores manager feedback only:
+Manager Recommendation Feedback stores manager feedback only:
 
 - Accepted recommendation
 - Overridden recommendation
 - Override reason
 
-Automatic machine-learning weight adjustment is outside the MVP. Future versions may implement adaptive scoring.
+Feedback is stored for evaluation and future insight generation.
 
-Knowledge Assistant retrieves information only from approved knowledge sources:
+Automatic machine-learning weight adjustment, automatic retraining, and autonomous weight changes are outside the MVP.
 
-- SOP
-- User Guide
-- FAQ
-- Product Documentation
-- Equipment Manuals
+The Grounded Knowledge Assistant retrieves information only from approved knowledge sources:
+
+- SOPs
+- AC/electronics service manuals
+- Safety instructions
+- Installation guides
+- FAQs
+- Customer visit checklists
+
+Gemini is planned only for AI Job Understanding, the Controlled Conversational Workflow Assistant, and the Grounded RAG Knowledge Assistant.
+
+Gemini is not the employee assignment engine.
 
 ---
 
@@ -158,7 +169,6 @@ The MVP must not introduce:
 
 Future versions may add:
 
-- Adaptive scoring
 - Offline synchronization
 - Route optimization
 - Push notifications
@@ -166,6 +176,7 @@ Future versions may add:
 - Payroll integration
 - ERP integration
 - Advanced business reporting
+- Automatic learning or automatic model-weight adjustment
 
 These enhancements are outside the MVP and must not influence the current implementation.
 

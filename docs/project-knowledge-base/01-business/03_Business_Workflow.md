@@ -40,7 +40,7 @@ Web: Manager Verification
 ↓
 Notifications + Audit Logs
 ↓
-Dashboard Insights + Decision Support
+Dashboard Insights + Action Needed Alerts
 ```
 
 ---
@@ -146,21 +146,30 @@ Process:
    - Skills
    - Availability
    - Workload
-   - Location relevance
-   - Job priority
+   - Location relevance when data becomes available
    - Historical performance
 3. System displays ranked recommendations.
 4. Each recommendation includes a score and explanation.
 
 Manager may:
 
-- Accept the recommendation.
-- Override the recommendation.
-- Record an override reason.
+- Accept the recommended employee.
+- Choose another employee.
+- Record a short override reason.
+
+Suggested override reasons:
+
+- Better local availability
+- Customer requested this technician
+- Manager preference
+- Special experience required
+- Other
 
 Outcome:
 
 The assignment remains human-approved and explainable.
+
+Missing data must be shown transparently and must not be invented.
 
 ---
 
@@ -206,33 +215,39 @@ Job completion is evidence-based and auditable.
 
 ---
 
-# 10. Conversational AI Workflow
+# 10. Controlled Conversational Workflow Assistant
 
-Actors:
+Status:
+
+- Planned next phase
+
+Actor:
 
 - Manager
-- Employee
 
 Purpose:
 
-Guide approved workflow actions using natural language.
+Support limited manager-safe workflow requests using natural language.
 
 Examples:
 
+- Show urgent unassigned jobs.
+- Find available technicians.
+- Summarize open jobs.
 - Create a job draft.
-- Update job status.
-- Report an issue.
-- Summarize a completed job.
+- Open assignment review.
 
 Rules:
 
-- Critical actions require user confirmation.
+- Write actions require manager confirmation.
+- The assistant opens existing review or action flows rather than silently changing data.
 - AI Job Summary belongs inside this workflow.
-- Conversational AI stays within approved Workflow actions.
+- The assistant is not a general-purpose autonomous chatbot.
+- Gemini may support this assistant, but Gemini must not automatically create jobs, assign employees, update job status, or execute critical actions without manager confirmation.
 
 ---
 
-# 11. Decision Support
+# 11. Action Needed Alerts
 
 Actors:
 
@@ -241,17 +256,28 @@ Actors:
 
 Purpose:
 
-Provide operational support through:
+Provide dashboard-level operational support through limited, actionable alerts.
 
-- Dashboard insights
-- Operational recommendations
-- Natural-language operational queries
+Initial alerts may include:
 
-Decision Support does not execute actions automatically.
+- Urgent jobs still unassigned
+- Overloaded technicians
+- Overdue jobs
+- Jobs with no matching skilled employee
+
+Rules:
+
+- Alerts remain non-intrusive.
+- Alerts do not execute actions automatically.
+- No notification system is required for these MVP dashboard alerts.
 
 ---
 
-# 12. Knowledge Assistant
+# 12. Grounded Knowledge Assistant
+
+Status:
+
+- Planned next phase
 
 Actors:
 
@@ -263,31 +289,98 @@ Purpose:
 
 Retrieve approved operational information from:
 
-- SOP
-- User Guide
-- FAQ
-- Product Documentation
-- Equipment Manuals
+- SOPs
+- AC/electronics service manuals
+- Safety instructions
+- Installation guides
+- FAQs
+- Customer visit checklists
 
-The assistant must not answer from unsupported general knowledge when an approved source is required.
+Responses must cite or show trusted source references.
+
+If no trusted answer exists, the assistant must clearly state that.
+
+Web crawling, unrestricted document ingestion, and multi-agent retrieval are outside MVP scope.
 
 ---
 
-# 13. Adaptive Learning
+# 13. Manager Recommendation Feedback
 
-The MVP records feedback from assignment decisions:
+Status:
+
+- Planned next phase
+
+Workflow records feedback from assignment decisions:
 
 - Accepted recommendation
 - Overridden recommendation
 - Override reason
 
+Feedback is stored for evaluation and future insight generation.
+
 The MVP does not automatically adjust model weights.
 
-Future versions may implement adaptive scoring after enough validated feedback exists.
+Feedback must not be described as automatic model retraining or automatic weight adjustment.
 
 ---
 
-# 14. Notifications and Audit Logs
+# 14. AI-Assisted Assignment Evaluation
+
+Status:
+
+- Planned next phase
+
+Evaluation compares manual assignment baseline with AI-assisted assignment outcomes.
+
+Metrics may include:
+
+- Recommendations generated
+- Accepted recommendations
+- Acceptance rate
+- Overrides
+- Common override reasons
+- Completion rate
+- Assignment-to-start time
+- Assignment-to-completion time
+- Workload distribution
+
+Metrics must be descriptive and based only on valid available data.
+
+Do not claim statistical significance or prediction accuracy without sufficient evidence.
+
+---
+
+# 15. Explainable Hybrid MCDM Assignment Upgrade
+
+Status:
+
+- Planned next phase
+
+The planned assignment upgrade is:
+
+```text
+Eligibility filtering
+↓
+Normalized criteria values
+↓
+AHP-derived weight profile
+↓
+TOPSIS candidate ranking
+↓
+Explanation generation
+↓
+Manager approval or override
+```
+
+AHP/TOPSIS is not currently implemented.
+
+Managers use simple presets such as Balanced, Urgent Response, Best Expertise, or Fair Workload.
+
+Managers must not configure technical weights or view mathematical matrices.
+
+---
+
+# 16. Notifications and Audit Logs
 
 Notifications support operational awareness across both applications.
 
@@ -310,7 +403,7 @@ Workflow remains traceable and accountable.
 
 ---
 
-# 15. Business Rules
+# 17. Business Rules
 
 - Every business record belongs to one organization.
 - Every authenticated user has one Firestore profile.
@@ -318,6 +411,7 @@ Workflow remains traceable and accountable.
 - Employees use the mobile field application.
 - Managers approve assignments.
 - Recommendations are advisory only.
+- The system must never automatically assign employees.
 - Important actions are auditable.
 - Employee mobile dashboard content is limited to Today's Jobs, Assigned Jobs, Notifications, and Quick Actions.
 - The architecture must remain Firebase Spark compatible.

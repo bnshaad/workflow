@@ -35,7 +35,7 @@ Managers always make the final assignment decision.
 
 The system may recommend.
 
-The system shall never automatically assign tasks without manager approval.
+The system shall never automatically assign jobs or employees without manager approval.
 
 ---
 
@@ -175,13 +175,15 @@ AI capabilities shall be:
 
 The assignment engine shall remain deterministic and rule-based for the MVP.
 
-Adaptive Learning stores feedback only in the MVP:
+Manager Recommendation Feedback stores feedback only in the MVP:
 
 - Accepted recommendation
 - Overridden recommendation
 - Override reason
 
-Automatic machine-learning weight adjustment is outside the MVP scope.
+Feedback is stored for evaluation and future insight generation.
+
+Automatic machine-learning weight adjustment, automatic model retraining, and autonomous weight changes are outside the MVP scope.
 
 ---
 

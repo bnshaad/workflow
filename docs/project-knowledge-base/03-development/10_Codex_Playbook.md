@@ -188,7 +188,7 @@ Job Issues
 
 Internal code terminology
 
-tasks
+jobs
 
 users
 
@@ -210,7 +210,7 @@ organizations
 
 users
 
-tasks
+jobs
 
 recommendations
 
@@ -219,6 +219,8 @@ incidents
 notifications
 
 auditLogs
+
+jobActivities
 
 Never create additional collections without approval.
 
@@ -348,9 +350,17 @@ Intelligent Task Assignment
 
 Explainable AI
 
-Adaptive Learning
+Manager Accept / Override Recommendation Feedback
 
-Decision Support
+AI-Assisted Assignment Evaluation
+
+Explainable Hybrid MCDM Assignment Upgrade
+
+Secure Gemini Job Understanding Integration
+
+Decision Support Alerts
+
+Feedback Insights
 
 ```text
 WEB COMPLETE
@@ -376,9 +386,9 @@ Issue Reporting
 
 Mobile AI
 
-Conversational AI
+Controlled Conversational Workflow Assistant
 
-Knowledge Assistant
+Grounded RAG Knowledge Assistant
 
 ## Phase G
 

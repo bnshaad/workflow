@@ -7,7 +7,22 @@
 - [ ] Team
 - [ ] Jobs
 - [ ] Suggested Worker
-- [ ] Notifications
+- [ ] 13L - Manager Accept / Override Recommendation Feedback
+- [ ] 13M - AI-Assisted Assignment Evaluation
+- [ ] 13N - Explainable Hybrid MCDM Assignment Upgrade
+- [ ] 13O - Secure Gemini Job Understanding Integration
+- [ ] 13P - Controlled Conversational Workflow Assistant
+- [ ] 13Q - Grounded RAG Knowledge Assistant
+- [ ] 13R - Decision Support Alerts
+- [ ] 13S - Feedback Insights
+- [ ] Future integration - Employee mobile UI
+- [ ] Future integration - Work proof upload
+- [ ] Future integration - Incident reporting
+- [ ] Future integration - Notifications
+- [ ] Future integration - Location verification
+- [ ] Future integration - Route optimization
+- [ ] Future integration - Predictive workforce planning
+- [ ] Future integration - Automatic learning / automatic model-weight adjustment
 - [ ] Settings
 - [ ] Testing
 - [ ] Documentation

@@ -39,7 +39,7 @@ Purpose:
 - Manage team members
 - Review assignment recommendations
 - Monitor operations
-- Use Decision Support
+- View Action Needed alerts and feedback insights
 - Review proof and issues
 - Access settings and audit logs according to role
 
@@ -63,7 +63,7 @@ Purpose:
 - Update status
 - Upload work proof
 - Report issues
-- Use Conversational AI and Knowledge Assistant where appropriate
+- Use the Controlled Conversational Workflow Assistant and Grounded Knowledge Assistant where appropriate
 
 The employee mobile dashboard remains focused on field execution.
 
@@ -118,7 +118,7 @@ Contents:
 - Recent Activity
 - Quick Actions
 
-Decision Support may surface dashboard insights and operational recommendations, but it does not replace dashboard content.
+Action Needed alerts may surface limited operational issues, but they do not replace dashboard content.
 
 ---
 
@@ -210,7 +210,7 @@ Job details include:
 - Status controls
 - Proof upload
 - Issue reporting
-- Relevant instructions from Knowledge Assistant
+- Relevant instructions from Grounded Knowledge Assistant
 
 ---
 
@@ -224,37 +224,80 @@ AI extracts suggested structured job fields for manager review.
 
 ## Intelligent Task Assignment
 
-The system recommends suitable workers with a Best Match Score.
+The implemented baseline recommends suitable workers with deterministic rule-based weighted scoring and a Best Match Score.
+
+The system must never automatically assign employees.
+
+Managers remain responsible for final assignment decisions.
+
+Missing data must be shown transparently and must not be invented.
 
 ## Explainable AI
 
 Every recommendation includes visible reasoning.
 
-## Adaptive Learning
+## Manager Recommendation Feedback
 
-The MVP records accepted recommendations, overridden recommendations, and override reasons.
+The planned next phase records accepted recommendations, overridden recommendations, and override reasons.
 
-Future versions may add adaptive scoring.
+Feedback is stored for evaluation and future insight generation.
 
-## Decision Support
+This must not be described as automatic model retraining or automatic weight adjustment.
 
-Decision Support provides dashboard insights, operational recommendations, and natural-language operational queries.
+## AI-Assisted Assignment Evaluation
 
-## Conversational AI
+The planned next phase evaluates AI-assisted assignment outcomes against a manual assignment baseline using descriptive metrics.
 
-Conversational AI guides approved workflow actions.
+## Explainable Hybrid MCDM Assignment Model
+
+The planned next phase upgrades ranking through eligibility filtering, normalized criteria values, an AHP-derived weight profile, TOPSIS candidate ranking, explanation generation, and manager approval or override.
+
+Managers use presets such as Balanced, Urgent Response, Best Expertise, and Fair Workload.
+
+Managers must not configure technical weights or view mathematical matrices.
+
+## Secure Gemini Job Understanding Integration
+
+Gemini may support AI Job Understanding by producing editable structured drafts only.
+
+Gemini is not the employee assignment engine.
+
+Production Gemini integration must use a secure backend or trusted runtime path.
+
+API keys must never be placed in frontend code, localStorage, sessionStorage, or commits.
+
+## Controlled Conversational Workflow Assistant
+
+The planned assistant guides limited approved workflow actions.
 
 AI Job Summary is part of this workflow and not a separate AI feature.
 
-## Knowledge Assistant
+It must confirm before any write action and must not silently change operational data.
 
-Knowledge Assistant retrieves answers from:
+## Grounded RAG Knowledge Assistant
 
-- SOP
-- User Guide
-- FAQ
-- Product Documentation
-- Equipment Manuals
+The planned assistant retrieves answers from:
+
+- SOPs
+- AC/electronics service manuals
+- Safety instructions
+- Installation guides
+- FAQs
+- Customer visit checklists
+
+Responses must cite or show trusted source references.
+
+If no trusted answer exists, the assistant must clearly state that.
+
+## Decision Support Alerts
+
+Action Needed alerts may include urgent jobs still unassigned, overloaded technicians, overdue jobs, and jobs with no matching skilled employee.
+
+## Feedback Insights
+
+Feedback insights may include recommendation acceptance rate, common override reason, recurring location mismatch, and availability-related overrides.
+
+This remains insight-only.
 
 ---
 
@@ -305,5 +348,5 @@ The product is acceptable when:
 - Team management supports assignment readiness.
 - Recommendations are explainable.
 - Employees can complete assigned work from mobile.
-- Decision Support and Knowledge Assistant remain scoped.
+- Action Needed alerts and Grounded Knowledge Assistant remain scoped.
 - The UI feels modern, minimal, and professional.

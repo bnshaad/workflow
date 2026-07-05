@@ -56,7 +56,8 @@ Responsibilities:
 - Team
 - Assignment recommendation review
 - Explainable AI
-- Decision Support
+- Action Needed alerts
+- Feedback insights
 - Settings according to role
 - Audit logs according to role
 
@@ -76,8 +77,7 @@ Responsibilities:
 - Work Proof
 - Issue Reporting
 - Notifications
-- Conversational AI
-- Knowledge Assistant
+- Grounded Knowledge Assistant
 
 ---
 
@@ -212,31 +212,39 @@ Approved AI capabilities:
 - AI Job Understanding
 - Intelligent Task Assignment
 - Explainable AI
-- Adaptive Learning
-- Decision Support
-- Conversational AI
-- Knowledge Assistant
+- Manager Recommendation Feedback
+- AI-Assisted Assignment Evaluation
+- Explainable Hybrid MCDM Assignment Model
+- Secure Gemini Job Understanding Integration
+- Controlled Conversational Workflow Assistant
+- Grounded RAG Knowledge Assistant
+- Decision Support Alerts
+- Feedback Insights
 
 Rules:
 
-- AI Job Summary is part of Conversational AI.
-- Decision Support is limited to dashboard insights, operational recommendations, and natural-language operational queries.
-- Adaptive Learning stores manager feedback only in the MVP.
-- Knowledge Assistant retrieves only from approved documentation.
+- AI Job Summary is part of the controlled conversational assistant workflow.
+- Decision Support Alerts are limited to Action Needed dashboard alerts and descriptive insights.
+- Manager feedback is stored for evaluation and future insight generation only.
+- The Grounded Knowledge Assistant retrieves only from trusted approved documentation.
 - No automatic ML weight adjustment is included in the MVP.
+- Gemini is planned only for AI Job Understanding, the Controlled Conversational Workflow Assistant, and the Grounded RAG Knowledge Assistant.
+- Gemini is not the employee assignment engine.
+- Production Gemini integration must use a secure backend or trusted runtime path.
+- API keys must never be placed in frontend code, localStorage, sessionStorage, or commits.
 
 ---
 
 # 11. Assignment Engine Architecture
 
-The assignment engine is a rule-based TypeScript service for the MVP.
+The current assignment engine baseline is a deterministic rule-based TypeScript service.
 
 It evaluates:
 
 - Skills
 - Availability
 - Workload
-- Location relevance
+- Location relevance when data becomes available
 - Priority
 - Historical performance
 
@@ -247,6 +255,32 @@ It returns:
 - Explanation
 
 Managers approve or override recommendations.
+
+The system must never automatically assign employees.
+
+Missing data must be shown transparently and must not be invented.
+
+The planned Explainable Hybrid MCDM Assignment Model is a future enhancement, not the current implementation.
+
+Planned upgrade architecture:
+
+```text
+Eligibility filtering
+↓
+Normalized criteria values
+↓
+AHP-derived weight profile
+↓
+TOPSIS candidate ranking
+↓
+Explanation generation
+↓
+Manager approval or override
+```
+
+Manager-facing presets may include Balanced, Urgent Response, Best Expertise, and Fair Workload. Each preset maps to a predefined internal weight profile.
+
+Managers must not configure technical weights or view mathematical matrices.
 
 ---
 
@@ -363,8 +397,12 @@ Mobile source structure will be defined during Phase E, but it must follow the s
 - AI Job Understanding
 - Intelligent Task Assignment
 - Explainable AI
-- Adaptive Learning
-- Decision Support
+- Manager Accept / Override Recommendation Feedback
+- AI-Assisted Assignment Evaluation
+- Explainable Hybrid MCDM Assignment Upgrade
+- Secure Gemini Job Understanding Integration
+- Decision Support Alerts
+- Feedback Insights
 
 ```text
 WEB COMPLETE
@@ -381,8 +419,8 @@ WEB COMPLETE
 
 ## Phase F: Mobile AI
 
-- Conversational AI
-- Knowledge Assistant
+- Controlled Conversational Workflow Assistant
+- Grounded RAG Knowledge Assistant
 
 ## Phase G: Platform Completion
 
@@ -405,3 +443,5 @@ WEB COMPLETE
 - Do not bypass RBAC.
 - Do not implement AI conversations outside approved Workflow use cases.
 - Do not implement automatic ML weight adjustment in the MVP.
+- Do not use Gemini as the employee assignment engine.
+- Do not place Gemini API keys in frontend code, localStorage, sessionStorage, or commits.
