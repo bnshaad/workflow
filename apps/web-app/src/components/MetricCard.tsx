@@ -22,14 +22,14 @@ export function MetricCard({
   value,
 }: MetricCardProps) {
   return (
-    <article className="min-h-[132px] rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-center gap-3 text-muted-foreground">
-        <Icon aria-hidden="true" className="size-5 shrink-0" />
+    <article className="rounded-lg border border-border bg-card p-3 shadow-sm">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Icon aria-hidden="true" className="size-4 shrink-0" />
         <p className="text-xs font-medium uppercase leading-5 tracking-[0.08em]">
           {label}
         </p>
       </div>
-      <p className={cn('mt-4 text-2xl font-semibold tracking-tight', valueTone[tone])}>
+      <p className={cn('mt-2 text-2xl font-semibold tracking-tight', valueTone[tone])}>
         {value}
       </p>
     </article>

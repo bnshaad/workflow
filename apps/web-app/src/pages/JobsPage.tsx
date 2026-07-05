@@ -160,7 +160,7 @@ export function JobsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
         title="Jobs"
         description="Track service jobs and review job details."
@@ -175,8 +175,8 @@ export function JobsPage() {
         }
       />
 
-      <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+      <section className="rounded-xl border border-border bg-card p-3 shadow-sm">
+        <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
           <div className="relative min-w-0 xl:flex-[1.5]">
             <Search
               aria-hidden="true"
@@ -191,7 +191,7 @@ export function JobsPage() {
             />
           </div>
 
-          <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_auto_auto]">
+          <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_auto_auto]">
             <FilterSelect
               icon={<ClipboardList aria-hidden="true" className="size-4" />}
               label="Status"
@@ -252,7 +252,7 @@ export function JobsPage() {
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="rounded-full bg-muted px-2.5 py-1">
             {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
           </span>
@@ -262,7 +262,7 @@ export function JobsPage() {
         </div>
 
         {showMoreFilters ? (
-          <div className="mt-4 grid gap-3 border-t border-border pt-4 md:grid-cols-2">
+          <div className="mt-3 grid gap-2 border-t border-border pt-3 md:grid-cols-2">
             <FilterSelect
               icon={<Filter aria-hidden="true" className="size-4" />}
               label="Priority"
@@ -310,7 +310,7 @@ export function JobsPage() {
                   'Actions',
                 ].map((header) => (
                   <th
-                    className="px-6 py-4 text-xs font-medium tracking-[0.08em] text-muted-foreground"
+                    className="px-4 py-3 text-xs font-medium tracking-[0.08em] text-muted-foreground"
                     key={header}
                   >
                     {header}
@@ -350,18 +350,18 @@ export function JobsPage() {
               {!isLoading && !errorMessage
                 ? filteredJobs.map((job) => (
                     <tr className="transition hover:bg-background/60" key={job.id}>
-                      <td className="px-6 py-5">
+                      <td className="px-4 py-3">
                         <Link
                           className="font-medium text-foreground transition hover:text-primary"
                           to={`/jobs/${job.id}`}
                         >
                           {job.title}
                         </Link>
-                        <p className="mt-1 text-sm text-muted-foreground">
+                        <p className="text-sm text-muted-foreground">
                           {job.customerName}
                         </p>
                       </td>
-                      <td className="px-6 py-5">
+                      <td className="px-4 py-3">
                         <span
                           className={
                             job.assignedEmployeeIds.length === 0
@@ -372,12 +372,12 @@ export function JobsPage() {
                           {formatAssignedEmployees(job.assignedEmployeeIds)}
                         </span>
                       </td>
-                      <td className="px-6 py-5">
+                      <td className="px-4 py-3">
                         <StatusBadge tone={priorityTone[job.priority]}>
                           {job.priority}
                         </StatusBadge>
                       </td>
-                      <td className="px-6 py-5">
+                      <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-1.5">
                           {job.status === 'completed' ? (
                             <Check
@@ -390,10 +390,10 @@ export function JobsPage() {
                           </StatusBadge>
                         </span>
                       </td>
-                      <td className="px-6 py-5 text-muted-foreground">
+                      <td className="px-4 py-3 text-muted-foreground">
                         {formatTimestamp(job.dueDate)}
                       </td>
-                      <td className="px-6 py-5 text-right">
+                      <td className="px-4 py-3 text-right">
                         <Link
                           aria-label={`View details for ${job.title}`}
                           className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
@@ -447,7 +447,7 @@ export function JobsPage() {
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-2 border-t border-border bg-background/50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 border-t border-border bg-background/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             Showing {filteredJobs.length} of {jobs.length} loaded jobs
           </p>
@@ -460,7 +460,7 @@ export function JobsPage() {
 
 function JobCard({ job }: { job: Job }) {
   return (
-    <article className="p-4">
+    <article className="p-3">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <Link
@@ -480,14 +480,14 @@ function JobCard({ job }: { job: Job }) {
         </Link>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <StatusBadge tone={priorityTone[job.priority]}>{job.priority}</StatusBadge>
         <StatusBadge tone={statusTone[job.status]}>
           {JOB_STATUS_LABELS[job.status]}
         </StatusBadge>
       </div>
 
-      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Assigned
@@ -563,8 +563,8 @@ function TableMessage({
       <td
         className={
           tone === 'danger'
-            ? 'px-6 py-10 text-center text-destructive'
-            : 'px-6 py-10 text-center text-muted-foreground'
+            ? 'px-4 py-6 text-center text-destructive'
+            : 'px-4 py-6 text-center text-muted-foreground'
         }
         colSpan={6}
       >
@@ -590,8 +590,8 @@ function ListMessage({
     <div
       className={
         tone === 'danger'
-          ? 'px-6 py-10 text-center text-sm text-destructive'
-          : 'px-6 py-10 text-center text-sm text-muted-foreground'
+          ? 'px-4 py-6 text-center text-sm text-destructive'
+          : 'px-4 py-6 text-center text-sm text-muted-foreground'
       }
     >
       <p>{children}</p>

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import {
+  BarChart3,
   BriefcaseBusiness,
   X,
   LayoutDashboard,
@@ -23,6 +24,12 @@ const navigationItems = [
     label: 'Dashboard',
     to: '/dashboard',
     icon: LayoutDashboard,
+    canView: canViewDashboard,
+  },
+  {
+    label: 'Analytics',
+    to: '/analytics',
+    icon: BarChart3,
     canView: canViewDashboard,
   },
   {

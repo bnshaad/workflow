@@ -42,21 +42,21 @@ const teamMembers: TeamMember[] = [
 
 export function TeamPage() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
         title="Team"
         description="See who's available and what everyone is working on."
         actions={
           <>
             <button
-              className="inline-flex h-11 items-center gap-2 rounded-lg border border-border bg-card px-5 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
               type="button"
             >
               <Download aria-hidden="true" className="size-4" />
               Export
             </button>
             <button
-              className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30"
               type="button"
             >
               <Plus aria-hidden="true" className="size-4" />
@@ -66,23 +66,23 @@ export function TeamPage() {
         }
       />
 
-      <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+      <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
             <Search
               aria-hidden="true"
-              className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
+              className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
             />
             <input
-              className="h-12 w-full rounded-lg border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-4 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
               placeholder="Find someone by name or skill..."
               type="search"
             />
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <select
-              className="h-12 min-w-44 rounded-lg border border-border bg-card px-4 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              className="h-10 min-w-40 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
               defaultValue="Any Skill"
             >
               <option>Any Skill</option>
@@ -92,7 +92,7 @@ export function TeamPage() {
               <option>General</option>
             </select>
             <select
-              className="h-12 min-w-44 rounded-lg border border-border bg-card px-4 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              className="h-10 min-w-40 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
               defaultValue="Any Status"
             >
               <option>Any Status</option>
@@ -101,7 +101,7 @@ export function TeamPage() {
               <option>On Leave</option>
             </select>
             <button
-              className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-card px-4 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-3 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               type="button"
               aria-label="More filters"
             >
@@ -113,7 +113,7 @@ export function TeamPage() {
 
       <section
         aria-label="Team members"
-        className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4"
+        className="space-y-2"
       >
         {teamMembers.map((member) => (
           <TeamMemberCard key={member.name} {...member} />

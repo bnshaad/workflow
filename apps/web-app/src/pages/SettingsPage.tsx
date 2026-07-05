@@ -102,18 +102,18 @@ function SettingsSection({
 }) {
   return (
     <section className="rounded-xl border border-border bg-card shadow-sm">
-      <div className="flex items-start gap-4 border-b border-border p-6">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon aria-hidden="true" className="size-5" />
+      <div className="flex items-start gap-3 border-b border-border p-4">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon aria-hidden="true" className="size-4" />
         </span>
         <div>
-          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          <h2 className="text-base font-semibold text-foreground">{title}</h2>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">
             {description}
           </p>
         </div>
       </div>
-      <div className="p-6">{children}</div>
+      <div className="p-3">{children}</div>
     </section>
   )
 }
@@ -121,10 +121,10 @@ function SettingsSection({
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+      <p className="mb-1 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
         {label}
       </p>
-      <div className="rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground">
+      <div className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground">
         {value}
       </div>
     </div>
@@ -141,21 +141,21 @@ export function SettingsPage() {
     : false
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
         title="Settings"
         description="Review Business setup, Team access, Audit Logs, and operational Preferences."
       />
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-4">
           {showBusinessProfile ? (
             <SettingsSection
               icon={BriefcaseBusiness}
               title="Business Profile"
               description="Admin-focused Business details used across Jobs and Team workflows."
             >
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2">
                 {businessProfile.map((field) => (
                   <ReadOnlyField key={field.label} {...field} />
                 ))}
@@ -173,13 +173,13 @@ export function SettingsPage() {
                 <table className="w-full min-w-[560px] border-collapse text-left text-sm">
                   <thead>
                     <tr className="border-b border-border bg-background/60">
-                      <th className="px-4 py-3 text-xs font-medium tracking-[0.08em] text-muted-foreground">
+                      <th className="px-3 py-2 text-xs font-medium tracking-[0.08em] text-muted-foreground">
                         Name
                       </th>
-                      <th className="px-4 py-3 text-xs font-medium tracking-[0.08em] text-muted-foreground">
+                      <th className="px-3 py-2 text-xs font-medium tracking-[0.08em] text-muted-foreground">
                         Email
                       </th>
-                      <th className="px-4 py-3 text-xs font-medium tracking-[0.08em] text-muted-foreground">
+                      <th className="px-3 py-2 text-xs font-medium tracking-[0.08em] text-muted-foreground">
                         Role
                       </th>
                     </tr>
@@ -187,13 +187,13 @@ export function SettingsPage() {
                   <tbody className="divide-y divide-border">
                     {users.map((user) => (
                       <tr key={user.email}>
-                        <td className="px-4 py-4 font-medium text-foreground">
+                        <td className="px-3 py-2 font-medium text-foreground">
                           {user.name}
                         </td>
-                        <td className="px-4 py-4 text-muted-foreground">
+                        <td className="px-3 py-2 text-muted-foreground">
                           {user.email}
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="px-3 py-2">
                           <StatusBadge tone={user.tone}>{user.role}</StatusBadge>
                         </td>
                       </tr>
@@ -205,17 +205,17 @@ export function SettingsPage() {
           ) : null}
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           {showAuditLogs ? (
             <SettingsSection
               icon={ShieldCheck}
               title="Audit Logs"
               description="Admin-focused activity summary for Jobs, Team, and Issues."
             >
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {auditLogs.map((log) => (
                   <article
-                    className="rounded-lg border border-border bg-background p-4"
+                    className="rounded-lg border border-border bg-background px-3 py-2"
                     key={log.id}
                   >
                     <div className="flex items-start justify-between gap-4">
@@ -223,7 +223,7 @@ export function SettingsPage() {
                         <h3 className="text-sm font-medium text-foreground">
                           {log.action}
                         </h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
+                        <p className="text-sm text-muted-foreground">
                           {log.actor} - {log.target}
                         </p>
                       </div>
@@ -243,17 +243,17 @@ export function SettingsPage() {
               title="Preferences"
               description="Manager-visible display preferences for Jobs, Team, and Issues."
             >
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {preferences.map((preference) => (
                   <div
-                    className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background p-4"
+                    className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background px-3 py-2"
                     key={preference.label}
                   >
                     <div>
                       <h3 className="text-sm font-medium text-foreground">
                         {preference.label}
                       </h3>
-                      <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                      <p className="text-sm leading-5 text-muted-foreground">
                         {preference.description}
                       </p>
                     </div>
@@ -280,7 +280,7 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <section className="rounded-xl border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
+      <section className="rounded-xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
         <div className="flex items-start gap-3">
           <ClipboardList aria-hidden="true" className="mt-0.5 size-5 text-primary" />
           <p>

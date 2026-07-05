@@ -1,3 +1,4 @@
+export { AnalyticsPage } from './AnalyticsPage'
 export { CreateJobPage } from './CreateJobPage'
 export { DashboardPage } from './DashboardPage'
 export { JobDetailsPage } from './JobDetailsPage'

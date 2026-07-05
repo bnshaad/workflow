@@ -3,15 +3,11 @@ import {
   ArrowRight,
   AlertTriangle,
   BriefcaseBusiness,
-  Check,
   CheckCircle2,
   ClipboardList,
   Clock,
-  ListChecks,
-  Percent,
   Plus,
   RefreshCcw,
-  Timer,
   UserPlus,
   UsersRound,
 } from 'lucide-react'
@@ -19,10 +15,8 @@ import { Link } from 'react-router-dom'
 import {
   MetricCard,
   PageHeader,
-  RecentActivityItem,
   StatusBadge,
 } from '@/components'
-import { JOB_PRIORITY_OPTIONS } from '@/constants/jobConstants'
 import { useAuth } from '@/hooks'
 import { canCreateJob } from '@/permissions'
 import {
@@ -30,12 +24,7 @@ import {
   type DashboardSummary,
   type RecentDashboardActivity,
 } from '@/services/dashboard'
-import {
-  getManualAssignmentBaselineMetrics,
-  type ManualAssignmentBaselineMetrics,
-} from '@/services/evaluation'
 import { JobStatuses, JOB_STATUS_LABELS, type JobStatus } from '@/types'
-import type { JobPriority } from '@/types/jobPriority'
 
 type MetricItem = {
   icon: ComponentType<SVGProps<SVGSVGElement>>
@@ -86,18 +75,9 @@ const statusMetricTone: Partial<
   in_progress: 'primary',
 }
 
-const priorityTone: Record<JobPriority, 'danger' | 'default' | 'warning'> = {
-  High: 'warning',
-  Low: 'default',
-  Medium: 'default',
-  Urgent: 'danger',
-}
-
 export function DashboardPage() {
   const { profile } = useAuth()
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
-  const [baseline, setBaseline] =
-    useState<ManualAssignmentBaselineMetrics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -113,14 +93,13 @@ export function DashboardPage() {
       setErrorMessage('')
 
       try {
-        const [dashboardSummary, baselineMetrics] = await Promise.all([
-          getDashboardSummary(profile, profile.organizationId),
-          getManualAssignmentBaselineMetrics(profile, profile.organizationId),
-        ])
+        const dashboardSummary = await getDashboardSummary(
+          profile,
+          profile.organizationId,
+        )
 
         if (isMounted) {
           setSummary(dashboardSummary)
-          setBaseline(baselineMetrics)
         }
       } catch (error) {
         if (import.meta.env.DEV) {
@@ -130,7 +109,6 @@ export function DashboardPage() {
         if (isMounted) {
           setErrorMessage('Unable to load dashboard metrics. Please try again.')
           setSummary(null)
-          setBaseline(null)
         }
       } finally {
         if (isMounted) {
@@ -155,7 +133,7 @@ export function DashboardPage() {
   const canCreateJobs = profile ? canCreateJob(profile) : false
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
         title="Dashboard"
         description={formatDashboardContext(new Date())}
@@ -193,7 +171,7 @@ export function DashboardPage() {
 
           <section
             aria-labelledby="job-status-overview-heading"
-            className="space-y-4"
+            className="space-y-3"
           >
             <div>
               <h2
@@ -206,20 +184,17 @@ export function DashboardPage() {
                 Current job counts by operational state.
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {metrics.map((metric) => (
                 <MetricCard key={metric.label} {...metric} />
               ))}
             </div>
           </section>
 
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <EmployeeWorkload summary={summary} />
-            <PriorityBreakdown summary={summary} />
             <RecentActivity summary={summary} />
           </div>
-
-          {baseline ? <ManualAssignmentBaseline baseline={baseline} /> : null}
         </>
       ) : (
         <section className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
@@ -308,7 +283,7 @@ function ActionNeededPanel({ items }: { items: ActionNeededItem[] }) {
   return (
     <section
       aria-labelledby="action-needed-heading"
-      className="rounded-xl border border-border bg-card p-5 shadow-sm"
+      className="rounded-xl border border-border bg-card p-4 shadow-sm"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -328,13 +303,13 @@ function ActionNeededPanel({ items }: { items: ActionNeededItem[] }) {
       </div>
 
       {items.length > 0 ? (
-        <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
           {items.map((item) => (
             <ActionNeededCard item={item} key={item.label} />
           ))}
         </div>
       ) : (
-        <div className="mt-5 rounded-lg border border-border bg-background px-4 py-5 text-sm text-muted-foreground">
+        <div className="mt-4 rounded-lg border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
           No urgent operational issues right now.
         </div>
       )}
@@ -352,21 +327,30 @@ function ActionNeededCard({ item }: { item: ActionNeededItem }) {
   }[item.tone]
 
   return (
-    <article className={`rounded-lg border p-4 ${toneClass}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-2xl font-semibold tracking-tight">{item.count}</p>
-          <h3 className="mt-1 text-sm font-semibold text-foreground">
+    <article
+      className={`grid gap-3 rounded-lg border p-3 sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:items-center ${toneClass}`}
+    >
+      <div className="flex items-center gap-3 sm:block">
+        <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-card/80 text-lg font-semibold tracking-tight">
+          {item.count}
+        </span>
+        <div className="min-w-0 sm:hidden">
+          <h3 className="text-sm font-semibold text-foreground">
             {item.label}
           </h3>
         </div>
-        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-card/80">
-          <Icon aria-hidden="true" className="size-4" />
-        </span>
       </div>
-      <p className="mt-3 text-sm leading-5 text-muted-foreground">
-        {item.description}
-      </p>
+      <div className="min-w-0">
+        <div className="hidden items-center gap-2 sm:flex">
+          <Icon aria-hidden="true" className="size-4 shrink-0" />
+          <h3 className="truncate text-sm font-semibold text-foreground">
+            {item.label}
+          </h3>
+        </div>
+        <p className="text-sm leading-5 text-muted-foreground sm:mt-1 sm:truncate">
+          {item.description}
+        </p>
+      </div>
       <ActionNeededLink item={item} />
     </article>
   )
@@ -374,7 +358,7 @@ function ActionNeededCard({ item }: { item: ActionNeededItem }) {
 
 function ActionNeededLink({ item }: { item: ActionNeededItem }) {
   const className =
-    'mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30'
+    'inline-flex h-8 w-fit items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30'
 
   if (item.actionHref) {
     return (
@@ -393,44 +377,12 @@ function ActionNeededLink({ item }: { item: ActionNeededItem }) {
   )
 }
 
-function PriorityBreakdown({ summary }: { summary: DashboardSummary }) {
-  return (
-    <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-foreground">
-            Priority Breakdown
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Jobs grouped by service urgency.
-          </p>
-        </div>
-        <ListChecks aria-hidden="true" className="size-5 text-muted-foreground" />
-      </div>
-
-      <div className="mt-6 space-y-3">
-        {JOB_PRIORITY_OPTIONS.map((priority) => (
-          <div
-            className="flex items-center justify-between gap-4 rounded-md border border-border bg-background px-4 py-3"
-            key={priority}
-          >
-            <StatusBadge tone={priorityTone[priority]}>{priority}</StatusBadge>
-            <span className="text-lg font-semibold text-foreground">
-              {summary.jobMetrics.priorityCounts[priority]}
-            </span>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
 function EmployeeWorkload({ summary }: { summary: DashboardSummary }) {
-  const workload = summary.employeeWorkload.slice(0, 8)
+  const workload = summary.employeeWorkload.slice(0, 4)
 
   return (
     <section
-      className="rounded-lg border border-border bg-card p-6 shadow-sm"
+      className="rounded-lg border border-border bg-card p-4 shadow-sm"
       id="employee-workload"
     >
       <div className="flex items-center justify-between gap-3">
@@ -442,26 +394,31 @@ function EmployeeWorkload({ summary }: { summary: DashboardSummary }) {
             Assigned and in-progress jobs.
           </p>
         </div>
-        <UsersRound aria-hidden="true" className="size-5 text-muted-foreground" />
+        <Link
+          className="shrink-0 text-sm font-medium text-primary transition hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          to="/analytics"
+        >
+          View full workload in Analytics
+        </Link>
       </div>
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-4 space-y-2">
         {workload.length > 0 ? (
           workload.map((employee) => (
             <div
-              className="flex items-center justify-between gap-4 rounded-md border border-border bg-background px-4 py-3"
+              className="flex items-center justify-between gap-4 rounded-md border border-border bg-background px-3 py-2"
               key={employee.employeeId}
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">
                   {employee.displayName}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {employee.assignedJobCount} assigned /{' '}
                   {employee.inProgressJobCount} in progress
                 </p>
               </div>
-              <span className="shrink-0 text-lg font-semibold text-foreground">
+              <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-card text-sm font-semibold text-foreground">
                 {employee.activeJobCount}
               </span>
             </div>
@@ -477,8 +434,10 @@ function EmployeeWorkload({ summary }: { summary: DashboardSummary }) {
 }
 
 function RecentActivity({ summary }: { summary: DashboardSummary }) {
+  const recentActivities = summary.recentActivities.slice(0, 5)
+
   return (
-    <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-foreground">
@@ -488,22 +447,21 @@ function RecentActivity({ summary }: { summary: DashboardSummary }) {
             Latest job lifecycle events.
           </p>
         </div>
-        <Check aria-hidden="true" className="size-5 text-muted-foreground" />
+        <Link
+          className="shrink-0 text-sm font-medium text-primary transition hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          to="/jobs"
+        >
+          View Jobs
+        </Link>
       </div>
 
-      <div className="relative mt-6 space-y-6 pl-5 before:absolute before:inset-y-0 before:left-[11px] before:w-px before:bg-border">
-        {summary.recentActivities.length > 0 ? (
-          summary.recentActivities.map((activity) => (
-            <RecentActivityItem
-              icon={getActivityIcon(activity.activityType)}
-              key={activity.id}
-              meta={`${formatActivityTime(activity.performedAt)} - ${activity.performerName}`}
-              text={`${formatActivityType(activity.activityType)}: ${activity.jobTitle}`}
-              tone={getActivityTone(activity.activityType)}
-            />
+      <div className="mt-4 space-y-2">
+        {recentActivities.length > 0 ? (
+          recentActivities.map((activity) => (
+            <CompactActivityItem activity={activity} key={activity.id} />
           ))
         ) : (
-          <p className="-ml-5 rounded-md border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+          <p className="rounded-md border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
             No recent job activity yet.
           </p>
         )}
@@ -512,144 +470,53 @@ function RecentActivity({ summary }: { summary: DashboardSummary }) {
   )
 }
 
-function ManualAssignmentBaseline({
-  baseline,
+function CompactActivityItem({
+  activity,
 }: {
-  baseline: ManualAssignmentBaselineMetrics
-}) {
-  const topEmployees = baseline.assignmentCountByEmployee.slice(0, 6)
-
-  return (
-    <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-foreground">
-            Manual Assignment Baseline
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Descriptive outcomes for manager-selected initial assignments.
-          </p>
-        </div>
-        <StatusBadge tone="default">Manual</StatusBadge>
-      </div>
-
-      {baseline.totalManualAssignments > 0 ? (
-        <>
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <BaselineMetric
-              icon={UserPlus}
-              label="Manual Assignments"
-              value={String(baseline.totalManualAssignments)}
-            />
-            <BaselineMetric
-              icon={RefreshCcw}
-              label="Jobs Started"
-              value={String(baseline.jobsStarted)}
-            />
-            <BaselineMetric
-              icon={CheckCircle2}
-              label="Jobs Completed"
-              value={String(baseline.completedJobs)}
-            />
-            <BaselineMetric
-              icon={Percent}
-              label="Completion Rate"
-              value={formatPercent(baseline.completionRate)}
-            />
-            <BaselineMetric
-              icon={Timer}
-              label="Avg Assign to Start"
-              value={formatHours(baseline.averageAssignedToStartedHours)}
-            />
-            <BaselineMetric
-              icon={Clock}
-              label="Avg Assign to Complete"
-              value={formatHours(baseline.averageAssignedToCompletedHours)}
-            />
-            {baseline.jobsWithDueDate > 0 ? (
-              <BaselineMetric
-                icon={AlertTriangle}
-                label="Overdue Completions"
-                value={`${baseline.jobsCompletedOverdue} (${formatPercent(
-                  baseline.overdueCompletionRate ?? 0,
-                )})`}
-              />
-            ) : null}
-            <BaselineMetric
-              icon={UsersRound}
-              label="Distribution"
-              value={`${baseline.assignmentDistribution.lowest} / ${baseline.assignmentDistribution.highest} / ${formatNumber(
-                baseline.assignmentDistribution.average,
-              )}`}
-              helper="Low / high / avg"
-            />
-          </div>
-
-          <div className="mt-6 rounded-md border border-border bg-background p-4">
-            <h3 className="text-sm font-semibold text-foreground">
-              Assignment Count by Employee
-            </h3>
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {topEmployees.map((employee) => (
-                <div
-                  className="flex items-center justify-between gap-4 rounded-md border border-border bg-card px-4 py-3"
-                  key={employee.employeeId}
-                >
-                  <span className="min-w-0 truncate text-sm text-foreground">
-                    {employee.displayName}
-                  </span>
-                  <span className="shrink-0 text-sm font-semibold text-foreground">
-                    {employee.assignmentCount}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      ) : (
-        <p className="mt-6 rounded-md border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-          No manual initial assignment audit events are available yet.
-        </p>
-      )}
-    </section>
-  )
-}
-
-function BaselineMetric({
-  helper,
-  icon: Icon,
-  label,
-  value,
-}: {
-  helper?: string
-  icon: ComponentType<SVGProps<SVGSVGElement>>
-  label: string
-  value: string
+  activity: RecentDashboardActivity
 }) {
   return (
-    <div className="rounded-md border border-border bg-background p-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Icon aria-hidden="true" className="size-4 shrink-0" />
-        <p className="text-xs font-medium uppercase leading-5 tracking-[0.08em]">
-          {label}
+    <div className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2">
+      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-card text-muted-foreground">
+        <ActivityIcon type={activity.activityType} />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium text-foreground">
+          {formatActivityType(activity.activityType)}: {activity.jobTitle}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {formatActivityTime(activity.performedAt)} - {activity.performerName}
         </p>
       </div>
-      <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-        {value}
-      </p>
-      {helper ? (
-        <p className="mt-1 text-xs text-muted-foreground">{helper}</p>
-      ) : null}
     </div>
   )
 }
 
+function ActivityIcon({
+  type,
+}: {
+  type: RecentDashboardActivity['activityType']
+}) {
+  switch (type) {
+    case 'employees_assigned':
+    case 'employees_reassigned':
+    case 'employees_unassigned':
+      return <UserPlus aria-hidden="true" className="size-4" />
+    case 'employee_completed_job':
+      return <CheckCircle2 aria-hidden="true" className="size-4" />
+    case 'employee_started_job':
+      return <RefreshCcw aria-hidden="true" className="size-4" />
+    default:
+      return <ClipboardList aria-hidden="true" className="size-4" />
+  }
+}
+
 function DashboardLoadingState() {
   return (
-    <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }, (_, index) => (
         <div
-          className="min-h-[168px] rounded-xl border border-border bg-card p-6 shadow-sm"
+          className="min-h-[92px] rounded-lg border border-border bg-card p-3 shadow-sm"
           key={index}
         >
           <div className="h-4 w-28 rounded-full bg-muted" />
@@ -658,36 +525,6 @@ function DashboardLoadingState() {
       ))}
     </section>
   )
-}
-
-function getActivityIcon(type: RecentDashboardActivity['activityType']) {
-  switch (type) {
-    case 'employees_assigned':
-    case 'employees_reassigned':
-    case 'employees_unassigned':
-      return UserPlus
-    case 'employee_completed_job':
-      return CheckCircle2
-    case 'employee_started_job':
-      return RefreshCcw
-    default:
-      return ClipboardList
-  }
-}
-
-function getActivityTone(type: RecentDashboardActivity['activityType']) {
-  switch (type) {
-    case 'employee_completed_job':
-      return 'success'
-    case 'employees_unassigned':
-      return 'danger'
-    case 'employee_started_job':
-    case 'employees_assigned':
-    case 'employees_reassigned':
-      return 'primary'
-    default:
-      return 'default'
-  }
 }
 
 function formatActivityType(type: RecentDashboardActivity['activityType']) {
@@ -720,18 +557,4 @@ function formatDashboardContext(date: Date) {
   return `Operational snapshot for ${new Intl.DateTimeFormat(undefined, {
     dateStyle: 'full',
   }).format(date)}.`
-}
-
-function formatPercent(value: number) {
-  return `${Math.round(value * 100)}%`
-}
-
-function formatHours(value: number | null) {
-  return value === null ? 'N/A' : `${formatNumber(value)}h`
-}
-
-function formatNumber(value: number) {
-  return new Intl.NumberFormat(undefined, {
-    maximumFractionDigits: 1,
-  }).format(value)
 }

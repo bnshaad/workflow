@@ -377,7 +377,7 @@ export function JobDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-border bg-card p-10 text-center text-sm text-muted-foreground shadow-sm">
+      <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground shadow-sm">
         Loading job details...
       </div>
     )
@@ -387,7 +387,7 @@ export function JobDetailsPage() {
     return (
       <div className="space-y-6">
         <BackLink />
-        <div className="rounded-xl border border-border bg-card p-10 text-center text-sm text-muted-foreground shadow-sm">
+        <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground shadow-sm">
           {errorMessage || 'Job not found.'}
         </div>
       </div>
@@ -395,7 +395,7 @@ export function JobDetailsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <nav className="flex items-center gap-2 text-sm text-muted-foreground">
         <Link
           className="rounded-sm transition hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -412,9 +412,9 @@ export function JobDetailsPage() {
         job={job}
       />
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <aside className="min-w-0 xl:order-2">
-          <div className="space-y-6 xl:sticky xl:top-6">
+          <div className="space-y-4 xl:sticky xl:top-4">
             <AssignmentDecisionPanel
               allowedStatuses={allowedStatuses}
               assignedEmployeeNames={assignedEmployeeNames}
@@ -455,9 +455,9 @@ export function JobDetailsPage() {
           </div>
         </aside>
 
-        <div className="min-w-0 space-y-6 xl:order-1">
+        <div className="min-w-0 space-y-4 xl:order-1">
           <InfoCard title="Job Information">
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
                 <DetailItem label="Description">{job.description}</DetailItem>
               </div>
@@ -481,7 +481,7 @@ export function JobDetailsPage() {
           </InfoCard>
 
           <InfoCard title="Customer Information">
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3">
               <DetailItem label="Customer Name">{job.customerName}</DetailItem>
               <DetailItem label="Phone">
                 <span className="inline-flex items-center gap-2">
@@ -502,7 +502,7 @@ export function JobDetailsPage() {
           </InfoCard>
 
           <InfoCard title="Attachments">
-            <div className="flex min-h-20 items-center gap-3 rounded-lg border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
+            <div className="flex min-h-12 items-center gap-3 rounded-lg border border-dashed border-border bg-background p-3 text-sm text-muted-foreground">
               <Paperclip aria-hidden="true" className="size-4" />
               {job.attachments.length === 0
                 ? 'No attachments uploaded yet.'
@@ -511,7 +511,7 @@ export function JobDetailsPage() {
           </InfoCard>
 
           <InfoCard title="Job Metadata">
-            <div className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-2">
               <DetailItem label="Created By">
                 <span className="inline-flex items-center gap-2">
                   <UserRound
@@ -568,7 +568,7 @@ function JobSummary({
   job: Job
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+    <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -583,11 +583,11 @@ function JobSummary({
             </span>
           </div>
 
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground">
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
             {job.title}
           </h1>
 
-          <div className="mt-5 grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
             <SummaryItem label="Customer">{job.customerName}</SummaryItem>
             <SummaryItem label="Location">
               {job.location || job.serviceAddress || 'No location note'}
@@ -704,8 +704,8 @@ function AssignmentDecisionPanel({
 
   return (
     <InfoCard title="Assignment & Status">
-      <div className="space-y-6">
-        <div className="rounded-lg border border-border bg-background p-4">
+      <div className="space-y-4">
+        <div className="rounded-lg border border-border bg-background p-3">
           <DetailItem label="Current Assignment">
             {assignedEmployeeNames.length === 0 ? (
               <span className="text-muted-foreground">Unassigned</span>
@@ -752,7 +752,7 @@ function AssignmentDecisionPanel({
         ) : null}
 
         {!isOpen && !isAssigned ? (
-          <p className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
+          <p className="rounded-lg border border-border bg-background p-3 text-sm text-muted-foreground">
             Assignment changes are not available for this job status.
           </p>
         ) : null}
@@ -806,7 +806,7 @@ function OpenAssignmentControls({
   toggleEmployeeSelection: (employeeId: string) => void
 }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <section className="space-y-3">
         <SectionHeading
           description="Generate advisory candidates before assigning manually."
@@ -861,12 +861,12 @@ function OpenAssignmentControls({
               ))}
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+            <p className="rounded-lg border border-dashed border-border bg-background p-3 text-sm text-muted-foreground">
               No eligible employees were found for this recommendation.
             </p>
           )
         ) : (
-          <p className="rounded-lg border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border bg-background p-3 text-sm text-muted-foreground">
             Generate recommendations to see ranked employees, score breakdowns,
             and explanation reasons.
           </p>
@@ -1090,7 +1090,7 @@ function EmployeeSelectionList({
         />
       </div>
 
-      <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-border bg-background p-2">
+      <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-lg border border-border bg-background p-2">
         {employees.length === 0 ? (
           <p className="px-2 py-4 text-center text-sm text-muted-foreground">
             No eligible employees found.
@@ -1098,7 +1098,7 @@ function EmployeeSelectionList({
         ) : (
           employees.map((employee) => (
             <label
-              className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 text-sm transition hover:bg-muted has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
+              className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-1.5 text-sm transition hover:bg-muted has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
               key={employee.id}
             >
               <input
@@ -1192,11 +1192,11 @@ function InfoCard({
   title: string
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-      <h2 className="border-b border-border pb-4 text-lg font-semibold text-foreground">
+    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+      <h2 className="border-b border-border pb-3 text-base font-semibold text-foreground">
         {title}
       </h2>
-      <div className="pt-6">{children}</div>
+      <div className="pt-4">{children}</div>
     </section>
   )
 }

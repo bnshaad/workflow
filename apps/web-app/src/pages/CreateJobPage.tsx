@@ -1,5 +1,13 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowLeft, Calendar, Paperclip, Save, Sparkles } from 'lucide-react'
+import {
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
+  ChevronDown,
+  Paperclip,
+  Save,
+  Sparkles,
+} from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components'
 import { DEFAULT_JOB_PRIORITY, JOB_PRIORITY_OPTIONS } from '@/constants/jobConstants'
@@ -45,6 +53,9 @@ export function CreateJobPage() {
   const [draftSuggestion, setDraftSuggestion] =
     useState<AiJobDraftSuggestion | null>(null)
   const [aiErrorMessage, setAiErrorMessage] = useState('')
+  const [hasAppliedDraftSuggestion, setHasAppliedDraftSuggestion] =
+    useState(false)
+  const [isDraftPreviewExpanded, setIsDraftPreviewExpanded] = useState(true)
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -66,6 +77,8 @@ export function CreateJobPage() {
         })
 
       setDraftSuggestion(suggestion)
+      setHasAppliedDraftSuggestion(false)
+      setIsDraftPreviewExpanded(true)
     } catch (error) {
       if (error instanceof AiJobUnderstandingError) {
         setAiErrorMessage(error.message)
@@ -96,6 +109,8 @@ export function CreateJobPage() {
           ? draftSuggestion.requiredSkills.join(', ')
           : current.requiredSkillIds,
     }))
+    setHasAppliedDraftSuggestion(true)
+    setIsDraftPreviewExpanded(false)
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -137,13 +152,13 @@ export function CreateJobPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
         title="Create Job"
         description="Add a manual job for the current organization."
         actions={
           <Link
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
             to="/jobs"
           >
             <ArrowLeft aria-hidden="true" className="size-4" />
@@ -153,7 +168,7 @@ export function CreateJobPage() {
       />
 
       <section className="rounded-xl border border-border bg-card shadow-sm">
-        <div className="border-b border-border p-6">
+        <div className="border-b border-border p-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
@@ -165,17 +180,25 @@ export function CreateJobPage() {
               </p>
             </div>
             {draftSuggestion ? (
-              <span className="inline-flex w-fit rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                AI-generated suggestion
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {hasAppliedDraftSuggestion ? (
+                  <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600">
+                    <CheckCircle2 aria-hidden="true" className="size-3.5" />
+                    Applied to form
+                  </span>
+                ) : null}
+                <span className="inline-flex w-fit rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                  AI-generated suggestion
+                </span>
+              </div>
             ) : null}
           </div>
         </div>
 
-        <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
+        <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
           <Field label="Natural-language customer request">
             <textarea
-              className="min-h-36 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
               onChange={(event) => setCustomerRequest(event.target.value)}
               placeholder="Example: Customer name is Sarah Jenkins. AC is not cooling at 123 Maple Street and they need service today. Phone is 555-123-4567."
               value={customerRequest}
@@ -185,65 +208,98 @@ export function CreateJobPage() {
           <div className="rounded-lg border border-border bg-background p-4">
             {draftSuggestion ? (
               <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Draft suggestion
-                  </h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Development stub output. Review every field before using it.
-                  </p>
-                </div>
-                <dl className="grid gap-3 text-sm">
-                  <SuggestionRow label="Title" value={draftSuggestion.title} />
-                  <SuggestionRow
-                    label="Service Type"
-                    value={draftSuggestion.serviceType}
-                  />
-                  <SuggestionRow
-                    label="Priority"
-                    value={draftSuggestion.priority}
-                  />
-                  <SuggestionRow
-                    label="Skills"
-                    value={draftSuggestion.requiredSkills.join(', ')}
-                  />
-                  <SuggestionRow
-                    label="Customer"
-                    value={draftSuggestion.customerName}
-                  />
-                  <SuggestionRow
-                    label="Phone"
-                    value={draftSuggestion.customerPhone}
-                  />
-                  <SuggestionRow
-                    label="Address"
-                    value={draftSuggestion.serviceAddress}
-                  />
-                  <SuggestionRow
-                    label="Location"
-                    value={draftSuggestion.location}
-                  />
-                </dl>
-                {draftSuggestion.needsReview.length > 0 ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    <p className="font-medium">Needs review</p>
-                    <ul className="mt-1 list-disc space-y-1 pl-4">
-                      {draftSuggestion.needsReview.map((reviewItem) => (
-                        <li key={reviewItem}>{reviewItem}</li>
-                      ))}
-                    </ul>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Draft suggestion
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Development stub output. Review every field before using it.
+                    </p>
                   </div>
-                ) : null}
+                  <button
+                    aria-expanded={isDraftPreviewExpanded}
+                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    onClick={() =>
+                      setIsDraftPreviewExpanded((current) => !current)
+                    }
+                    type="button"
+                  >
+                    {isDraftPreviewExpanded ? 'Collapse' : 'Expand'}
+                    <ChevronDown
+                      aria-hidden="true"
+                      className={`size-3.5 text-muted-foreground transition ${
+                        isDraftPreviewExpanded ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {!isDraftPreviewExpanded ? (
+                  <div className="rounded-lg border border-border bg-card px-3 py-2 text-sm">
+                    <p className="font-medium text-foreground">
+                      {draftSuggestion.title || 'Untitled suggested job'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {draftSuggestion.customerName || 'Customer needs review'} ·{' '}
+                      {draftSuggestion.priority} priority
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <dl className="grid gap-3 text-sm">
+                      <SuggestionRow label="Title" value={draftSuggestion.title} />
+                      <SuggestionRow
+                        label="Service Type"
+                        value={draftSuggestion.serviceType}
+                      />
+                      <SuggestionRow
+                        label="Priority"
+                        value={draftSuggestion.priority}
+                      />
+                      <SuggestionRow
+                        label="Skills"
+                        value={draftSuggestion.requiredSkills.join(', ')}
+                      />
+                      <SuggestionRow
+                        label="Customer"
+                        value={draftSuggestion.customerName}
+                      />
+                      <SuggestionRow
+                        label="Phone"
+                        value={draftSuggestion.customerPhone}
+                      />
+                      <SuggestionRow
+                        label="Address"
+                        value={draftSuggestion.serviceAddress}
+                      />
+                      <SuggestionRow
+                        label="Location"
+                        value={draftSuggestion.location}
+                      />
+                    </dl>
+                    {draftSuggestion.needsReview.length > 0 ? (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        <p className="font-medium">Needs review</p>
+                        <ul className="mt-1 list-disc space-y-1 pl-4">
+                          {draftSuggestion.needsReview.map((reviewItem) => (
+                            <li key={reviewItem}>{reviewItem}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </div>
             ) : (
-              <div className="flex min-h-36 items-center text-sm text-muted-foreground">
+              <div className="flex min-h-24 items-center text-sm text-muted-foreground">
                 Generated fields will appear here before you apply them to the editable job form.
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 border-t border-border p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-border p-4 sm:flex-row sm:items-center sm:justify-between">
           {aiErrorMessage ? (
             <p className="text-sm font-medium text-destructive">
               {aiErrorMessage}
@@ -255,7 +311,7 @@ export function CreateJobPage() {
           )}
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isGeneratingDraft || customerRequest.trim().length === 0}
               onClick={handleGenerateDraft}
               type="button"
@@ -268,7 +324,7 @@ export function CreateJobPage() {
                   : 'Generate Draft'}
             </button>
             <button
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!draftSuggestion}
               onClick={applyDraftSuggestion}
               type="button"
@@ -283,157 +339,185 @@ export function CreateJobPage() {
         className="rounded-xl border border-border bg-card shadow-sm"
         onSubmit={handleSubmit}
       >
-        <div className="grid gap-6 border-b border-border p-6 lg:grid-cols-2">
-          <Field label="Title">
-            <input
-              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  title: event.target.value,
-                }))
-              }
-              placeholder="Annual HVAC inspection"
-              value={formState.title}
-            />
-          </Field>
+        <div className="space-y-4 p-4 pb-20">
+          <FormSection
+            description="Name the job and capture the customer request."
+            title="Customer & Job Details"
+          >
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Field label="Title">
+                <input
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  onChange={(event) =>
+                    setFormState((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))
+                  }
+                  placeholder="Annual HVAC inspection"
+                  value={formState.title}
+                />
+              </Field>
 
-          <Field label="Priority">
-            <select
-              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  priority: event.target.value as JobPriority,
-                }))
-              }
-              value={formState.priority}
-            >
-              {JOB_PRIORITY_OPTIONS.map((priority) => (
-                <option key={priority} value={priority}>
-                  {priority}
-                </option>
-              ))}
-            </select>
-          </Field>
+              <Field label="Customer Name">
+                <input
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  onChange={(event) =>
+                    setFormState((current) => ({
+                      ...current,
+                      customerName: event.target.value,
+                    }))
+                  }
+                  placeholder="Sarah Jenkins"
+                  value={formState.customerName}
+                />
+              </Field>
 
-          <div className="lg:col-span-2">
-            <Field label="Description">
-              <textarea
-                className="min-h-32 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    description: event.target.value,
-                  }))
-                }
-                placeholder="Describe the customer request and work required."
-                value={formState.description}
-              />
-            </Field>
-          </div>
+              <Field label="Customer Phone">
+                <input
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  onChange={(event) =>
+                    setFormState((current) => ({
+                      ...current,
+                      customerPhone: event.target.value,
+                    }))
+                  }
+                  placeholder="(555) 123-4567"
+                  value={formState.customerPhone}
+                />
+              </Field>
 
-          <Field label="Customer Name">
-            <input
-              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  customerName: event.target.value,
-                }))
-              }
-              placeholder="Sarah Jenkins"
-              value={formState.customerName}
-            />
-          </Field>
-
-          <Field label="Customer Phone">
-            <input
-              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  customerPhone: event.target.value,
-                }))
-              }
-              placeholder="(555) 123-4567"
-              value={formState.customerPhone}
-            />
-          </Field>
-
-          <div className="lg:col-span-2">
-            <Field label="Service Address">
-              <input
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    serviceAddress: event.target.value,
-                  }))
-                }
-                placeholder="123 Maple Street, Springfield"
-                value={formState.serviceAddress}
-              />
-            </Field>
-          </div>
-
-          <Field label="Location">
-            <input
-              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  location: event.target.value,
-                }))
-              }
-              placeholder="Facility, unit, or location note"
-              value={formState.location}
-            />
-          </Field>
-
-          <Field label="Due Date">
-            <div className="relative">
-              <Calendar
-                aria-hidden="true"
-                className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              />
-              <input
-                className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    dueDate: event.target.value,
-                  }))
-                }
-                type="datetime-local"
-                value={formState.dueDate}
-              />
+              <div className="lg:col-span-2">
+                <Field label="Description">
+                  <textarea
+                    className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        description: event.target.value,
+                      }))
+                    }
+                    placeholder="Describe the customer request and work required."
+                    value={formState.description}
+                  />
+                </Field>
+              </div>
             </div>
-          </Field>
+          </FormSection>
 
-          <Field label="Required Skill IDs">
-            <input
-              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  requiredSkillIds: event.target.value,
-                }))
-              }
-              placeholder="AC Repair, Installation"
-              value={formState.requiredSkillIds}
-            />
-          </Field>
+          <FormSection
+            description="Set the work type and any skills needed before assignment."
+            title="Service Requirements"
+          >
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Field label="Required Skill IDs">
+                <input
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  onChange={(event) =>
+                    setFormState((current) => ({
+                      ...current,
+                      requiredSkillIds: event.target.value,
+                    }))
+                  }
+                  placeholder="AC Repair, Installation"
+                  value={formState.requiredSkillIds}
+                />
+              </Field>
 
-          <Field label="Attachments">
-            <div className="flex min-h-10 items-center gap-2 rounded-lg border border-dashed border-border bg-background px-3 text-sm text-muted-foreground">
-              <Paperclip aria-hidden="true" className="size-4" />
-              Upload will be added in a later phase.
+              <Field label="Attachments">
+                <div className="flex min-h-10 items-center gap-2 rounded-lg border border-dashed border-border bg-background px-3 text-sm text-muted-foreground">
+                  <Paperclip aria-hidden="true" className="size-4" />
+                  Upload will be added in a later phase.
+                </div>
+              </Field>
             </div>
-          </Field>
+          </FormSection>
+
+          <FormSection
+            description="Choose urgency and the requested service window."
+            title="Priority & Schedule"
+          >
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Field label="Priority">
+                <select
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  onChange={(event) =>
+                    setFormState((current) => ({
+                      ...current,
+                      priority: event.target.value as JobPriority,
+                    }))
+                  }
+                  value={formState.priority}
+                >
+                  {JOB_PRIORITY_OPTIONS.map((priority) => (
+                    <option key={priority} value={priority}>
+                      {priority}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Due Date">
+                <div className="relative">
+                  <Calendar
+                    aria-hidden="true"
+                    className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <input
+                    className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        dueDate: event.target.value,
+                      }))
+                    }
+                    type="datetime-local"
+                    value={formState.dueDate}
+                  />
+                </div>
+              </Field>
+            </div>
+          </FormSection>
+
+          <FormSection
+            description="Capture where the service team should go."
+            title="Location"
+          >
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="lg:col-span-2">
+                <Field label="Service Address">
+                  <input
+                    className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        serviceAddress: event.target.value,
+                      }))
+                    }
+                    placeholder="123 Maple Street, Springfield"
+                    value={formState.serviceAddress}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Location">
+                <input
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  onChange={(event) =>
+                    setFormState((current) => ({
+                      ...current,
+                      location: event.target.value,
+                    }))
+                  }
+                  placeholder="Facility, unit, or location note"
+                  value={formState.location}
+                />
+              </Field>
+            </div>
+          </FormSection>
         </div>
 
-        <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-border bg-card/95 p-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-4">
           {errorMessage ? (
             <p className="text-sm font-medium text-destructive">{errorMessage}</p>
           ) : (
@@ -442,7 +526,7 @@ export function CreateJobPage() {
             </p>
           )}
           <button
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSubmitting}
             type="submit"
           >
@@ -469,6 +553,26 @@ function Field({
       </span>
       {children}
     </label>
+  )
+}
+
+function FormSection({
+  children,
+  description,
+  title,
+}: {
+  children: ReactNode
+  description: string
+  title: string
+}) {
+  return (
+    <section className="rounded-lg border border-border bg-background p-4">
+      <div className="mb-4">
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      </div>
+      {children}
+    </section>
   )
 }
 

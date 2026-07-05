@@ -22,7 +22,7 @@ export function DataTable<Row extends { id: string }>({
           <tr className="border-b border-border bg-background/40">
             {columns.map((column) => (
               <th
-                className="px-8 py-4 text-xs font-medium tracking-[0.08em] text-muted-foreground"
+                className="px-4 py-3 text-xs font-medium tracking-[0.08em] text-muted-foreground"
                 key={String(column.key)}
               >
                 {column.header}
@@ -34,7 +34,7 @@ export function DataTable<Row extends { id: string }>({
           {rows.map((row) => (
             <tr className="transition hover:bg-background/60" key={row.id}>
               {columns.map((column) => (
-                <td className="px-8 py-5 align-middle" key={String(column.key)}>
+                <td className="px-4 py-3 align-middle" key={String(column.key)}>
                   {column.render ? column.render(row) : String(row[column.key as keyof Row])}
                 </td>
               ))}

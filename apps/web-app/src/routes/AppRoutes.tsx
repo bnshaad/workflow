@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/layouts'
 import {
+  AnalyticsPage,
   CreateJobPage,
   DashboardPage,
   JobDetailsPage,
@@ -36,6 +37,9 @@ export function AppRoutes() {
         <Route element={<AppLayout />}>
           <Route element={<RoleRoute canAccess={canViewDashboard} />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+          </Route>
+          <Route element={<RoleRoute canAccess={canViewDashboard} />}>
+            <Route path="/analytics" element={<AnalyticsPage />} />
           </Route>
           <Route element={<RoleRoute canAccess={canViewJobs} />}>
             <Route path="/jobs" element={<JobsPage />} />
