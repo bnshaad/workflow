@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ComponentType, type SVGProps } from 'react'
 import {
+  ArrowRight,
   AlertTriangle,
   BriefcaseBusiness,
   Check,
@@ -8,11 +9,13 @@ import {
   Clock,
   ListChecks,
   Percent,
+  Plus,
   RefreshCcw,
   Timer,
   UserPlus,
   UsersRound,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import {
   MetricCard,
   PageHeader,
@@ -21,6 +24,7 @@ import {
 } from '@/components'
 import { JOB_PRIORITY_OPTIONS } from '@/constants/jobConstants'
 import { useAuth } from '@/hooks'
+import { canCreateJob } from '@/permissions'
 import {
   getDashboardSummary,
   type DashboardSummary,
@@ -39,6 +43,19 @@ type MetricItem = {
   tone?: 'default' | 'primary' | 'success' | 'danger'
   value: string
 }
+
+type ActionNeededItem = {
+  actionHref?: string
+  actionLabel: string
+  actionTo?: string
+  count: number
+  description: string
+  icon: ComponentType<SVGProps<SVGSVGElement>>
+  label: string
+  tone: 'danger' | 'default' | 'primary' | 'warning'
+}
+
+const HIGH_WORKLOAD_THRESHOLD = 3
 
 const statusMetricOrder: JobStatus[] = [
   JobStatuses.Open,
@@ -132,12 +149,36 @@ export function DashboardPage() {
   const metrics = useMemo(() => {
     return summary ? buildMetricItems(summary) : []
   }, [summary])
+  const actionNeededItems = useMemo(() => {
+    return summary ? buildActionNeededItems(summary) : []
+  }, [summary])
+  const canCreateJobs = profile ? canCreateJob(profile) : false
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Today's Overview"
-        description="Operational snapshot for your service business."
+        title="Dashboard"
+        description={formatDashboardContext(new Date())}
+        actions={
+          <>
+            {canCreateJobs ? (
+              <Link
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 sm:w-auto"
+                to="/jobs/create"
+              >
+                <Plus aria-hidden="true" className="size-4" />
+                Create Job
+              </Link>
+            ) : null}
+            <Link
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-5 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 sm:w-auto"
+              to="/jobs"
+            >
+              View Open Jobs
+              <ArrowRight aria-hidden="true" className="size-4" />
+            </Link>
+          </>
+        }
       />
 
       {isLoading ? (
@@ -148,18 +189,33 @@ export function DashboardPage() {
         </section>
       ) : summary ? (
         <>
+          <ActionNeededPanel items={actionNeededItems} />
+
           <section
-            aria-label="Dashboard metrics"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6"
+            aria-labelledby="job-status-overview-heading"
+            className="space-y-4"
           >
-            {metrics.map((metric) => (
-              <MetricCard key={metric.label} {...metric} />
-            ))}
+            <div>
+              <h2
+                className="text-base font-semibold text-foreground"
+                id="job-status-overview-heading"
+              >
+                Job Status Overview
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Current job counts by operational state.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+              {metrics.map((metric) => (
+                <MetricCard key={metric.label} {...metric} />
+              ))}
+            </div>
           </section>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-            <PriorityBreakdown summary={summary} />
             <EmployeeWorkload summary={summary} />
+            <PriorityBreakdown summary={summary} />
             <RecentActivity summary={summary} />
           </div>
 
@@ -201,6 +257,142 @@ function buildMetricItems(summary: DashboardSummary): MetricItem[] {
   return metrics
 }
 
+function buildActionNeededItems(summary: DashboardSummary): ActionNeededItem[] {
+  const overloadedEmployeeCount = summary.employeeWorkload.filter(
+    (employee) => employee.activeJobCount >= HIGH_WORKLOAD_THRESHOLD,
+  ).length
+
+  const items: ActionNeededItem[] = [
+    {
+      actionLabel: 'View Jobs',
+      actionTo: '/jobs',
+      count: summary.actionNeeded.highPriorityOpenUnassignedJobs,
+      description: 'Urgent or high-priority jobs are open with no employee assigned.',
+      icon: AlertTriangle,
+      label: 'Priority jobs need assignment',
+      tone: 'warning',
+    },
+    {
+      actionLabel: 'View Jobs',
+      actionTo: '/jobs',
+      count: summary.actionNeeded.overdueActiveJobs,
+      description: 'Active jobs are past their due date.',
+      icon: Clock,
+      label: 'Overdue active jobs',
+      tone: 'danger',
+    },
+    {
+      actionHref: '#employee-workload',
+      actionLabel: 'Review Workload',
+      count: overloadedEmployeeCount,
+      description: `Employees have ${HIGH_WORKLOAD_THRESHOLD} or more active jobs.`,
+      icon: UsersRound,
+      label: 'High employee workload',
+      tone: 'primary',
+    },
+    {
+      actionLabel: 'View Jobs',
+      actionTo: '/jobs',
+      count: summary.actionNeeded.openUnassignedJobs,
+      description: 'Open jobs are waiting for assignment.',
+      icon: UserPlus,
+      label: 'Open jobs need employees',
+      tone: 'default',
+    },
+  ]
+
+  return items.filter((item) => item.count > 0)
+}
+
+function ActionNeededPanel({ items }: { items: ActionNeededItem[] }) {
+  return (
+    <section
+      aria-labelledby="action-needed-heading"
+      className="rounded-xl border border-border bg-card p-5 shadow-sm"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2
+            className="text-base font-semibold text-foreground"
+            id="action-needed-heading"
+          >
+            Action Needed
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Operational items that may need manager attention.
+          </p>
+        </div>
+        <StatusBadge tone={items.length > 0 ? 'warning' : 'success'}>
+          {items.length > 0 ? `${items.length} active` : 'Clear'}
+        </StatusBadge>
+      </div>
+
+      {items.length > 0 ? (
+        <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-4">
+          {items.map((item) => (
+            <ActionNeededCard item={item} key={item.label} />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 rounded-lg border border-border bg-background px-4 py-5 text-sm text-muted-foreground">
+          No urgent operational issues right now.
+        </div>
+      )}
+    </section>
+  )
+}
+
+function ActionNeededCard({ item }: { item: ActionNeededItem }) {
+  const Icon = item.icon
+  const toneClass = {
+    danger: 'border-destructive/20 bg-destructive/5 text-destructive',
+    default: 'border-border bg-background text-foreground',
+    primary: 'border-primary/20 bg-primary/5 text-primary',
+    warning: 'border-amber-500/20 bg-amber-500/5 text-amber-600',
+  }[item.tone]
+
+  return (
+    <article className={`rounded-lg border p-4 ${toneClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-2xl font-semibold tracking-tight">{item.count}</p>
+          <h3 className="mt-1 text-sm font-semibold text-foreground">
+            {item.label}
+          </h3>
+        </div>
+        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-card/80">
+          <Icon aria-hidden="true" className="size-4" />
+        </span>
+      </div>
+      <p className="mt-3 text-sm leading-5 text-muted-foreground">
+        {item.description}
+      </p>
+      <ActionNeededLink item={item} />
+    </article>
+  )
+}
+
+function ActionNeededLink({ item }: { item: ActionNeededItem }) {
+  const className =
+    'mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30'
+
+  if (item.actionHref) {
+    return (
+      <a className={className} href={item.actionHref}>
+        {item.actionLabel}
+        <ArrowRight aria-hidden="true" className="size-4" />
+      </a>
+    )
+  }
+
+  return (
+    <Link className={className} to={item.actionTo ?? '/jobs'}>
+      {item.actionLabel}
+      <ArrowRight aria-hidden="true" className="size-4" />
+    </Link>
+  )
+}
+
 function PriorityBreakdown({ summary }: { summary: DashboardSummary }) {
   return (
     <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
@@ -237,7 +429,10 @@ function EmployeeWorkload({ summary }: { summary: DashboardSummary }) {
   const workload = summary.employeeWorkload.slice(0, 8)
 
   return (
-    <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+    <section
+      className="rounded-lg border border-border bg-card p-6 shadow-sm"
+      id="employee-workload"
+    >
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-foreground">
@@ -519,6 +714,12 @@ function formatActivityTime(timestamp: { toDate: () => Date }) {
     minute: '2-digit',
     month: 'short',
   }).format(timestamp.toDate())
+}
+
+function formatDashboardContext(date: Date) {
+  return `Operational snapshot for ${new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'full',
+  }).format(date)}.`
 }
 
 function formatPercent(value: number) {

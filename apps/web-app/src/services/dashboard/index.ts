@@ -59,6 +59,12 @@ export type DashboardJobMetrics = {
   totalJobs: number
 }
 
+export type DashboardActionNeededSummary = {
+  highPriorityOpenUnassignedJobs: number
+  openUnassignedJobs: number
+  overdueActiveJobs: number
+}
+
 export type EmployeeWorkloadSummary = {
   activeJobCount: number
   assignedJobCount: number
@@ -77,6 +83,7 @@ export type RecentDashboardActivity = {
 }
 
 export type DashboardSummary = {
+  actionNeeded: DashboardActionNeededSummary
   employeeWorkload: EmployeeWorkloadSummary[]
   jobMetrics: DashboardJobMetrics
   recentActivities: RecentDashboardActivity[]
@@ -94,6 +101,7 @@ export async function getDashboardSummary(
   ])
 
   return {
+    actionNeeded: buildDashboardActionNeededSummary(jobs),
     employeeWorkload: buildEmployeeWorkloadSummary(employees, jobs),
     jobMetrics: buildDashboardJobMetrics(jobs),
     recentActivities: buildRecentActivitySummary(activities, jobs, employees),
@@ -239,6 +247,46 @@ function buildDashboardJobMetrics(
     priorityCounts,
     statusCounts,
     totalJobs: jobs.length,
+  }
+}
+
+function buildDashboardActionNeededSummary(
+  jobs: DashboardJobRecord[],
+): DashboardActionNeededSummary {
+  const now = Timestamp.now().toMillis()
+  let highPriorityOpenUnassignedJobs = 0
+  let openUnassignedJobs = 0
+  let overdueActiveJobs = 0
+
+  for (const job of jobs) {
+    const isOpenUnassigned =
+      job.status === JobStatuses.Open && job.assignedEmployeeIds.length === 0
+
+    if (isOpenUnassigned) {
+      openUnassignedJobs += 1
+    }
+
+    if (
+      isOpenUnassigned &&
+      (job.priority === 'Urgent' || job.priority === 'High')
+    ) {
+      highPriorityOpenUnassignedJobs += 1
+    }
+
+    if (
+      job.dueDate &&
+      job.dueDate.toMillis() < now &&
+      job.status !== JobStatuses.Completed &&
+      job.status !== JobStatuses.Cancelled
+    ) {
+      overdueActiveJobs += 1
+    }
+  }
+
+  return {
+    highPriorityOpenUnassignedJobs,
+    openUnassignedJobs,
+    overdueActiveJobs,
   }
 }
 
