@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test:rules": "node --experimental-strip-types --test scripts/*.test.ts",
     "seed:demo": "node scripts/seedDemoDataset.mjs"
   },
   "dependencies": {

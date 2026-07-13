@@ -104,6 +104,7 @@ export function CreateJobPage() {
       serviceAddress: draftSuggestion.serviceAddress || current.serviceAddress,
       location: draftSuggestion.location || current.location,
       priority: draftSuggestion.priority || current.priority,
+      dueDate: draftSuggestion.dueDate || current.dueDate,
       requiredSkillIds:
         draftSuggestion.requiredSkills.length > 0
           ? draftSuggestion.requiredSkills.join(', ')
@@ -188,7 +189,7 @@ export function CreateJobPage() {
                   </span>
                 ) : null}
                 <span className="inline-flex w-fit rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                  AI-generated suggestion
+                  AI-generated editable suggestion
                 </span>
               </div>
             ) : null}
@@ -214,7 +215,9 @@ export function CreateJobPage() {
                       Draft suggestion
                     </h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Development stub output. Review every field before using it.
+                      {draftSuggestion.source === 'gemini'
+                        ? 'Gemini-assisted output. Apply it only as editable form text.'
+                        : 'Development stub output. Apply it only as editable form text.'}
                     </p>
                   </div>
                   <button
@@ -276,6 +279,10 @@ export function CreateJobPage() {
                       <SuggestionRow
                         label="Location"
                         value={draftSuggestion.location}
+                      />
+                      <SuggestionRow
+                        label="Due date"
+                        value={draftSuggestion.dueDate ?? ''}
                       />
                     </dl>
                     {draftSuggestion.needsReview.length > 0 ? (
@@ -345,7 +352,11 @@ export function CreateJobPage() {
             title="Customer & Job Details"
           >
             <div className="grid gap-4 lg:grid-cols-2">
-              <Field label="Title">
+              <Field
+                error={getFieldError(errorMessage, 'Job title')}
+                label="Title"
+                required
+              >
                 <input
                   className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   onChange={(event) =>
@@ -359,7 +370,11 @@ export function CreateJobPage() {
                 />
               </Field>
 
-              <Field label="Customer Name">
+              <Field
+                error={getFieldError(errorMessage, 'Customer name')}
+                label="Customer Name"
+                required
+              >
                 <input
                   className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   onChange={(event) =>
@@ -373,7 +388,11 @@ export function CreateJobPage() {
                 />
               </Field>
 
-              <Field label="Customer Phone">
+              <Field
+                error={getFieldError(errorMessage, 'Customer phone')}
+                label="Customer Phone"
+                required
+              >
                 <input
                   className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   onChange={(event) =>
@@ -388,7 +407,11 @@ export function CreateJobPage() {
               </Field>
 
               <div className="lg:col-span-2">
-                <Field label="Description">
+                <Field
+                  error={getFieldError(errorMessage, 'Job description')}
+                  label="Description"
+                  required
+                >
                   <textarea
                     className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                     onChange={(event) =>
@@ -410,7 +433,10 @@ export function CreateJobPage() {
             title="Service Requirements"
           >
             <div className="grid gap-4 lg:grid-cols-2">
-              <Field label="Required Skill IDs">
+              <Field
+                helper="Optional comma-separated skills."
+                label="Required Skill IDs"
+              >
                 <input
                   className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   onChange={(event) =>
@@ -438,7 +464,7 @@ export function CreateJobPage() {
             title="Priority & Schedule"
           >
             <div className="grid gap-4 lg:grid-cols-2">
-              <Field label="Priority">
+              <Field label="Priority" required>
                 <select
                   className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   onChange={(event) =>
@@ -485,7 +511,11 @@ export function CreateJobPage() {
           >
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="lg:col-span-2">
-                <Field label="Service Address">
+                <Field
+                  error={getFieldError(errorMessage, 'Service address')}
+                  label="Service Address"
+                  required
+                >
                   <input
                     className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                     onChange={(event) =>
@@ -541,17 +571,37 @@ export function CreateJobPage() {
 
 function Field({
   children,
+  error,
+  helper,
   label,
+  required = false,
 }: {
   children: ReactNode
+  error?: string
+  helper?: string
   label: string
+  required?: boolean
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-medium text-foreground">
+      <span className="mb-1.5 flex items-center gap-1 text-sm font-medium text-foreground">
         {label}
+        {required ? (
+          <span className="text-destructive" aria-hidden="true">
+            *
+          </span>
+        ) : null}
       </span>
       {children}
+      {error ? (
+        <span className="mt-1 block text-xs font-medium text-destructive">
+          {error}
+        </span>
+      ) : helper ? (
+        <span className="mt-1 block text-xs text-muted-foreground">
+          {helper}
+        </span>
+      ) : null}
     </label>
   )
 }
@@ -593,6 +643,12 @@ function SuggestionRow({
       </dd>
     </div>
   )
+}
+
+function getFieldError(errorMessage: string, fieldLabel: string) {
+  return errorMessage.toLowerCase().includes(fieldLabel.toLowerCase())
+    ? errorMessage
+    : undefined
 }
 
 function parseSkillIds(value: string) {

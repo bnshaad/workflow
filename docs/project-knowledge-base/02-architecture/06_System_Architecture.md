@@ -17,7 +17,7 @@ Workflow must remain simple, maintainable, secure, and compatible with Firebase 
 
 # 2. High-Level Architecture
 
-Workflow consists of two client applications connected to shared Firebase and AI services.
+Workflow consists of two client applications connected to shared Firebase services and a narrowly scoped trusted execution boundary for critical actions.
 
 ```text
 Workflow Platform
@@ -26,6 +26,7 @@ Shared Firebase Backend
 ├── Firebase Authentication
 ├── Cloud Firestore
 ├── Firebase Storage
+├── Cloud Functions (critical action execution only)
 ├── AI Services
 └── Notification Services
 
@@ -56,8 +57,7 @@ Responsibilities:
 - Team
 - Assignment recommendation review
 - Explainable AI
-- Action Needed alerts
-- Feedback insights
+- Decision Support
 - Settings according to role
 - Audit logs according to role
 
@@ -77,7 +77,8 @@ Responsibilities:
 - Work Proof
 - Issue Reporting
 - Notifications
-- Grounded Knowledge Assistant
+- Conversational AI
+- Knowledge Assistant
 
 ---
 
@@ -91,7 +92,7 @@ Both applications share:
 - AI Services
 - Notification Services
 
-No custom backend is required for the MVP.
+The browser clients use Firestore services for permitted data access. Critical coordinator actions use a Firebase callable function that authenticates the caller, reloads the canonical proposal, and executes the action through the Admin SDK. This is not a general custom backend or model runtime.
 
 ---
 
@@ -116,6 +117,7 @@ Backend platform:
 - Firebase Authentication
 - Cloud Firestore
 - Firebase Storage
+- Firebase Cloud Functions for approved critical actions only
 
 ---
 
@@ -212,39 +214,31 @@ Approved AI capabilities:
 - AI Job Understanding
 - Intelligent Task Assignment
 - Explainable AI
-- Manager Recommendation Feedback
-- AI-Assisted Assignment Evaluation
-- Explainable Hybrid MCDM Assignment Model
-- Secure Gemini Job Understanding Integration
-- Controlled Conversational Workflow Assistant
-- Grounded RAG Knowledge Assistant
-- Decision Support Alerts
-- Feedback Insights
+- Adaptive Learning
+- Decision Support
+- Conversational AI
+- Knowledge Assistant
 
 Rules:
 
-- AI Job Summary is part of the controlled conversational assistant workflow.
-- Decision Support Alerts are limited to Action Needed dashboard alerts and descriptive insights.
-- Manager feedback is stored for evaluation and future insight generation only.
-- The Grounded Knowledge Assistant retrieves only from trusted approved documentation.
+- AI Job Summary is part of Conversational AI.
+- Decision Support is limited to dashboard insights, operational recommendations, and natural-language operational queries.
+- Adaptive Learning stores manager feedback only in the MVP.
+- Knowledge Assistant retrieves only from approved documentation.
 - No automatic ML weight adjustment is included in the MVP.
-- Gemini is planned only for AI Job Understanding, the Controlled Conversational Workflow Assistant, and the Grounded RAG Knowledge Assistant.
-- Gemini is not the employee assignment engine.
-- Production Gemini integration must use a secure backend or trusted runtime path.
-- API keys must never be placed in frontend code, localStorage, sessionStorage, or commits.
 
 ---
 
 # 11. Assignment Engine Architecture
 
-The current assignment engine baseline is a deterministic rule-based TypeScript service.
+The assignment engine is a rule-based TypeScript service for the MVP.
 
 It evaluates:
 
 - Skills
 - Availability
 - Workload
-- Location relevance when data becomes available
+- Location relevance
 - Priority
 - Historical performance
 
@@ -255,32 +249,6 @@ It returns:
 - Explanation
 
 Managers approve or override recommendations.
-
-The system must never automatically assign employees.
-
-Missing data must be shown transparently and must not be invented.
-
-The planned Explainable Hybrid MCDM Assignment Model is a future enhancement, not the current implementation.
-
-Planned upgrade architecture:
-
-```text
-Eligibility filtering
-↓
-Normalized criteria values
-↓
-AHP-derived weight profile
-↓
-TOPSIS candidate ranking
-↓
-Explanation generation
-↓
-Manager approval or override
-```
-
-Manager-facing presets may include Balanced, Urgent Response, Best Expertise, and Fair Workload. Each preset maps to a predefined internal weight profile.
-
-Managers must not configure technical weights or view mathematical matrices.
 
 ---
 
@@ -328,13 +296,13 @@ The MVP must never rely on UI checks alone.
 
 # 15. Performance Architecture
 
-The architecture remains Firebase Spark compatible by:
+The client data model remains read-efficient by:
 
 - Using few top-level collections
 - Embedding small task-specific objects
 - Avoiding unnecessary reads
-- Avoiding Cloud Functions as a requirement
-- Avoiding custom backend complexity
+- Limiting Cloud Functions to authenticated, proposal-bound critical writes
+- Avoiding general custom backend complexity
 - Keeping dashboard queries lightweight
 
 ---
@@ -397,12 +365,8 @@ Mobile source structure will be defined during Phase E, but it must follow the s
 - AI Job Understanding
 - Intelligent Task Assignment
 - Explainable AI
-- Manager Accept / Override Recommendation Feedback
-- AI-Assisted Assignment Evaluation
-- Explainable Hybrid MCDM Assignment Upgrade
-- Secure Gemini Job Understanding Integration
-- Decision Support Alerts
-- Feedback Insights
+- Adaptive Learning
+- Decision Support
 
 ```text
 WEB COMPLETE
@@ -419,8 +383,8 @@ WEB COMPLETE
 
 ## Phase F: Mobile AI
 
-- Controlled Conversational Workflow Assistant
-- Grounded RAG Knowledge Assistant
+- Conversational AI
+- Knowledge Assistant
 
 ## Phase G: Platform Completion
 
@@ -443,5 +407,19 @@ WEB COMPLETE
 - Do not bypass RBAC.
 - Do not implement AI conversations outside approved Workflow use cases.
 - Do not implement automatic ML weight adjustment in the MVP.
-- Do not use Gemini as the employee assignment engine.
-- Do not place Gemini API keys in frontend code, localStorage, sessionStorage, or commits.
+
+# 19. Trusted Proposal Execution and Model Boundary Update (2026-07-14)
+
+The current repository contains a deterministic browser-side coordinator with fixed routes and no model calls or assistant UI. Its create-job proposal is persisted in `actionProposals` and must be confirmed by proposal ID. The `confirmCreateJobProposal` Firebase callable function validates Firebase Authentication, the active Firestore profile, manager or admin role, ownership, and organization before it reloads the stored payload and atomically claims execution.
+
+The proposal lifecycle is `prepared`, `processing`, `completed`, `failed`, `expired`, `cancelled`, or `reconciliation_required`; `confirmed` is reserved for a future distinct acknowledgement stage. The proposal ID is also the deterministic job ID, so duplicate confirmation returns the existing result and concurrent requests cannot create a second job. Definite failures become `failed`; uncertain write outcomes become `reconciliation_required` for administrative follow-up.
+
+The server-side Functions boundary also provides two narrow Gemini-assisted callables: `classifyCoordinatorIntent` and `draftJobFromRequest`. Browser clients never call Gemini directly. Both callables require Firebase Authentication plus a trusted active manager or admin profile, accept bounded text only, use timeouts and one bounded retry, validate structured JSON, and return only a classification or editable draft. Logs include operation, request length, and outcome metadata only; they do not retain prompts, personal data, raw provider errors, or hidden reasoning.
+
+Deterministic routing is always first. Gemini classification runs only when no exact supported route matches, is limited to one classification call, and can select only `show_urgent_unassigned_jobs`, `show_open_jobs_summary`, `show_overloaded_employees`, `prepare_job_draft`, or `unsupported`. It cannot name a tool, grant authority, prepare a critical proposal, confirm a proposal, or execute a write. Structured drafts remain editable and must pass the existing proposal and trusted confirmation path before a job can exist.
+
+`GEMINI_API_KEY` is declared through Firebase `defineSecret` and bound only to the two model callables. Do not add it to browser variables, `.env` files committed to source control, Firestore, logs, or test fixtures. Configure it only in a controlled development Firebase project with `firebase functions:secrets:set GEMINI_API_KEY`, then redeploy the affected Functions. No secret, live Gemini request, or deployment is present in this repository.
+
+The controlled runtime check on 2026-07-14 used Node `20.20.2` and Firebase CLI `15.18.0`. It passed the Functions build and 13 unit tests, the Auth/Firestore/Functions emulator integration suite (7 checks, loading both model callables), and the web rule tests (15 checks), lint, and production build. The Firebase account available to that check exposed only the current `workflow-p` project, not a separately identified non-production project. Therefore no Secret was configured, no billing or quota was assessed, no deployment occurred, and no live Gemini request or log review occurred. A distinct approved development project is required before those steps.
+
+Deploying Firebase Functions, using Cloud Secret Manager, and calling Gemini can require billing-enabled services even when usage remains within free quotas. This phase adds no Genkit, RAG, agent delegation, autonomous execution, or general-purpose server runtime. See `09_Multi_Agent_AI_Architecture.md`.

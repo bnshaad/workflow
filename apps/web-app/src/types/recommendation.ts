@@ -2,7 +2,19 @@ import type { TenantDocument } from './common'
 
 export type AssignmentAlgorithmVersion = 'rule-based-v1'
 export type AssignmentRecommendationMode = 'ai_recommendation'
-export type AssignmentRecommendationStatus = 'generated'
+export type AssignmentRecommendationStatus =
+  | 'accepted'
+  | 'generated'
+  | 'overridden'
+export type AssignmentRecommendationDecision = 'accepted' | 'overridden'
+export type AssignmentOverrideReason =
+  | 'Better local availability'
+  | 'Customer requested this employee'
+  | 'Special experience required'
+  | 'Workload balancing'
+  | 'Recommended employee unavailable'
+  | 'Manager preference'
+  | 'Other'
 
 export type AssignmentScoreBreakdown = {
   availability: number
@@ -25,8 +37,17 @@ export interface AssignmentRecommendation extends TenantDocument {
   algorithmVersion: AssignmentAlgorithmVersion
   assignmentMode: AssignmentRecommendationMode
   candidates: AssignmentRecommendationCandidate[]
+  decidedAt?: TenantDocument['createdAt']
+  decidedBy?: string
+  decision?: AssignmentRecommendationDecision
   generatedAt: TenantDocument['createdAt']
   generatedBy: string
   jobId: string
+  overrideNote?: string | null
+  overrideReason?: AssignmentOverrideReason | null
+  recommendedEmployeeId?: string | null
+  recommendationCriteriaSnapshot?: AssignmentScoreBreakdown | null
+  recommendationScoreSnapshot?: number | null
+  selectedEmployeeId?: string | null
   status: AssignmentRecommendationStatus
 }

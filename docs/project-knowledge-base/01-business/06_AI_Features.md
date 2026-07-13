@@ -30,10 +30,6 @@ AI features must remain explainable, practical, and compatible with the Firebase
 
 # 3. AI Job Understanding
 
-Status:
-
-- Planned next phase
-
 Purpose:
 
 Help managers convert customer requests into structured job drafts.
@@ -55,19 +51,10 @@ Rules:
 
 - Manager reviews and confirms before saving.
 - AI does not create jobs automatically.
-- AI produces editable structured drafts only.
-- Production Gemini integration must use a secure backend or trusted runtime path.
-- API keys must never be placed in frontend code, localStorage, sessionStorage, or commits.
-
-Gemini may support AI Job Understanding, but Gemini is not the employee assignment engine.
 
 ---
 
 # 4. Intelligent Task Assignment
-
-Status:
-
-- Implemented baseline
 
 Purpose:
 
@@ -93,18 +80,10 @@ Rules:
 
 - Manager approves or overrides.
 - Recommendations are advisory.
-- The current implementation baseline is deterministic, rule-based, explainable, and human-in-the-loop.
-- The system must never automatically assign employees.
-- Managers remain responsible for final assignment decisions.
-- Missing data must be shown transparently and must not be invented.
 
 ---
 
 # 5. Explainable AI
-
-Status:
-
-- Implemented baseline
 
 Purpose:
 
@@ -122,238 +101,87 @@ Managers must always understand why a worker is recommended.
 
 ---
 
-# 6. Manager Recommendation Feedback
-
-Status:
-
-- Planned next phase
+# 6. Adaptive Learning
 
 Purpose:
 
 Record manager feedback for future analysis.
 
-The manager recommendation decision flow is:
+The MVP stores:
 
-- Accept recommended employee.
-- Choose another employee.
-- Record a short override reason when overriding.
+- Accepted recommendation
+- Overridden recommendation
+- Override reason
 
-Suggested override reasons:
+The MVP does not automatically adjust recommendation weights.
 
-- Better local availability
-- Customer requested this technician
-- Manager preference
-- Special experience required
-- Other
-
-Feedback is stored for evaluation and future insight generation.
-
-This must not be described as automatic model retraining or automatic weight adjustment.
+Future versions may implement adaptive scoring after enough feedback data exists.
 
 ---
 
-# 7. AI-Assisted Assignment Evaluation
-
-Status:
-
-- Planned next phase
-
-Purpose:
-
-Evaluate AI-assisted assignment outcomes against a manual assignment baseline.
-
-Planned metrics:
-
-- Recommendations generated
-- Accepted recommendations
-- Acceptance rate
-- Overrides
-- Common override reasons
-- Completion rate
-- Assignment-to-start time
-- Assignment-to-completion time
-- Workload distribution
-
-Rules:
-
-- Metrics are descriptive and based only on valid available data.
-- Do not claim statistical significance or prediction accuracy without sufficient evidence.
-
----
-
-# 8. Explainable Hybrid MCDM Assignment Model
-
-Status:
-
-- Planned next phase
-
-Purpose:
-
-Upgrade assignment ranking while preserving explainability and manager control.
-
-Architecture:
-
-```text
-Eligibility filtering
-↓
-Normalized criteria values
-↓
-AHP-derived weight profile
-↓
-TOPSIS candidate ranking
-↓
-Explanation generation
-↓
-Manager approval or override
-```
-
-AHP/TOPSIS is a future enhancement and is not currently implemented.
-
-Manager-facing presets may include:
-
-- Balanced
-- Urgent Response
-- Best Expertise
-- Fair Workload
-
-Each preset maps to a predefined internal weight profile.
-
-Managers must not configure technical weights or view mathematical matrices.
-
----
-
-# 9. Decision Support Alerts
+# 7. Decision Support
 
 Purpose:
 
 Help administrators and managers understand operations.
 
-Decision Support Alerts provide:
+Decision Support provides:
 
 - Dashboard insights
-- Action Needed operational alerts
-- Feedback insights
+- Operational recommendations
+- Natural-language operational queries
 
 Examples:
 
 - Urgent jobs awaiting assignment
 - Workers with high workload
-- Overloaded technicians
-- Overdue jobs
-- Jobs with no matching skilled employee
+- Available skilled workers
+- Delayed jobs
+- Frequently overridden recommendation patterns
 
-Rules:
-
-- Alerts must remain limited, actionable, and non-intrusive.
-- No notification system is required for these MVP dashboard alerts.
-- Decision Support Alerts do not execute actions automatically.
+Decision Support does not execute actions automatically.
 
 ---
 
-# 10. Feedback Insights
-
-Status:
-
-- Planned next phase
+# 8. Conversational AI
 
 Purpose:
 
-Surface descriptive patterns from manager recommendation feedback.
-
-Initial insights:
-
-- Recommendation acceptance rate
-- Common override reason
-- Recurring location mismatch
-- Availability-related overrides
-
-This remains insight-only.
-
-No automatic adaptation, automatic retraining, or autonomous weight changes are included in the MVP.
-
----
-
-# 11. Controlled Conversational Workflow Assistant
-
-Status:
-
-- Planned next phase
-
-Purpose:
-
-Support limited manager-safe workflow requests.
+Guide users through approved Workflow actions using natural language.
 
 Examples:
 
-- Show urgent unassigned jobs
-- Find available technicians
-- Summarize open jobs
-- Create a job draft
-- Open assignment review
+- Draft a job from a customer request
+- Update job status
+- Report an issue
+- Complete a job
+- Generate or review a job summary
 
-Rules:
+AI Job Summary belongs inside Conversational AI and is not a standalone AI module.
 
-- Confirm before any write action.
-- Open existing review or action flows rather than silently changing data.
-- Do not automatically create jobs, assign employees, update job status, or execute critical actions without manager confirmation.
-- This is not a general-purpose autonomous chatbot.
-
-Gemini may support the controlled assistant, but only inside these approved boundaries.
+Critical actions require user confirmation.
 
 ---
 
-# 12. Grounded Knowledge Assistant
-
-Status:
-
-- Planned next phase
+# 9. Knowledge Assistant
 
 Purpose:
 
-Retrieve trusted operational information through grounded RAG.
+Retrieve trusted operational information.
 
-Initial knowledge sources:
+Allowed knowledge sources:
 
-- SOPs
-- AC/electronics service manuals
-- Safety instructions
-- Installation guides
-- FAQs
-- Customer visit checklists
+- SOP
+- User Guide
+- FAQ
+- Product Documentation
+- Equipment Manuals
 
-Rules:
-
-- Responses must cite or show trusted source references.
-- If no trusted answer exists, the assistant must clearly state that.
-- Web crawling, unrestricted document ingestion, and multi-agent retrieval are outside MVP scope.
-
-Gemini may support the grounded knowledge assistant, but it must stay grounded in trusted sources.
+The Knowledge Assistant must stay limited to approved knowledge retrieval.
 
 ---
 
-# 13. Gemini Integration Boundaries
-
-Status:
-
-- Planned next phase
-
-Gemini is planned only for:
-
-- AI Job Understanding
-- Controlled Conversational Workflow Assistant
-- Grounded RAG Knowledge Assistant
-
-Gemini is not the employee assignment engine.
-
-Gemini must not automatically create jobs, assign employees, update job status, or execute critical actions without manager confirmation.
-
-Production Gemini integration must use a secure backend or trusted runtime path.
-
-API keys must never be placed in frontend code, localStorage, sessionStorage, or commits.
-
----
-
-# 14. Out of Scope
+# 10. Out of Scope
 
 The MVP excludes:
 
@@ -363,6 +191,17 @@ The MVP excludes:
 - Predictive workforce planning
 - AI forecasting dashboards
 - Unsupported external knowledge retrieval
-- Web crawling
-- Unrestricted document ingestion
-- Multi-agent retrieval
+
+# 11. Coordinated Multi-Agent Layer (2026-07-13)
+
+The AI modules are connected through a coordinator that routes each request to the minimum required specialist. The assignment engine remains deterministic and is invoked as a tool by the Workforce Intelligence Agent. Critical business changes are returned as proposed actions and require explicit authorized confirmation before execution.
+
+The approved specialist boundaries are:
+
+- Job Intelligence
+- Workforce Intelligence
+- Operations Insight
+- Knowledge Retrieval
+
+Adaptive learning in the MVP remains feedback collection and pattern analysis only.
+

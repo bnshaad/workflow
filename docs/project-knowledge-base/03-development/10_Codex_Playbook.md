@@ -188,7 +188,7 @@ Job Issues
 
 Internal code terminology
 
-jobs
+tasks
 
 users
 
@@ -210,7 +210,7 @@ organizations
 
 users
 
-jobs
+tasks
 
 recommendations
 
@@ -219,8 +219,6 @@ incidents
 notifications
 
 auditLogs
-
-jobActivities
 
 Never create additional collections without approval.
 
@@ -350,17 +348,9 @@ Intelligent Task Assignment
 
 Explainable AI
 
-Manager Accept / Override Recommendation Feedback
+Adaptive Learning
 
-AI-Assisted Assignment Evaluation
-
-Explainable Hybrid MCDM Assignment Upgrade
-
-Secure Gemini Job Understanding Integration
-
-Decision Support Alerts
-
-Feedback Insights
+Decision Support
 
 ```text
 WEB COMPLETE
@@ -386,9 +376,9 @@ Issue Reporting
 
 Mobile AI
 
-Controlled Conversational Workflow Assistant
+Conversational AI
 
-Grounded RAG Knowledge Assistant
+Knowledge Assistant
 
 ## Phase G
 
@@ -461,3 +451,17 @@ A module is complete when
 • Contains no placeholder logic
 
 Only after that should the next module begin.
+
+# Multi-Agent Implementation Rules (2026-07-13)
+
+- Audit the repository before implementing; do not force code to match stale documentation.
+- Reuse existing auth, tenant, service, jobs, assignment, activity, and audit abstractions.
+- Do not let model code call Firestore directly.
+- Add typed tool adapters around existing services.
+- Use rule-first routing and invoke only required specialists.
+- Every critical write must use a structured proposal and explicit confirmation flow.
+- Revalidate identity, organization, permissions, proposal expiry, and current entity state at execution time.
+- Add maximum-step, maximum-call, timeout, schema-validation, and idempotency protections.
+- Do not create temporary files, debug files, duplicate documentation, backup files, or new dependencies unless strictly necessary.
+- Modify the minimum required files, review `git status`, and do not commit secrets or generated files.
+

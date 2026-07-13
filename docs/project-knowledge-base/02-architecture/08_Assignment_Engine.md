@@ -15,21 +15,11 @@ The engine recommends suitable workers for jobs while keeping managers responsib
 
 ---
 
-# 2. Current Implementation Baseline
+# 2. Scope
 
-Status:
-
-- Implemented
-
-The current assignment engine baseline is deterministic, rule-based, weighted scoring, and explainable.
-
-It is human-in-the-loop.
+The MVP assignment engine is rule-based and explainable.
 
 It does not use machine-learning training, automatic model updates, or autonomous assignment.
-
-The system must never automatically assign employees.
-
-Managers remain responsible for final assignment decisions.
 
 ---
 
@@ -42,12 +32,10 @@ The engine may evaluate:
 - Worker availability
 - Current workload
 - Job priority
-- Location relevance when data becomes available
+- Location relevance
 - Previous performance
 
 All inputs must come from approved Workflow data in Firestore.
-
-Missing data must be shown transparently and must not be invented.
 
 ---
 
@@ -68,24 +56,12 @@ Each recommendation must be understandable to a manager.
 
 Managers may:
 
+- Accept the recommendation.
+- Override the recommendation.
 - Select a different worker.
 - Record an override reason.
 
 The system must never automatically finalize assignments without manager approval.
-
-The manager decision flow is:
-
-1. Accept recommended employee.
-2. Choose another employee.
-3. Record a short override reason when overriding.
-
-Suggested override reasons:
-
-- Better local availability
-- Customer requested this technician
-- Manager preference
-- Special experience required
-- Other
 
 ---
 
@@ -103,17 +79,16 @@ The MVP stores:
 - Overridden recommendation
 - Override reason
 - Selected worker when overridden
-- Feedback for evaluation and future insight generation
 
 ---
 
-# 7. Feedback and Learning Boundary
+# 7. Adaptive Learning Boundary
 
-Feedback in the MVP means storing manager decisions for later analysis.
+Adaptive Learning in the MVP means storing feedback for later analysis.
 
 The MVP does not automatically adjust scoring weights.
 
-Do not describe feedback as automatic model retraining or automatic weight adjustment.
+Future versions may implement adaptive scoring after enough validated data exists.
 
 ---
 
@@ -147,72 +122,7 @@ The service should:
 
 ---
 
-# 10. Planned Upgrade: Explainable Hybrid MCDM Assignment Model
-
-Status:
-
-- Planned next phase
-
-The planned upgrade is named the Explainable Hybrid MCDM Assignment Model.
-
-Architecture:
-
-```text
-Eligibility filtering
-↓
-Normalized criteria values
-↓
-AHP-derived weight profile
-↓
-TOPSIS candidate ranking
-↓
-Explanation generation
-↓
-Manager approval or override
-```
-
-AHP/TOPSIS is a future enhancement and is not currently implemented.
-
-Future manager-facing assignment presets may include:
-
-- Balanced
-- Urgent Response
-- Best Expertise
-- Fair Workload
-
-Each preset maps to a predefined internal weight profile.
-
-The manager must not configure technical weights or view mathematical matrices.
-
----
-
-# 11. AI-Assisted Assignment Evaluation
-
-Status:
-
-- Planned next phase
-
-Evaluation compares the manual assignment baseline with AI-assisted assignment outcomes.
-
-Planned descriptive metrics:
-
-- Recommendations generated
-- Accepted recommendations
-- Acceptance rate
-- Overrides
-- Common override reasons
-- Completion rate
-- Assignment-to-start time
-- Assignment-to-completion time
-- Workload distribution
-
-Metrics must be descriptive and based only on valid available data.
-
-Do not claim statistical significance or prediction accuracy without sufficient evidence.
-
----
-
-# 12. Out of Scope
+# 10. Out of Scope
 
 The MVP excludes:
 

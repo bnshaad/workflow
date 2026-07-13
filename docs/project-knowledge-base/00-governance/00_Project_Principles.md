@@ -35,7 +35,7 @@ Managers always make the final assignment decision.
 
 The system may recommend.
 
-The system shall never automatically assign jobs or employees without manager approval.
+The system shall never automatically assign tasks without manager approval.
 
 ---
 
@@ -175,15 +175,13 @@ AI capabilities shall be:
 
 The assignment engine shall remain deterministic and rule-based for the MVP.
 
-Manager Recommendation Feedback stores feedback only in the MVP:
+Adaptive Learning stores feedback only in the MVP:
 
 - Accepted recommendation
 - Overridden recommendation
 - Override reason
 
-Feedback is stored for evaluation and future insight generation.
-
-Automatic machine-learning weight adjustment, automatic model retraining, and autonomous weight changes are outside the MVP scope.
+Automatic machine-learning weight adjustment is outside the MVP scope.
 
 ---
 
@@ -258,3 +256,14 @@ Every decision made during this project should answer the following question:
 "Does this improve the operational workflow while remaining secure, explainable, maintainable, and within the approved MVP scope?"
 
 If the answer is no, the change should not be implemented.
+
+# 13. Multi-Agent and Critical-Action Principles (2026-07-13)
+
+- Multi-agent AI is a controlled orchestration pattern, not autonomous control.
+- Use the minimum number of agents required for a request.
+- Prefer deterministic rules and services where they are sufficient.
+- All agents are read-only by default.
+- Critical writes require a displayed structured proposal, explicit confirmation, fresh authorization checks, and audit logging.
+- The coordinator never bypasses the existing service layer or Firestore Security Rules.
+- Do not claim automatic learning, autonomous assignment, or real-time monitoring unless implemented and evaluated.
+
