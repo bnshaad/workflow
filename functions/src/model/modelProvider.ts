@@ -9,16 +9,29 @@ export interface StructuredModelProvider {
 }
 
 export type ModelProviderFailureKind =
+  | 'authentication_failed'
   | 'invalid_response'
   | 'missing_configuration'
   | 'quota_exhausted'
   | 'temporary_failure'
   | 'timeout'
 
+export type ModelProviderDiagnostics = {
+  code: string
+  finishReason?: string
+  httpStatus?: number
+  modelName?: string
+  responseLength?: number
+  validationFields?: string[]
+}
+
 export class ModelProviderError extends Error {
   constructor(
     readonly kind: ModelProviderFailureKind,
     message: string,
+    readonly diagnostics: ModelProviderDiagnostics = {
+      code: kind,
+    },
   ) {
     super(message)
     this.name = 'ModelProviderError'
@@ -28,7 +41,7 @@ export class ModelProviderError extends Error {
 type FetchResponse = {
   ok: boolean
   status: number
-  json(): Promise<unknown>
+  text(): Promise<string>
 }
 
 type FetchImplementation = (
@@ -41,7 +54,7 @@ type FetchImplementation = (
   },
 ) => Promise<FetchResponse>
 
-const GEMINI_MODEL = 'gemini-2.5-flash-lite'
+export const GEMINI_MODEL = 'gemini-3.1-flash-lite'
 const MAX_ATTEMPTS = 2
 const REQUEST_TIMEOUT_MS = 5_000
 
@@ -55,6 +68,10 @@ export function createGeminiModelProvider(
         throw new ModelProviderError(
           'missing_configuration',
           'The Gemini API key is not configured.',
+          {
+            code: 'missing_configuration',
+            modelName: GEMINI_MODEL,
+          },
         )
       },
     }
@@ -100,18 +117,7 @@ async function generateGeminiJson(
     const response = await fetchImplementation(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
       {
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: request.prompt }] }],
-          generationConfig: {
-            candidateCount: 1,
-            responseMimeType: 'application/json',
-            responseSchema: request.responseSchema,
-            temperature: 0,
-          },
-          systemInstruction: {
-            parts: [{ text: request.systemInstruction }],
-          },
-        }),
+        body: JSON.stringify(buildGeminiRequestBody(request)),
         headers: {
           'Content-Type': 'application/json',
           'x-goog-api-key': apiKey,
@@ -122,22 +128,52 @@ async function generateGeminiJson(
     )
 
     if (!response.ok) {
-      throw response.status === 429
-        ? new ModelProviderError('quota_exhausted', 'Gemini quota exceeded.')
-        : new ModelProviderError('temporary_failure', 'Gemini request failed.')
+      const responseLength = (await readBodySafely(response)).length
+      throw httpFailure(response.status, responseLength)
     }
 
-    const body = await response.json()
-    const text = readResponseText(body)
+    const responseBody = await readBodySafely(response)
+    let body: unknown
+
+    try {
+      body = JSON.parse(responseBody) as unknown
+    } catch {
+      throw new ModelProviderError(
+        'invalid_response',
+        'Gemini returned an invalid response body.',
+        {
+          code: 'invalid_response_body',
+          modelName: GEMINI_MODEL,
+          responseLength: responseBody.length,
+        },
+      )
+    }
+
+    const text = readResponseText(body, responseBody.length)
 
     try {
       return JSON.parse(text) as unknown
     } catch {
-      throw new ModelProviderError('invalid_response', 'Gemini returned invalid JSON.')
+      throw new ModelProviderError(
+        'invalid_response',
+        'Gemini returned invalid JSON.',
+        {
+          code: 'invalid_json',
+          modelName: GEMINI_MODEL,
+          responseLength: text.length,
+        },
+      )
     }
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new ModelProviderError('timeout', 'Gemini request timed out.')
+      throw new ModelProviderError(
+        'timeout',
+        'Gemini request timed out.',
+        {
+          code: 'timeout',
+          modelName: GEMINI_MODEL,
+        },
+      )
     }
 
     throw error
@@ -146,17 +182,139 @@ async function generateGeminiJson(
   }
 }
 
-function readResponseText(value: unknown) {
-  const body = value as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: unknown }> } }>
+export function buildGeminiRequestBody(request: StructuredGenerationRequest) {
+  return {
+    contents: [{ parts: [{ text: request.prompt }] }],
+    generationConfig: {
+      candidateCount: 1,
+      responseMimeType: 'application/json',
+      responseSchema: request.responseSchema,
+      temperature: 0,
+    },
+    systemInstruction: {
+      parts: [{ text: request.systemInstruction }],
+    },
   }
-  const text = body.candidates?.[0]?.content?.parts?.[0]?.text
+}
 
-  if (typeof text !== 'string' || text.length === 0) {
-    throw new ModelProviderError('invalid_response', 'Gemini response is empty.')
+function readResponseText(value: unknown, responseLength: number) {
+  const body = value as {
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{
+          text?: unknown
+          thought?: unknown
+          thoughtSignature?: unknown
+        }>
+      }
+      finishReason?: unknown
+    }>
+  }
+  const candidate = body.candidates?.[0]
+
+  if (!candidate) {
+    throw new ModelProviderError(
+      'invalid_response',
+      'Gemini returned no candidate.',
+      {
+        code: 'missing_candidate',
+        modelName: GEMINI_MODEL,
+        responseLength,
+      },
+    )
+  }
+
+  const finishReason = candidate.finishReason
+  if (
+    typeof finishReason === 'string' &&
+    finishReason.length > 0 &&
+    finishReason !== 'STOP'
+  ) {
+    throw new ModelProviderError(
+      'invalid_response',
+      'Gemini did not complete the response.',
+      {
+        code: 'finish_reason',
+        finishReason,
+        modelName: GEMINI_MODEL,
+        responseLength,
+      },
+    )
+  }
+
+  const text = (candidate.content?.parts ?? [])
+    .filter((part) => part.thought !== true && typeof part.text === 'string')
+    .map((part) => part.text as string)
+    .join('')
+
+  if (text.length === 0) {
+    throw new ModelProviderError(
+      'invalid_response',
+      'Gemini response is empty.',
+      {
+        code: 'missing_text',
+        modelName: GEMINI_MODEL,
+        responseLength,
+      },
+    )
   }
 
   return text
+}
+
+function httpFailure(status: number, responseLength: number) {
+  const diagnostics = {
+    code: status === 400 ? 'schema_or_request_rejected' : 'http_failure',
+    httpStatus: status,
+    modelName: GEMINI_MODEL,
+    responseLength,
+  }
+
+  if (status === 400) {
+    return new ModelProviderError(
+      'invalid_response',
+      'Gemini rejected the structured request.',
+      diagnostics,
+    )
+  }
+
+  if (status === 404) {
+    return new ModelProviderError(
+      'invalid_response',
+      'The configured Gemini model was not found.',
+      { ...diagnostics, code: 'model_not_found' },
+    )
+  }
+
+  if (status === 401 || status === 403) {
+    return new ModelProviderError(
+      'authentication_failed',
+      'Gemini authentication failed.',
+      { ...diagnostics, code: 'authentication_failed' },
+    )
+  }
+
+  if (status === 429) {
+    return new ModelProviderError(
+      'quota_exhausted',
+      'Gemini quota exceeded.',
+      { ...diagnostics, code: 'quota_exhausted' },
+    )
+  }
+
+  return new ModelProviderError(
+    'temporary_failure',
+    'Gemini request failed.',
+    diagnostics,
+  )
+}
+
+async function readBodySafely(response: FetchResponse) {
+  try {
+    return await response.text()
+  } catch {
+    return ''
+  }
 }
 
 function normalizeProviderError(error: unknown) {
@@ -164,5 +322,12 @@ function normalizeProviderError(error: unknown) {
     return error
   }
 
-  return new ModelProviderError('temporary_failure', 'Gemini request failed.')
+  return new ModelProviderError(
+    'temporary_failure',
+    'Gemini request failed.',
+    {
+      code: 'network_failure',
+      modelName: GEMINI_MODEL,
+    },
+  )
 }

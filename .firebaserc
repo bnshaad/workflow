@@ -1,5 +1,9 @@
 {
   "projects": {
-    "default": "workflow-p"
-  }
+    "default": "workflow-p",
+    "dev": "workflow-mvp-dev",
+    "prod": "workflow-p"
+  },
+  "targets": {},
+  "etags": {}
 }

@@ -36,14 +36,18 @@ import {
   validateRecommendationDecisionInput,
   type RecommendationDecisionEvaluationMetrics,
 } from './assignmentRecommendationDecisionRules'
+import {
+  ASSIGNMENT_ALGORITHM_VERSION,
+  isEligibleRecommendationEmployee,
+  rankAssignmentCandidates,
+} from '../../../../../shared/assignmentRecommendation.ts'
 
 const JOBS_COLLECTION = 'jobs'
 const USERS_COLLECTION = 'users'
 const RECOMMENDATIONS_COLLECTION = 'recommendations'
 const JOB_ACTIVITIES_COLLECTION = 'jobActivities'
 const AUDIT_LOGS_COLLECTION = 'auditLogs'
-const ALGORITHM_VERSION = 'rule-based-v1'
-const TOP_CANDIDATE_LIMIT = 5
+const ALGORITHM_VERSION = ASSIGNMENT_ALGORITHM_VERSION
 const HISTORICAL_JOB_LIMIT = 100
 
 export type GenerateAssignmentRecommendationsResult = {
@@ -63,11 +67,6 @@ export type DecideAssignmentRecommendationResult = {
   assignedEmployee: UserProfile
   job: Job
   recommendation: AssignmentRecommendation
-}
-
-type HistoricalPerformance = {
-  completedJobs: number
-  consideredJobs: number
 }
 
 type RecommendationEmployee = UserProfile & {
@@ -197,7 +196,7 @@ export const assignmentRecommendationService: AssignmentRecommendationService = 
       }
 
       if (
-        !isEligibleForRecommendation(selectedEmployee) ||
+        !isEligibleRecommendationEmployee(selectedEmployee) ||
         selectedEmployee.organizationId !== organizationId ||
         selectedEmployee.id !== input.selectedEmployeeId
       ) {
@@ -325,7 +324,8 @@ export const assignmentRecommendationService: AssignmentRecommendationService = 
       readEligibleEmployees(organizationId),
       readHistoricalJobs(organizationId),
     ])
-    const candidates = rankCandidates(job, employees, historicalJobs)
+    const candidates: AssignmentRecommendationCandidate[] =
+      rankAssignmentCandidates(job, employees, historicalJobs)
     const timestamp = Timestamp.now()
     const recommendationReference = doc(
       collection(firestore, RECOMMENDATIONS_COLLECTION),
@@ -450,7 +450,7 @@ async function readEligibleEmployees(organizationId: string) {
 
   return snapshot.docs
     .map((employeeDocument) => mapUserProfile(employeeDocument.data()))
-    .filter((employee) => isEligibleForRecommendation(employee))
+    .filter((employee) => isEligibleRecommendationEmployee(employee))
 }
 
 async function readHistoricalJobs(organizationId: string) {
@@ -465,265 +465,6 @@ async function readHistoricalJobs(organizationId: string) {
 
   return snapshot.docs.map((jobDocument) =>
     mapJob(jobDocument.id, jobDocument.data()),
-  )
-}
-
-function rankCandidates(
-  job: Job,
-  employees: RecommendationEmployee[],
-  historicalJobs: Job[],
-) {
-  return employees
-    .map((employee) => scoreEmployee(job, employee, historicalJobs))
-    .sort((firstCandidate, secondCandidate) => {
-      return (
-        secondCandidate.totalScore - firstCandidate.totalScore ||
-        firstCandidate.employeeName.localeCompare(secondCandidate.employeeName)
-      )
-    })
-    .slice(0, TOP_CANDIDATE_LIMIT)
-    .map((candidate, index) => ({
-      ...candidate,
-      rank: index + 1,
-    }))
-}
-
-function scoreEmployee(
-  job: Job,
-  employee: RecommendationEmployee,
-  historicalJobs: Job[],
-): AssignmentRecommendationCandidate {
-  const skillScore = scoreSkillMatch(job.requiredSkills, employee.skills)
-  const availabilityScore = scoreAvailability(employee)
-  const workloadScore = scoreWorkload(
-    getActiveWorkload(employee.id, historicalJobs),
-  )
-  const locationScore = scoreLocationRelevance(job.location)
-  const performanceScore = scoreHistoricalPerformance(
-    getHistoricalPerformance(employee.id, historicalJobs),
-  )
-  const scoreBreakdown: AssignmentScoreBreakdown = {
-    availability: availabilityScore.score,
-    locationRelevance: locationScore.score,
-    performance: performanceScore.score,
-    skillMatch: skillScore.score,
-    workload: workloadScore.score,
-  }
-  const totalScore =
-    scoreBreakdown.skillMatch +
-    scoreBreakdown.availability +
-    scoreBreakdown.workload +
-    scoreBreakdown.locationRelevance +
-    scoreBreakdown.performance
-
-  return {
-    employeeId: employee.id,
-    employeeName: employee.displayName,
-    rank: 0,
-    totalScore,
-    scoreBreakdown,
-    explanationReasons: [
-      ...skillScore.reasons,
-      ...availabilityScore.reasons,
-      ...workloadScore.reasons,
-      ...locationScore.reasons,
-      ...performanceScore.reasons,
-    ],
-  }
-}
-
-function scoreSkillMatch(requiredSkills: string[], employeeSkills: string[]) {
-  const normalizedRequiredSkills = normalizeList(requiredSkills)
-  const normalizedEmployeeSkills = normalizeList(employeeSkills)
-
-  if (normalizedRequiredSkills.length === 0) {
-    return {
-      score: 0,
-      reasons: ['Insufficient data: job has no required skills.'],
-    }
-  }
-
-  if (normalizedEmployeeSkills.length === 0) {
-    return {
-      score: 0,
-      reasons: ['No employee skills are available for matching.'],
-    }
-  }
-
-  const matchedSkills = normalizedRequiredSkills.filter((requiredSkill) =>
-    normalizedEmployeeSkills.includes(requiredSkill),
-  )
-  const score = Math.round(
-    (matchedSkills.length / normalizedRequiredSkills.length) * 35,
-  )
-
-  return {
-    score,
-    reasons:
-      matchedSkills.length > 0
-        ? [
-            `Matched ${matchedSkills.length} of ${normalizedRequiredSkills.length} required skill(s).`,
-          ]
-        : ['No required skills matched.'],
-  }
-}
-
-function scoreAvailability(employee: RecommendationEmployee) {
-  if (!employee.availabilityKnown) {
-    return {
-      score: 0,
-      reasons: ['Insufficient availability data for scoring.'],
-    }
-  }
-
-  const normalizedAvailability = employee.availability.toLowerCase()
-
-  if (normalizedAvailability === 'available') {
-    return {
-      score: 25,
-      reasons: ['Employee is marked available.'],
-    }
-  }
-
-  if (normalizedAvailability === 'busy') {
-    return {
-      score: 12,
-      reasons: ['Employee is marked busy, so availability is reduced.'],
-    }
-  }
-
-  return {
-    score: 0,
-    reasons: ['Insufficient availability data for scoring.'],
-  }
-}
-
-function scoreWorkload(activeTaskCount: number) {
-  if (!Number.isFinite(activeTaskCount)) {
-    return {
-      score: 0,
-      reasons: ['Insufficient workload data for scoring.'],
-    }
-  }
-
-  if (activeTaskCount <= 0) {
-    return {
-      score: 20,
-      reasons: ['Employee has no active assigned jobs.'],
-    }
-  }
-
-  if (activeTaskCount === 1) {
-    return {
-      score: 16,
-      reasons: ['Employee has a light active workload.'],
-    }
-  }
-
-  if (activeTaskCount === 2) {
-    return {
-      score: 12,
-      reasons: ['Employee has a moderate active workload.'],
-    }
-  }
-
-  if (activeTaskCount === 3) {
-    return {
-      score: 8,
-      reasons: ['Employee has a high active workload.'],
-    }
-  }
-
-  return {
-    score: activeTaskCount === 4 ? 4 : 0,
-    reasons: ['Employee has a very high active workload.'],
-  }
-}
-
-function scoreLocationRelevance(jobLocation: string) {
-  if (jobLocation.trim().length === 0) {
-    return {
-      score: 0,
-      reasons: ['Insufficient data: job has no location note.'],
-    }
-  }
-
-  return {
-    score: 0,
-    reasons: [
-      'Insufficient data: employee service area or location history is not available.',
-    ],
-  }
-}
-
-function scoreHistoricalPerformance(performance: HistoricalPerformance) {
-  if (performance.consideredJobs === 0) {
-    return {
-      score: 0,
-      reasons: ['Insufficient historical completion data for performance scoring.'],
-    }
-  }
-
-  const score = Math.round(
-    (performance.completedJobs / performance.consideredJobs) * 10,
-  )
-
-  return {
-    score,
-    reasons: [
-      `Completed ${performance.completedJobs} of ${performance.consideredJobs} historical assigned job(s).`,
-    ],
-  }
-}
-
-function getHistoricalPerformance(
-  employeeId: string,
-  historicalJobs: Job[],
-): HistoricalPerformance {
-  const consideredJobs = historicalJobs.filter((job) => {
-    return (
-      job.assignedEmployeeIds.includes(employeeId) &&
-      (job.status === JobStatuses.Completed ||
-        job.status === JobStatuses.Cancelled)
-    )
-  })
-  const completedJobs = consideredJobs.filter((job) => {
-    return job.status === JobStatuses.Completed && job.completedAt !== null
-  })
-
-  return {
-    completedJobs: completedJobs.length,
-    consideredJobs: consideredJobs.length,
-  }
-}
-
-function getActiveWorkload(employeeId: string, historicalJobs: Job[]) {
-  return historicalJobs.filter((job) => {
-    return (
-      job.assignedEmployeeIds.includes(employeeId) &&
-      (job.status === JobStatuses.Assigned ||
-        job.status === JobStatuses.InProgress)
-    )
-  }).length
-}
-
-function isEligibleForRecommendation(employee: RecommendationEmployee) {
-  const availability = employee.availability.toLowerCase()
-
-  return (
-    employee.role === Roles.Employee &&
-    !employee.isUnavailable &&
-    availability !== 'leave'
-  )
-}
-
-function normalizeList(values: string[]) {
-  return Array.from(
-    new Set(
-      values
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean),
-    ),
   )
 }
 

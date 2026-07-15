@@ -25,7 +25,7 @@ It does not use machine-learning training, automatic model updates, or autonomou
 
 # 3. Inputs
 
-The engine may evaluate:
+The approved engine may eventually evaluate the inputs below. Section 11 defines the smaller subset currently scored by `rule-based-v1`:
 
 - Required skills
 - Worker skills
@@ -94,7 +94,7 @@ Future versions may implement adaptive scoring after enough validated data exist
 
 # 8. Explainability Requirements
 
-Every recommendation must include reasons such as:
+Approved explanation categories may eventually include:
 
 - Skill match
 - Availability
@@ -132,3 +132,19 @@ The MVP excludes:
 - Route optimization
 - Shift planning
 - External optimization engines
+
+# 11. Verified `rule-based-v1` Implementation
+
+The authoritative scoring function is shared by the existing recommendation service and the trusted read-only Workforce Intelligence callable. It ranks active employee candidates who are not on leave, sorts by total score and then employee name, and returns at most five candidates.
+
+Current score contributions are:
+
+- Skill match: up to 35 points
+- Availability: up to 25 points
+- Active assigned or in-progress workload: up to 20 points
+- Historical completion ratio: up to 10 points
+- Location relevance: 0 points until verified employee service-area or location-history data exists
+
+The current employee `performanceScore` field is not used by `rule-based-v1`; historical performance is derived from the latest 100 tenant jobs. Job priority is also not currently scored. These fields must not be described as active criteria until the engine changes through an approved phase.
+
+The `getWorkforceRecommendation` callable is read-only. It authenticates the caller, reloads an active manager or admin profile, derives `organizationId` from that trusted profile, requires an active open job in the same tenant, loads tenant-scoped eligible employees and bounded job history, and invokes the shared engine. It does not persist a recommendation, create a proposal, or assign, reassign, or unassign an employee.

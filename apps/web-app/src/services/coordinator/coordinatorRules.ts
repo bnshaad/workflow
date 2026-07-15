@@ -8,6 +8,7 @@ import { JOB_PRIORITY_VALUES } from '../../types/jobPriority.ts'
 import { hashProposalPayload } from '../../../../../shared/actionProposal.ts'
 
 const VALID_CREATE_JOB_CONTEXTS = new Set(['create_job', 'unknown'])
+const VALID_WORKFORCE_CONTEXTS = new Set(['job_details', 'unknown'])
 
 export const COORDINATOR_LIMITS = {
   classificationConfidenceThreshold: 0.8,
@@ -30,7 +31,7 @@ export const AGENT_TOOL_ALLOWLIST = {
     'get_workload_snapshot',
     'get_urgent_unassigned_jobs',
   ],
-  workforce_intelligence: ['generate_assignment_recommendation'],
+  workforce_intelligence: ['get_workforce_recommendation'],
 } as const
 
 const FALLBACK_ROUTE: CoordinatorRoute = {
@@ -67,6 +68,45 @@ export function routeCoordinatorRequest(
       SupportedCoordinatorIntents.ShowOverloadedEmployees,
       'operations_insight',
       'get_workload_snapshot',
+    )
+  }
+
+  if (
+    VALID_WORKFORCE_CONTEXTS.has(request.uiContext) &&
+    matches(message, [
+      'recommend employee for job',
+      'who is the best technician for this job',
+    ])
+  ) {
+    return deterministicRoute(
+      SupportedCoordinatorIntents.RecommendEmployeeForJob,
+      'workforce_intelligence',
+      'get_workforce_recommendation',
+    )
+  }
+
+  if (
+    VALID_WORKFORCE_CONTEXTS.has(request.uiContext) &&
+    matches(message, ['explain recommendation', 'why is this employee recommended'])
+  ) {
+    return deterministicRoute(
+      SupportedCoordinatorIntents.ExplainRecommendation,
+      'workforce_intelligence',
+      'get_workforce_recommendation',
+    )
+  }
+
+  if (
+    VALID_WORKFORCE_CONTEXTS.has(request.uiContext) &&
+    matches(message, [
+      'compare top candidates',
+      'compare the top two employees for this job',
+    ])
+  ) {
+    return deterministicRoute(
+      SupportedCoordinatorIntents.CompareTopCandidates,
+      'workforce_intelligence',
+      'get_workforce_recommendation',
     )
   }
 
@@ -162,5 +202,9 @@ function matches(message: string, commands: string[]) {
 }
 
 function normalizeCommand(message: string) {
-  return message.trim().toLowerCase().replace(/\s+/g, ' ')
+  return message
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?]+$/, '')
+    .replace(/\s+/g, ' ')
 }

@@ -1,10 +1,14 @@
 import type { JobPriority } from './jobPriority'
 import type { ActionProposalStatus as SharedActionProposalStatus } from '../../../../shared/actionProposal.ts'
 import type { ModelIntentClassification as SharedModelIntentClassification } from '../../../../shared/coordinatorModel.ts'
+import type { WorkforceIntelligenceResult } from '../../../../shared/workforceIntelligence.ts'
 
 export const SupportedCoordinatorIntents = {
   PrepareCreateJobProposal: 'prepare_create_job_proposal',
   PrepareJobDraft: 'prepare_job_draft',
+  RecommendEmployeeForJob: 'recommend_employee_for_job',
+  ExplainRecommendation: 'explain_recommendation',
+  CompareTopCandidates: 'compare_top_candidates',
   ShowOpenJobsSummary: 'show_open_jobs_summary',
   ShowOverloadedEmployees: 'show_overloaded_employees',
   ShowUrgentUnassignedJobs: 'show_urgent_unassigned_jobs',
@@ -48,6 +52,7 @@ export type CoordinatorUiContext =
 export type CoordinatorRequest = {
   createJobInput?: ProposedCreateJobPayload
   customerRequest?: string
+  jobId?: string
   message: string
   requestId?: string
   uiContext: CoordinatorUiContext
@@ -132,6 +137,8 @@ export type CoordinatorResult<TData> = {
 export type CoordinatorResponse<TData> =
   | CoordinatorFallback
   | CoordinatorResult<TData>
+
+export type { WorkforceIntelligenceResult }
 
 export type UrgentUnassignedJob = {
   dueDate: string | null

@@ -1,4 +1,5 @@
 import { logger } from 'firebase-functions'
+import { randomUUID } from 'node:crypto'
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https'
 import { requireTrustedManager } from '../auth/requireTrustedManager.js'
 import {
@@ -6,7 +7,11 @@ import {
   toPublicModelError,
   type ModelClassificationInput,
 } from './modelCoordinatorService.js'
-import type { StructuredModelProvider } from './modelProvider.js'
+import {
+  GEMINI_MODEL,
+  ModelProviderError,
+  type StructuredModelProvider,
+} from './modelProvider.js'
 
 const MAX_REQUEST_LENGTH = 2_000
 const MAX_REQUEST_BYTES = 4_096
@@ -16,36 +21,60 @@ export function createModelCallableHandlers(provider: StructuredModelProvider) {
 
   return {
     async classifyCoordinatorIntent(request: CallableRequest<unknown>) {
+      const correlationId = readCorrelationId(request)
       await requireTrustedManager(request)
       const input = readClassificationInput(request.data)
+      const startedAt = Date.now()
 
       try {
         const result = await service.classifyIntent(input)
         logger.info('model_intent_classification', {
           confidence: result.confidence,
+          correlationId,
+          durationMs: Date.now() - startedAt,
           intent: result.intent,
+          modelName: GEMINI_MODEL,
           requestLength: input.message.length,
+          status: 'succeeded',
         })
         return result
       } catch (error) {
-        logModelFailure('intent_classification', input.message.length, error)
+        logModelFailure(
+          correlationId,
+          'intent_classification',
+          input.message.length,
+          error,
+          startedAt,
+        )
         throw asHttpsError(error)
       }
     },
 
     async draftJobFromRequest(request: CallableRequest<unknown>) {
+      const correlationId = readCorrelationId(request)
       await requireTrustedManager(request)
       const customerRequest = readCustomerRequest(request.data)
+      const startedAt = Date.now()
 
       try {
         const result = await service.draftJob(customerRequest)
         logger.info('model_job_draft', {
+          correlationId,
+          durationMs: Date.now() - startedAt,
+          modelName: GEMINI_MODEL,
           requestLength: customerRequest.length,
+          status: 'succeeded',
           warningCount: result.warnings.length,
         })
         return result
       } catch (error) {
-        logModelFailure('job_draft', customerRequest.length, error)
+        logModelFailure(
+          correlationId,
+          'job_draft',
+          customerRequest.length,
+          error,
+          startedAt,
+        )
         throw asHttpsError(error)
       }
     },
@@ -113,10 +142,49 @@ function asHttpsError(error: unknown) {
   return new HttpsError(publicError.code, publicError.message)
 }
 
-function logModelFailure(operation: string, requestLength: number, error: unknown) {
+function logModelFailure(
+  correlationId: string,
+  operation: string,
+  requestLength: number,
+  error: unknown,
+  startedAt: number,
+) {
+  const diagnostics =
+    error instanceof ModelProviderError ? error.diagnostics : undefined
   logger.warn('model_request_failed', {
-    errorKind: error instanceof Error ? error.name : 'unknown',
+    correlationId,
+    durationMs: Date.now() - startedAt,
+    errorCategory: normalizedErrorCategory(error),
+    errorCode: diagnostics?.code ?? 'unknown_failure',
+    finishReason: diagnostics?.finishReason,
+    httpStatus: diagnostics?.httpStatus,
+    modelName: diagnostics?.modelName ?? GEMINI_MODEL,
     operation,
     requestLength,
+    responseLength: diagnostics?.responseLength,
+    status: 'failed',
+    validationFields: diagnostics?.validationFields,
   })
+}
+
+function normalizedErrorCategory(error: unknown) {
+  if (!(error instanceof ModelProviderError)) {
+    return 'temporary_failure'
+  }
+
+  if (
+    error.diagnostics.code === 'model_not_found' ||
+    error.diagnostics.code === 'schema_or_request_rejected'
+  ) {
+    return error.diagnostics.code
+  }
+
+  return error.kind
+}
+
+function readCorrelationId(request: CallableRequest<unknown>) {
+  const value = request.rawRequest.get('x-correlation-id')
+  return typeof value === 'string' && /^[A-Za-z0-9._-]{1,80}$/.test(value)
+    ? value
+    : randomUUID()
 }

@@ -10,6 +10,7 @@ import { jobUnderstandingService } from '../ai'
 import { modelCoordinatorService } from '../ai'
 import { actionProposalService } from '../actionProposals'
 import { jobService } from '../jobs'
+import { workforceRecommendationService } from '../recommendations'
 import type { CoordinatorTools } from './workflowCoordinator'
 
 const MAX_URGENT_UNASSIGNED_JOBS = 20
@@ -74,6 +75,10 @@ export const workflowCoordinatorTools: CoordinatorTools = {
       note:
         'No organization workload threshold is configured. Employees are shown by active job count.',
     }
+  },
+
+  async getWorkforceRecommendation(profile, jobId) {
+    return workforceRecommendationService.recommendForJob(profile, jobId)
   },
 }
 

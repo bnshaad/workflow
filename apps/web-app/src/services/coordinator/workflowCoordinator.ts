@@ -13,6 +13,7 @@ import type {
   ProposedCreateJobPayload,
   UrgentUnassignedJob,
   WorkloadSnapshot,
+  WorkforceIntelligenceResult,
 } from '../../types/coordinator'
 import type { UserProfile } from '../../types/user'
 import {
@@ -20,6 +21,12 @@ import {
   routeCoordinatorRequest,
   validateProposedCreateJobPayload,
 } from './coordinatorRules.ts'
+import { WorkforceIntelligenceAgent } from './workforceIntelligenceAgent.ts'
+import { isModelCoordinatorIntent } from '../../../../../shared/coordinatorModel.ts'
+import type {
+  WorkforceIntent,
+  WorkforceRecommendationResult,
+} from '../../../../../shared/workforceIntelligence.ts'
 
 export type CoordinatorTools = {
   classifyCoordinatorIntent: (
@@ -43,6 +50,10 @@ export type CoordinatorTools = {
     profile: UserProfile,
   ) => Promise<UrgentUnassignedJob[]>
   getWorkloadSnapshot: (profile: UserProfile) => Promise<WorkloadSnapshot>
+  getWorkforceRecommendation: (
+    profile: UserProfile,
+    jobId: string,
+  ) => Promise<WorkforceRecommendationResult>
 }
 
 export type CoordinatorOperationalEvent = {
@@ -89,6 +100,7 @@ export class WorkflowCoordinator {
     | ProposedAction<ProposedCreateJobPayload>
     | UrgentUnassignedJob[]
     | WorkloadSnapshot
+    | WorkforceIntelligenceResult
   >> {
     const correlationId = request.requestId?.trim() || this.createId()
     let route = routeCoordinatorRequest(request)
@@ -142,6 +154,31 @@ export class WorkflowCoordinator {
             execution,
           )
           assertWorkloadSnapshot(data)
+          return this.result(correlationId, route, execution, data)
+        }
+        case 'recommend_employee_for_job':
+        case 'explain_recommendation':
+        case 'compare_top_candidates': {
+          const jobId = request.jobId?.trim()
+          if (!jobId) {
+            throw new CoordinatorValidationError(
+              'A current job is required for workforce recommendations.',
+            )
+          }
+
+          const activeProfile = this.requireDashboardProfile(profile)
+          const agent = new WorkforceIntelligenceAgent({
+            getRecommendation: async (trustedProfile, trustedJobId) =>
+              this.tools.getWorkforceRecommendation(
+                trustedProfile,
+                trustedJobId,
+              ),
+          })
+          const data = await this.runReadTool(
+            () => agent.handle(activeProfile, route.intent as WorkforceIntent, jobId),
+            execution,
+          )
+          assertWorkforceIntelligenceResult(data, jobId, route.intent)
           return this.result(correlationId, route, execution, data)
         }
         case 'prepare_job_draft': {
@@ -475,6 +512,12 @@ function modelClassificationRoute(
         'operations_insight',
         'get_workload_snapshot',
       )
+    case 'recommend_employee_for_job':
+      return workforceModelRoute(classification, request, 'recommend_employee_for_job')
+    case 'explain_recommendation':
+      return workforceModelRoute(classification, request, 'explain_recommendation')
+    case 'compare_top_candidates':
+      return workforceModelRoute(classification, request, 'compare_top_candidates')
     case 'prepare_job_draft':
       return request.uiContext === 'create_job' || request.uiContext === 'unknown'
         ? modelRoute(
@@ -486,6 +529,42 @@ function modelClassificationRoute(
         : unsupportedModelRoute(classification)
     case 'unsupported':
       return unsupportedModelRoute(classification)
+  }
+}
+
+function workforceModelRoute(
+  classification: ModelIntentClassification,
+  request: CoordinatorRequest,
+  intent: WorkforceIntent,
+): CoordinatorRoute {
+  return request.uiContext === 'job_details' && Boolean(request.jobId?.trim())
+    ? modelRoute(
+        classification,
+        intent,
+        'workforce_intelligence',
+        'get_workforce_recommendation',
+      )
+    : unsupportedModelRoute(classification)
+}
+
+function assertWorkforceIntelligenceResult(
+  value: unknown,
+  jobId: string,
+  intent: CoordinatorRoute['intent'],
+): asserts value is WorkforceIntelligenceResult {
+  const result = value as WorkforceIntelligenceResult
+  if (
+    !result ||
+    result.jobId !== jobId ||
+    result.intent !== intent ||
+    result.engineVersion !== 'rule-based-v1' ||
+    !Array.isArray(result.summary) ||
+    !Array.isArray(result.candidates) ||
+    result.candidates.length > 5
+  ) {
+    throw new CoordinatorValidationError(
+      'The workforce tool returned invalid data.',
+    )
   }
 }
 
@@ -524,9 +603,7 @@ function isValidModelClassification(
   return (
     Boolean(value) &&
     typeof value === 'object' &&
-    ['show_urgent_unassigned_jobs', 'show_open_jobs_summary', 'show_overloaded_employees', 'prepare_job_draft', 'unsupported'].includes(
-      (value as ModelIntentClassification).intent,
-    ) &&
+    isModelCoordinatorIntent((value as ModelIntentClassification).intent) &&
     typeof (value as ModelIntentClassification).confidence === 'number' &&
     Number.isFinite((value as ModelIntentClassification).confidence) &&
     (value as ModelIntentClassification).confidence >= 0 &&

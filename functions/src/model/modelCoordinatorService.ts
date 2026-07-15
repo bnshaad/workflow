@@ -42,7 +42,7 @@ export function createModelCoordinatorService(provider: StructuredModelProvider)
         prompt: `Extract an editable Workflow job draft from this customer request: ${request}`,
         responseSchema: jobDraftSchema(),
         systemInstruction:
-          'Return JSON only. Extract only stated information. Use empty strings, null, and missingFields for unknown values. Never invent customer data, addresses, dates, skills, or priorities. This output cannot create or authorize a job.',
+          'Return JSON only. Extract only stated information. Use empty strings, empty arrays, and missingFields for unknown values. dueDateText must be an ISO 8601 date or datetime only when the request states a resolvable date; otherwise use an empty string. Use lowercase priority values. Never invent customer data, addresses, dates, skills, or priorities. This output cannot create or authorize a job.',
       })
 
       return validateModelJobDraft(result)
@@ -118,36 +118,34 @@ function validateIntentClassification(value: unknown): ModelIntentClassification
 }
 
 function validateModelJobDraft(value: unknown): ModelJobDraft {
+  const responseLength = serializedLength(value)
   if (!value || typeof value !== 'object') {
-    throw new ModelProviderError('invalid_response', 'Draft is invalid.')
+    throw draftValidationError(['draft'], responseLength)
   }
 
   const record = value as Record<string, unknown>
-  const priority = record.priority === '' ? '' : record.priority
-
-  if (priority !== '' && !isJobPriority(priority)) {
-    throw new ModelProviderError('invalid_response', 'Draft priority is invalid.')
-  }
-
-  const dueDate = record.dueDate
-  if (dueDate !== null && (typeof dueDate !== 'string' || Number.isNaN(Date.parse(dueDate)))) {
-    throw new ModelProviderError('invalid_response', 'Draft due date is invalid.')
-  }
+  const priority = normalizePriority(record.priority, responseLength)
+  const dueDate = normalizeDueDate(record.dueDateText, responseLength)
+  const warnings = readDraftTextArray(record.warnings, 'warnings', responseLength)
 
   return {
-    customerName: readText(record.customerName),
-    customerPhone: readText(record.customerPhone),
-    description: readText(record.description, MAX_TEXT_LENGTH),
+    customerName: readDraftText(record.customerName, 'customerName', responseLength),
+    customerPhone: normalizePhone(
+      readDraftText(record.customerPhone, 'customerPhone', responseLength),
+    ),
+    description: readDraftText(record.description, 'description', responseLength, MAX_TEXT_LENGTH),
     dueDate,
-    location: readText(record.location),
-    missingFields: readTextArray(record.missingFields),
-    priority: priority as JobPriority | '',
-    requiredSkills: readTextArray(record.requiredSkills),
-    serviceAddress: readText(record.serviceAddress),
-    serviceType: readText(record.serviceType),
-    title: readText(record.title),
-    uncertainFields: readTextArray(record.uncertainFields),
-    warnings: readTextArray(record.warnings),
+    location: readDraftText(record.locationText, 'locationText', responseLength),
+    missingFields: normalizeFieldNames(
+      readDraftTextArray(record.missingFields, 'missingFields', responseLength),
+    ),
+    priority,
+    requiredSkills: readDraftTextArray(record.requiredSkills, 'requiredSkills', responseLength),
+    serviceAddress: readDraftText(record.serviceAddress, 'serviceAddress', responseLength),
+    serviceType: readDraftText(record.serviceType, 'serviceType', responseLength),
+    title: readDraftText(record.title, 'title', responseLength),
+    uncertainFields: readDraftTextArray(record.uncertainFields, 'uncertainFields', responseLength),
+    warnings: ensureDueDateWarning(warnings, dueDate),
   }
 }
 
@@ -189,12 +187,117 @@ function readTextArray(value: unknown) {
   return value.map((item) => readText(item, MAX_FIELD_LENGTH)).filter(Boolean)
 }
 
+function readDraftText(
+  value: unknown,
+  field: string,
+  responseLength: number,
+  maxLength = MAX_FIELD_LENGTH,
+) {
+  try {
+    return readText(value, maxLength)
+  } catch {
+    throw draftValidationError([field], responseLength)
+  }
+}
+
+function readDraftTextArray(
+  value: unknown,
+  field: string,
+  responseLength: number,
+) {
+  try {
+    return deduplicate(readTextArray(value))
+  } catch {
+    throw draftValidationError([field], responseLength)
+  }
+}
+
+function normalizePriority(value: unknown, responseLength: number): JobPriority | '' {
+  const priority = readDraftText(value, 'priority', responseLength).toLowerCase()
+  const normalized = priority
+    ? `${priority.charAt(0).toUpperCase()}${priority.slice(1)}`
+    : ''
+
+  if (normalized !== '' && !isJobPriority(normalized)) {
+    throw draftValidationError(['priority'], responseLength)
+  }
+
+  return normalized as JobPriority | ''
+}
+
+function normalizeDueDate(value: unknown, responseLength: number) {
+  const dueDate = readDraftText(value, 'dueDateText', responseLength)
+  if (dueDate === '') {
+    return null
+  }
+
+  const isIsoDate = /^\d{4}-\d{2}-\d{2}$/.test(dueDate)
+  const isIsoDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(dueDate)
+  if ((!isIsoDate && !isIsoDateTime) || Number.isNaN(Date.parse(dueDate))) {
+    throw draftValidationError(['dueDateText'], responseLength)
+  }
+
+  return dueDate
+}
+
+function normalizePhone(value: string) {
+  return value.replace(/\s+/g, ' ')
+}
+
+function ensureDueDateWarning(warnings: string[], dueDate: string | null) {
+  if (dueDate !== null || warnings.some((warning) => /date|deadline|schedule/i.test(warning))) {
+    return warnings
+  }
+
+  return [...warnings, 'Due date is missing or could not be resolved safely.']
+}
+
+function normalizeFieldNames(values: string[]) {
+  return deduplicate(
+    values.map((value) => {
+      if (value === 'dueDateText') return 'dueDate'
+      if (value === 'locationText') return 'location'
+      return value
+    }),
+  )
+}
+
+function deduplicate(values: string[]) {
+  const seen = new Set<string>()
+  return values.filter((value) => {
+    const key = value.toLocaleLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function draftValidationError(fields: string[], responseLength: number) {
+  return new ModelProviderError(
+    'invalid_response',
+    'The structured draft failed validation.',
+    {
+      code: 'draft_validation_failed',
+      responseLength,
+      validationFields: fields,
+    },
+  )
+}
+
+function serializedLength(value: unknown) {
+  try {
+    return JSON.stringify(value).length
+  } catch {
+    return 0
+  }
+}
+
 function intentSchema() {
   return {
     properties: {
       clarificationReason: { type: 'string' },
       confidence: { type: 'number' },
-      intent: { enum: ['show_urgent_unassigned_jobs', 'show_open_jobs_summary', 'show_overloaded_employees', 'prepare_job_draft', 'unsupported'], type: 'string' },
+      intent: { enum: ['show_urgent_unassigned_jobs', 'show_open_jobs_summary', 'show_overloaded_employees', 'recommend_employee_for_job', 'explain_recommendation', 'compare_top_candidates', 'prepare_job_draft', 'unsupported'], type: 'string' },
       requiresClarification: { type: 'boolean' },
     },
     required: ['intent', 'confidence', 'requiresClarification'],
@@ -208,10 +311,10 @@ function jobDraftSchema() {
       customerName: { type: 'string' },
       customerPhone: { type: 'string' },
       description: { type: 'string' },
-      dueDate: { nullable: true, type: 'string' },
-      location: { type: 'string' },
+      dueDateText: { type: 'string' },
+      locationText: { type: 'string' },
       missingFields: { items: { type: 'string' }, type: 'array' },
-      priority: { enum: ['', 'Low', 'Medium', 'High', 'Urgent'], type: 'string' },
+      priority: { type: 'string' },
       requiredSkills: { items: { type: 'string' }, type: 'array' },
       serviceAddress: { type: 'string' },
       serviceType: { type: 'string' },
@@ -219,7 +322,7 @@ function jobDraftSchema() {
       uncertainFields: { items: { type: 'string' }, type: 'array' },
       warnings: { items: { type: 'string' }, type: 'array' },
     },
-    required: ['title', 'description', 'customerName', 'customerPhone', 'serviceAddress', 'location', 'priority', 'requiredSkills', 'dueDate', 'missingFields', 'uncertainFields', 'warnings', 'serviceType'],
+    required: ['title', 'description', 'customerName', 'customerPhone', 'serviceAddress', 'locationText', 'priority', 'requiredSkills', 'dueDateText', 'missingFields', 'uncertainFields', 'warnings', 'serviceType'],
     type: 'object',
   }
 }

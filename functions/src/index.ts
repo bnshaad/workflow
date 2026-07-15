@@ -4,6 +4,8 @@ import { onCall } from 'firebase-functions/v2/https'
 import { confirmCreateJobProposal as confirmCreateJobProposalHandler } from './actionProposals/confirmCreateJobProposal.js'
 import { createModelCallableHandlers } from './model/modelCallables.js'
 import { createGeminiModelProvider } from './model/modelProvider.js'
+import { shouldReadGeminiSecret } from './model/modelRuntimeConfiguration.js'
+import { getWorkforceRecommendation as getWorkforceRecommendationHandler } from './workforce/workforceRecommendation.js'
 
 if (getApps().length === 0) {
   initializeApp()
@@ -16,10 +18,26 @@ export const confirmCreateJobProposal = onCall(
   confirmCreateJobProposalHandler,
 )
 
+export const getWorkforceRecommendation = onCall(
+  {
+    region: 'asia-south1',
+    timeoutSeconds: 10,
+  },
+  getWorkforceRecommendationHandler,
+)
+
 const geminiApiKey = defineSecret('GEMINI_API_KEY')
 
 function modelHandlers() {
-  return createModelCallableHandlers(createGeminiModelProvider(geminiApiKey.value()))
+  return createModelCallableHandlers(createGeminiModelProvider(readGeminiApiKey()))
+}
+
+function readGeminiApiKey() {
+  if (!shouldReadGeminiSecret(process.env)) {
+    return undefined
+  }
+
+  return geminiApiKey.value()
 }
 
 export const classifyCoordinatorIntent = onCall(

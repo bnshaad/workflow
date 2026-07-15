@@ -1,6 +1,6 @@
 # Current Implementation Status
 
-**Status date:** 2026-07-14
+**Status date:** 2026-07-15
 
 ## 1. Current stage
 
@@ -36,7 +36,10 @@ Workflow is past foundation and basic CRUD implementation. The manager web appli
 - Durable `actionProposals` persistence for create-job proposals, with client-side immutable proposal records and tenant-scoped reads
 - Firebase callable `confirmCreateJobProposal` boundary that reloads trusted proposal data, verifies active admin or manager access, atomically claims execution, writes the job and audit log, and records completion or a safe terminal state
 - Firebase Emulator Suite integration verification for Auth, Firestore Rules, Firestore transactions, and the create-job callable using disposable tenant fixtures
-- Secure Gemini provider boundary with bounded direct REST generation, strict structured validation, Firebase Secret binding, deterministic fake-provider tests, verified Node 20 compatibility, and no live API request
+- Secure Gemini provider boundary using server-only `gemini-3.1-flash-lite`, bounded direct REST generation, a flat draft transport schema, strict public-contract validation, Firebase Secret binding, deterministic fake-provider tests, and successful local real-model smoke verification
+- Emulator-only real-Gemini opt-in with a gitignored local Secret override and guarded synthetic smoke command
+- Read-only Workforce Intelligence routing for recommendation, explanation, and top-candidate comparison
+- Trusted tenant-scoped `getWorkforceRecommendation` callable using the shared deterministic engine without writes
 
 ## 4. Current architectural reality
 
@@ -62,12 +65,13 @@ Older documentation references to a primary `tasks` collection are superseded by
 
 | Module | Current maturity |
 |---|---|
-| AI Job Understanding | Server-side Gemini structured-draft callable implemented and verified through Node 20 build, unit, and emulator checks; it requires a configured Firebase Secret and has not been live-verified. Development stub remains opt-in only. |
+| AI Job Understanding | Server-side `gemini-3.1-flash-lite` structured-draft callable implemented with a flat transport schema and strict normalization; fake-provider automation and the controlled local real-model smoke have passed. Development stub remains opt-in only. |
 | Weighted assignment | Deterministic `rule-based-v1` recommendation service with explainable scoring; advisory only |
 | AHP-TOPSIS ranking | Approved future experimental ranking mode; not assumed implemented |
 | Recommendation acceptance/override | Implemented for generated recommendations; accepted/overridden decisions persist with reason and score snapshots |
 | Evaluation metrics | Manual-assignment baseline plus recommendation decision metrics are available as bounded reads |
 | Multi-agent coordinator | Deterministic-first typed coordinator; exact routes make zero model calls, ambiguous requests may use one server-side Gemini classification call mapped to a fixed allowlist. No assistant UI. |
+| Workforce Intelligence | First read-only slice implemented for recommendation, grounded explanation, and top-two comparison; deterministic engine remains authoritative and no assignment is executed |
 | Decision-support agent | Initial read-only Operations Insight routes only |
 | Knowledge/RAG agent | Planned |
 | Employee mobile AI | Planned after web AI core |
@@ -76,8 +80,8 @@ Older documentation references to a primary `tasks` collection are superseded by
 
 The coordinator now has a narrow secure model boundary for classification and editable drafting. The next coherent milestone is still not a broad autonomous multi-agent system:
 
-1. Provision or identify a separate approved development Firebase project, then configure and manually verify Gemini there using a Secret, quota limits, and Node 20.
-2. Add specialist slices one at a time, beginning with a grounded Workforce or Operations design, not autonomous execution.
+1. Keep public deployment and Blaze deferred until public Functions access is required.
+2. Add the next specialist slice one at a time, beginning with grounded Operations Intelligence, not autonomous execution.
 3. Extend trusted proposal execution only after each new action has explicit lifecycle, validation, audit, and reconciliation requirements.
 
 ## 7. Critical actions
@@ -116,14 +120,19 @@ Run these commands from the indicated directories:
 ```text
 functions/: npm run emulators
 functions/: npm run test:integration
+functions/: WORKFLOW_USE_REAL_GEMINI=true npm run test:ai:local
 functions/: npm run build
 apps/web-app/: npm run test:rules
 apps/web-app/: npm run lint
 apps/web-app/: npm run build
 ```
 
-`test:integration` starts isolated emulators using project ID `workflow-integration`, creates disposable Auth users and tenant profiles, and verifies the valid lifecycle, reload, audit write, duplicate and concurrent confirmation, ownership and tenant isolation, Rules-denied mutation, invalid payload/hash, expiry, unsupported action, inactive/employee access, processing collision, and reconciliation non-retry.
+`test:integration` starts isolated emulators using project ID `workflow-integration`, creates disposable Auth users and tenant profiles, and verifies the proposal lifecycle plus the read-only Workforce callable. Workforce coverage includes active manager access, employee and inactive-manager rejection, tenant isolation, missing jobs, eligibility, deterministic ordering and scores, grounded reasons, and absence of assignment, proposal, or recommendation writes.
 
-No Firebase project deployment has been performed. The 2026-07-14 controlled runtime verification used Node `20.20.2` with Firebase CLI `15.18.0`: Functions build and 13 unit tests passed; the Auth, Firestore, and Functions emulator suite passed 7 checks and loaded both Gemini callables; and the web rule tests passed 15 checks alongside lint and production build. The checked Firebase account exposed only the current `workflow-p` project, not a separately identified development project, so no Secret was set, billing or quota was not assessed, no deployment occurred, and no live Gemini smoke scenario or Cloud log review occurred. A deployment must target a controlled development Firebase project first, with review of the generated Functions package and no production credentials or user data. Eventual Functions deployment can require a billing-enabled Firebase project even when usage remains within free quotas. Do not deploy unverified changes to production.
+For optional local real-Gemini testing, create untracked `functions/.secret.local` containing `GEMINI_API_KEY`, then run the explicit opt-in command above from `functions/`. The command refuses CI, requires the isolated emulator project, never targets a deployed endpoint, uses synthetic classification and draft text, and verifies protected collection counts do not change. The local file is ignored by Git and the key is never printed. The deployed path continues to use Firebase `defineSecret`.
 
-The real uncertain-write transition is not artificially induced in the emulator suite; its terminal non-retry behavior is integration-tested and its failure classification remains unit-tested. Gemini behavior is covered with fake-provider unit tests only: no API key or live Gemini request was used. Node 20 is declared for Functions deployment and has been verified with an isolated Node `20.20.2` runtime; repeat the same checks after any Functions or dependency change and before controlled deployment. No Genkit, RAG, extra agents, autonomous actions, or assistant UI is implemented.
+The smoke command automatically asserts allowlisted intent values, destructive-request fallback, required empty fields for the incomplete draft, bounded structured output, and absence of job, proposal, or recommendation writes. It prints only field-presence and list-count summaries; prompts, customer details, secrets, raw responses, and full drafts are not logged.
+
+No Firebase project deployment has been performed. Workflow remains on Spark and uses local emulators; Blaze is deferred until public Functions deployment is required. Node 20 compatibility for Functions was verified on 2026-07-14. The web `test:rules` command now compiles its TypeScript tests with the existing compiler into ignored `node_modules/.tmp` output and runs Node's built-in test runner, removing the Node 25-only strip-types flag without adding a dependency. The final cleanup verification passed 26 Functions unit tests, 12 emulator integration tests, 22 web tests, both builds, web lint, and the real-Gemini smoke. The current cleanup host provides Node 25, so the revised web command still requires one direct rerun under Node 20 before claiming runtime verification of that command.
+
+The real uncertain-write transition is not artificially induced in the emulator suite; its terminal non-retry behavior is integration-tested and its failure classification remains unit-tested. Automated Gemini tests use fake providers; the separate opt-in local smoke passed against real Gemini using synthetic data. No Genkit, RAG, assignment-capable agent, recursive delegation, autonomous actions, or broad assistant UI is implemented.

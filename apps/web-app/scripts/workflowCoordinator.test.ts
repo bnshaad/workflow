@@ -7,6 +7,7 @@ import type {
   ProposedCreateJobPayload,
   UserProfile,
 } from '../src/types/index.ts'
+import type { WorkforceRecommendationResult } from '../../../shared/workforceIntelligence.ts'
 import {
   WorkflowCoordinator,
   type CoordinatorTools,
@@ -77,6 +78,7 @@ function createTools() {
   let classificationCalls = 0
   let confirmationCalls = 0
   let preparationCalls = 0
+  let workforceCalls = 0
   const tools: CoordinatorTools = {
     async classifyCoordinatorIntent() {
       classificationCalls += 1
@@ -139,13 +141,43 @@ function createTools() {
         note: 'No threshold configured.',
       }
     },
+    async getWorkforceRecommendation(_profile, jobId) {
+      workforceCalls += 1
+      return workforceRecommendation(jobId)
+    },
   }
 
   return {
     getClassificationCalls: () => classificationCalls,
     getConfirmationCalls: () => confirmationCalls,
     getPreparationCalls: () => preparationCalls,
+    getWorkforceCalls: () => workforceCalls,
     tools,
+  }
+}
+
+function workforceRecommendation(jobId: string): WorkforceRecommendationResult {
+  return {
+    candidates: [
+      {
+        employeeId: 'worker-1',
+        employeeName: 'Worker One',
+        rank: 1,
+        reasons: ['Matched 1 of 1 required skill(s).'],
+        score: 80,
+        scoreBreakdown: {
+          availability: 25,
+          locationRelevance: 0,
+          performance: 0,
+          skillMatch: 35,
+          workload: 20,
+        },
+        warnings: [],
+      },
+    ],
+    engineVersion: 'rule-based-v1',
+    generatedAt: '2026-07-15T00:00:00.000Z',
+    jobId,
   }
 }
 
@@ -371,4 +403,101 @@ test('invalid tool output falls back without returning unvalidated data', async 
 
   assert.equal(result.kind, 'fallback')
   assert.match(result.route.reason, /invalid data/)
+})
+
+test('routes a deterministic workforce request to one read-only tool call', async () => {
+  const { getClassificationCalls, getWorkforceCalls, tools } = createTools()
+  const coordinator = createCoordinator(tools)
+
+  const result = await coordinator.handle(managerProfile, {
+    jobId: 'job-1',
+    message: 'Who is the best technician for this job?',
+    uiContext: 'job_details',
+  })
+
+  assert.equal(result.kind, 'result')
+  assert.equal(result.route.intent, 'recommend_employee_for_job')
+  assert.equal(result.route.agent, 'workforce_intelligence')
+  assert.equal(result.execution.modelCalls, 0)
+  assert.equal(result.execution.toolCalls, 1)
+  assert.equal(getClassificationCalls(), 0)
+  assert.equal(getWorkforceCalls(), 1)
+  assert.equal('proposalId' in result.data, false)
+})
+
+test('uses one model classification and one fixed workforce tool', async () => {
+  const { getWorkforceCalls, tools } = createTools()
+  let classificationCalls = 0
+  tools.classifyCoordinatorIntent = async () => {
+    classificationCalls += 1
+    return {
+      confidence: 0.94,
+      intent: 'compare_top_candidates',
+      requiresClarification: false,
+      toolName: 'assign_employee',
+    } as never
+  }
+  const coordinator = createCoordinator(tools)
+
+  const result = await coordinator.handle(managerProfile, {
+    jobId: 'job-1',
+    message: 'Compare the strongest available options.',
+    uiContext: 'job_details',
+  })
+
+  assert.equal(result.kind, 'result')
+  assert.equal(result.route.intent, 'compare_top_candidates')
+  assert.equal(result.route.toolName, 'get_workforce_recommendation')
+  assert.equal(result.execution.modelCalls, 1)
+  assert.equal(result.execution.toolCalls, 1)
+  assert.equal(classificationCalls, 1)
+  assert.equal(getWorkforceCalls(), 1)
+})
+
+test('workforce requests fail closed without a trusted job context', async () => {
+  const { getWorkforceCalls, tools } = createTools()
+  tools.classifyCoordinatorIntent = async () => ({
+    confidence: 0.95,
+    intent: 'explain_recommendation',
+    requiresClarification: false,
+  })
+  const coordinator = createCoordinator(tools)
+
+  const result = await coordinator.handle(managerProfile, {
+    message: 'Why is Rahul recommended?',
+    uiContext: 'job_details',
+  })
+
+  assert.equal(result.kind, 'fallback')
+  assert.equal(result.execution.modelCalls, 1)
+  assert.equal(result.execution.toolCalls, 0)
+  assert.equal(getWorkforceCalls(), 0)
+})
+
+test('unrelated and unknown workforce requests never invoke the workforce tool', async () => {
+  const { getWorkforceCalls, tools } = createTools()
+  const coordinator = createCoordinator(tools)
+
+  const unrelated = await coordinator.handle(managerProfile, {
+    jobId: 'job-1',
+    message: 'Summarize open jobs',
+    uiContext: 'job_details',
+  })
+  assert.equal(unrelated.route.intent, 'show_open_jobs_summary')
+  assert.equal(getWorkforceCalls(), 0)
+
+  tools.classifyCoordinatorIntent = async () => ({
+    confidence: 0.98,
+    intent: 'unsupported',
+    requiresClarification: false,
+  })
+  const unknown = await coordinator.handle(managerProfile, {
+    jobId: 'job-1',
+    message: 'Choose whoever will make the customer happiest next month.',
+    uiContext: 'job_details',
+  })
+  assert.equal(unknown.kind, 'fallback')
+  assert.equal(unknown.execution.modelCalls, 1)
+  assert.equal(unknown.execution.toolCalls, 0)
+  assert.equal(getWorkforceCalls(), 0)
 })
