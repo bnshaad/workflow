@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
+  ArrowUpRight,
   Calendar,
   Check,
   ChevronDown,
   ClipboardList,
   Filter,
   SlidersHorizontal,
-  MoreHorizontal,
   Plus,
   Search,
   X,
@@ -175,7 +175,10 @@ export function JobsPage() {
         }
       />
 
-      <section className="rounded-xl border border-border bg-card p-3 shadow-sm">
+      <section
+        aria-label="Job filters"
+        className="rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4"
+      >
         <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
           <div className="relative min-w-0 xl:flex-[1.5]">
             <Search
@@ -183,7 +186,8 @@ export function JobsPage() {
               className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
             />
             <input
-              className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              aria-label="Search jobs"
+              className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-4 text-sm outline-none transition placeholder:text-muted-foreground/80 focus:border-primary focus:bg-card focus:ring-2 focus:ring-primary/20"
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search title or customer..."
               type="search"
@@ -252,10 +256,13 @@ export function JobsPage() {
           </div>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="rounded-full bg-muted px-2.5 py-1">
-            {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
-          </span>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {hasActiveFilters ? (
+            <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary">
+              {activeFilterCount} active filter
+              {activeFilterCount === 1 ? '' : 's'}
+            </span>
+          ) : null}
           <span>
             Showing {filteredJobs.length} of {jobs.length} loaded jobs
           </span>
@@ -296,7 +303,26 @@ export function JobsPage() {
         ) : null}
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <section
+        aria-labelledby="jobs-list-heading"
+        className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+      >
+        <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3.5">
+          <div>
+            <h2
+              className="text-sm font-semibold text-foreground"
+              id="jobs-list-heading"
+            >
+              Job list
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Select a job to review its assignment and activity.
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+            {filteredJobs.length} result{filteredJobs.length === 1 ? '' : 's'}
+          </span>
+        </div>
         <div className="hidden overflow-x-auto lg:block">
           <table className="w-full min-w-[820px] border-collapse text-left">
             <thead>
@@ -349,10 +375,13 @@ export function JobsPage() {
 
               {!isLoading && !errorMessage
                 ? filteredJobs.map((job) => (
-                    <tr className="transition hover:bg-background/60" key={job.id}>
+                    <tr
+                      className="group transition-colors hover:bg-primary/[0.035]"
+                      key={job.id}
+                    >
                       <td className="px-4 py-3">
                         <Link
-                          className="font-medium text-foreground transition hover:text-primary"
+                          className="font-medium text-foreground transition group-hover:text-primary hover:text-primary"
                           to={`/jobs/${job.id}`}
                         >
                           {job.title}
@@ -396,10 +425,10 @@ export function JobsPage() {
                       <td className="px-4 py-3 text-right">
                         <Link
                           aria-label={`View details for ${job.title}`}
-                          className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                          className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition group-hover:bg-primary/10 group-hover:text-primary hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/30"
                           to={`/jobs/${job.id}`}
                         >
-                          <MoreHorizontal aria-hidden="true" className="size-4" />
+                          <ArrowUpRight aria-hidden="true" className="size-4" />
                         </Link>
                       </td>
                     </tr>
@@ -447,7 +476,7 @@ export function JobsPage() {
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-2 border-t border-border bg-background/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1 border-t border-border bg-background/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             Showing {filteredJobs.length} of {jobs.length} loaded jobs
           </p>
@@ -460,7 +489,7 @@ export function JobsPage() {
 
 function JobCard({ job }: { job: Job }) {
   return (
-    <article className="p-3">
+    <article className="p-4 transition-colors hover:bg-primary/[0.035]">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <Link
@@ -473,10 +502,10 @@ function JobCard({ job }: { job: Job }) {
         </div>
         <Link
           aria-label={`View details for ${job.title}`}
-          className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
           to={`/jobs/${job.id}`}
         >
-          <MoreHorizontal aria-hidden="true" className="size-4" />
+          <ArrowUpRight aria-hidden="true" className="size-4" />
         </Link>
       </div>
 
@@ -535,7 +564,7 @@ function FilterSelect({
         {icon}
       </span>
       <select
-        className="h-10 w-full appearance-none rounded-lg border border-border bg-background pl-10 pr-10 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+        className="h-10 w-full appearance-none rounded-lg border border-border bg-background pl-10 pr-10 text-sm text-foreground outline-none transition hover:border-muted-foreground/40 focus:border-primary focus:bg-card focus:ring-2 focus:ring-primary/20"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >

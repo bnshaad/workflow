@@ -86,7 +86,7 @@ export function Sidebar({
 
   return (
     <>
-      <aside className="fixed left-0 top-0 z-50 hidden h-screen w-[240px] flex-col border-r border-sidebar-border bg-sidebar px-2 py-4 md:flex">
+      <aside className="fixed left-0 top-0 z-50 hidden h-screen w-[240px] flex-col border-r border-sidebar-border bg-sidebar px-3 py-5 md:flex">
         <SidebarContent navigationItems={visibleNavigationItems} />
       </aside>
 
@@ -101,7 +101,7 @@ export function Sidebar({
           <aside
             aria-label="Mobile navigation"
             aria-modal="true"
-            className="relative flex h-full w-[min(320px,85vw)] flex-col border-r border-sidebar-border bg-sidebar px-2 py-4 shadow-xl"
+            className="relative flex h-full w-[min(320px,85vw)] flex-col border-r border-sidebar-border bg-sidebar px-3 py-4 shadow-xl"
             role="dialog"
           >
             <div className="mb-4 flex items-center justify-between gap-3 px-4 py-2">
@@ -134,7 +134,7 @@ function SidebarContent({
 }) {
   return (
     <>
-      <div className="mb-8 px-4 py-2">
+      <div className="mb-7 px-3 py-1">
         <BrandMark />
       </div>
 
@@ -146,14 +146,16 @@ function SidebarContent({
 function BrandMark() {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-base font-semibold text-primary-foreground">
+      <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-base font-semibold text-primary-foreground shadow-sm shadow-primary/20">
         W
       </div>
       <div>
-        <p className="text-2xl font-semibold leading-7 tracking-tight text-primary">
+        <p className="text-xl font-semibold leading-6 tracking-[-0.025em] text-primary">
           Workflow
         </p>
-        <p className="text-xs leading-4 text-muted-foreground">Business</p>
+        <p className="text-xs leading-4 text-muted-foreground">
+          Operations portal
+        </p>
       </div>
     </div>
   )
@@ -167,26 +169,50 @@ function SidebarNavigation({
   onNavigate?: () => void
 }) {
   return (
-    <nav aria-label="Primary navigation" className="flex flex-1 flex-col gap-1">
-      {navigationItems.map((item) => (
-        <NavLink
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30',
-              isActive
-                ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )
-          }
-          end={item.to !== '/jobs'}
-          key={item.to}
-          onClick={onNavigate}
-          to={item.to}
-        >
-          <item.icon aria-hidden="true" className="size-5" />
-          <span>{item.label}</span>
-        </NavLink>
-      ))}
+    <nav aria-label="Primary navigation" className="flex flex-1 flex-col">
+      <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
+        Workspace
+      </p>
+      <div className="space-y-1">
+        {navigationItems.map((item) => (
+          <NavLink
+            className={({ isActive }) =>
+              cn(
+                'group relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-primary/30',
+                isActive
+                  ? 'bg-primary/10 text-primary shadow-sm shadow-primary/5'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )
+            }
+            end={item.to !== '/jobs'}
+            key={item.to}
+            onClick={onNavigate}
+            to={item.to}
+          >
+            {({ isActive }) => (
+              <>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'absolute inset-y-2 left-0 w-0.5 rounded-full bg-primary transition-opacity',
+                    isActive ? 'opacity-100' : 'opacity-0',
+                  )}
+                />
+                <item.icon
+                  aria-hidden="true"
+                  className={cn(
+                    'size-[18px] shrink-0 transition-colors',
+                    isActive
+                      ? 'text-primary'
+                      : 'text-muted-foreground group-hover:text-foreground',
+                  )}
+                />
+                <span>{item.label}</span>
+              </>
+            )}
+          </NavLink>
+        ))}
+      </div>
     </nav>
   )
 }

@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  BriefcaseBusiness,
   ChevronDown,
   LogOut,
   Menu,
   Settings,
   UserCircle,
 } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks'
 import { canAccessSettings } from '@/permissions'
 
@@ -16,6 +15,7 @@ type HeaderProps = {
 }
 
 export function Header({ onOpenNavigation }: HeaderProps) {
+  const location = useLocation()
   const navigate = useNavigate()
   const { loading, profile, signOut } = useAuth()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -25,6 +25,7 @@ export function Header({ onOpenNavigation }: HeaderProps) {
   const displayName = profile?.displayName ?? 'Workflow user'
   const roleLabel = profile ? formatRole(profile.role) : ''
   const showSettingsLink = profile ? canAccessSettings(profile) : false
+  const pageLabel = getPageLabel(location.pathname)
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
@@ -70,7 +71,7 @@ export function Header({ onOpenNavigation }: HeaderProps) {
   }
 
   return (
-    <header className="z-40 flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6">
+    <header className="z-40 flex h-[68px] shrink-0 items-center justify-between border-b border-border bg-card/95 px-4 backdrop-blur-sm sm:px-6 lg:px-8">
       <div className="flex min-w-0 items-center gap-3">
         <button
           aria-label="Open navigation menu"
@@ -80,12 +81,13 @@ export function Header({ onOpenNavigation }: HeaderProps) {
         >
           <Menu aria-hidden="true" className="size-5" />
         </button>
-        <div className="hidden min-w-0 items-center gap-2 text-sm font-medium text-foreground sm:flex">
-          <BriefcaseBusiness
-            aria-hidden="true"
-            className="size-4 shrink-0 text-muted-foreground"
-          />
-          <span className="truncate">Business Name</span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-foreground">
+            {pageLabel}
+          </p>
+          <p className="hidden text-xs text-muted-foreground sm:block">
+            Workforce operations
+          </p>
         </div>
       </div>
 
@@ -94,17 +96,22 @@ export function Header({ onOpenNavigation }: HeaderProps) {
           <button
             aria-expanded={isMenuOpen}
             aria-haspopup="menu"
-            className="flex max-w-[240px] items-center gap-2 rounded-full border border-border bg-card p-1 pr-3 text-sm font-medium text-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="flex max-w-[260px] items-center gap-2 rounded-lg border border-transparent bg-card p-1.5 pr-2 text-sm font-medium text-foreground transition hover:border-border hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 sm:pr-2.5"
             onClick={() => setIsMenuOpen((current) => !current)}
             type="button"
           >
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-primary">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <UserCircle aria-hidden="true" className="size-5" />
             </span>
             {loading ? (
               <span className="hidden h-4 w-28 rounded-full bg-muted sm:inline" />
             ) : (
-              <span className="hidden truncate sm:inline">{displayName}</span>
+              <span className="hidden min-w-0 text-left sm:block">
+                <span className="block truncate leading-4">{displayName}</span>
+                <span className="block text-xs font-normal leading-4 text-muted-foreground">
+                  {roleLabel}
+                </span>
+              </span>
             )}
             <ChevronDown
               aria-hidden="true"
@@ -189,4 +196,24 @@ export function Header({ onOpenNavigation }: HeaderProps) {
 
 function formatRole(role: string) {
   return role.charAt(0).toUpperCase() + role.slice(1)
+}
+
+function getPageLabel(pathname: string) {
+  if (pathname === '/jobs/create') {
+    return 'Create Job'
+  }
+
+  if (pathname.startsWith('/jobs/')) {
+    return 'Job Details'
+  }
+
+  const routeLabels: Record<string, string> = {
+    '/analytics': 'Analytics',
+    '/dashboard': 'Dashboard',
+    '/jobs': 'Jobs',
+    '/settings': 'Settings',
+    '/team': 'Team',
+  }
+
+  return routeLabels[pathname] ?? 'Workflow'
 }

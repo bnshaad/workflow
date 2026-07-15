@@ -184,7 +184,7 @@ export function DashboardPage() {
                 Current job counts by operational state.
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
               {metrics.map((metric) => (
                 <MetricCard key={metric.label} {...metric} />
               ))}
@@ -283,7 +283,7 @@ function ActionNeededPanel({ items }: { items: ActionNeededItem[] }) {
   return (
     <section
       aria-labelledby="action-needed-heading"
-      className="rounded-xl border border-border bg-card p-4 shadow-sm"
+      className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -303,7 +303,7 @@ function ActionNeededPanel({ items }: { items: ActionNeededItem[] }) {
       </div>
 
       {items.length > 0 ? (
-        <div className="mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
           {items.map((item) => (
             <ActionNeededCard item={item} key={item.label} />
           ))}
@@ -328,7 +328,7 @@ function ActionNeededCard({ item }: { item: ActionNeededItem }) {
 
   return (
     <article
-      className={`grid gap-3 rounded-lg border p-3 sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:items-center ${toneClass}`}
+      className={`grid gap-3 rounded-lg border p-3.5 transition-shadow hover:shadow-sm sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:items-center ${toneClass}`}
     >
       <div className="flex items-center gap-3 sm:block">
         <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-card/80 text-lg font-semibold tracking-tight">
@@ -382,7 +382,7 @@ function EmployeeWorkload({ summary }: { summary: DashboardSummary }) {
 
   return (
     <section
-      className="rounded-lg border border-border bg-card p-4 shadow-sm"
+      className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
       id="employee-workload"
     >
       <div className="flex items-center justify-between gap-3">
@@ -398,7 +398,7 @@ function EmployeeWorkload({ summary }: { summary: DashboardSummary }) {
           className="shrink-0 text-sm font-medium text-primary transition hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-primary/30"
           to="/analytics"
         >
-          View full workload in Analytics
+          View analytics
         </Link>
       </div>
 
@@ -437,7 +437,7 @@ function RecentActivity({ summary }: { summary: DashboardSummary }) {
   const recentActivities = summary.recentActivities.slice(0, 5)
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+    <section className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-foreground">
@@ -513,10 +513,10 @@ function ActivityIcon({
 
 function DashboardLoadingState() {
   return (
-    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
       {Array.from({ length: 6 }, (_, index) => (
         <div
-          className="min-h-[92px] rounded-lg border border-border bg-card p-3 shadow-sm"
+          className="min-h-[116px] animate-pulse rounded-xl border border-border bg-card p-4 shadow-sm"
           key={index}
         >
           <div className="h-4 w-28 rounded-full bg-muted" />

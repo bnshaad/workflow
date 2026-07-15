@@ -15,6 +15,13 @@ const valueTone = {
   success: 'text-emerald-500',
 }
 
+const iconTone = {
+  danger: 'bg-destructive/10 text-destructive',
+  default: 'bg-muted text-muted-foreground',
+  primary: 'bg-primary/10 text-primary',
+  success: 'bg-emerald-500/10 text-emerald-600',
+}
+
 export function MetricCard({
   icon: Icon,
   label,
@@ -22,14 +29,26 @@ export function MetricCard({
   value,
 }: MetricCardProps) {
   return (
-    <article className="rounded-lg border border-border bg-card p-3 shadow-sm">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Icon aria-hidden="true" className="size-4 shrink-0" />
-        <p className="text-xs font-medium uppercase leading-5 tracking-[0.08em]">
+    <article className="group rounded-xl border border-border bg-card p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-medium uppercase leading-5 tracking-[0.08em] text-muted-foreground">
           {label}
         </p>
+        <span
+          className={cn(
+            'inline-flex size-8 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105',
+            iconTone[tone],
+          )}
+        >
+          <Icon aria-hidden="true" className="size-4" />
+        </span>
       </div>
-      <p className={cn('mt-2 text-2xl font-semibold tracking-tight', valueTone[tone])}>
+      <p
+        className={cn(
+          'mt-3 text-3xl font-semibold leading-9 tracking-[-0.03em]',
+          valueTone[tone],
+        )}
+      >
         {value}
       </p>
     </article>
