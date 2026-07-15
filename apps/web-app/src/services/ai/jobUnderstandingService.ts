@@ -3,6 +3,7 @@ import { requireActiveProfile } from '@/services/common'
 import type { UserProfile } from '@/types'
 import type { JobPriority } from '@/types/jobPriority'
 import { JobPriorities } from '@/types/jobPriority'
+import { modelCoordinatorService } from './modelCoordinatorService'
 
 export type GenerateJobDraftInput = {
   customerRequest: string
@@ -18,8 +19,9 @@ export type AiJobDraftSuggestion = {
   customerPhone: string
   serviceAddress: string
   location: string
+  dueDate: string | null
   needsReview: string[]
-  source: 'development-stub'
+  source: 'development-stub' | 'gemini'
 }
 
 export interface JobUnderstandingService {
@@ -37,11 +39,8 @@ export class AiJobUnderstandingError extends Error {
 }
 
 /**
- * Development-only AI Job Understanding contract.
- *
- * There is no approved secure production AI integration in the current Firebase
- * Spark architecture. This service keeps the UI and review workflow ready
- * without exposing API keys or creating jobs automatically.
+ * Model drafting is requested through the trusted callable boundary. The local
+ * stub remains available only for explicit development-only offline exercises.
  */
 export const jobUnderstandingService: JobUnderstandingService = {
   async generateJobDraftSuggestion(profile, input) {
@@ -61,7 +60,46 @@ export const jobUnderstandingService: JobUnderstandingService = {
       )
     }
 
-    return buildDevelopmentStubSuggestion(customerRequest)
+    if (
+      import.meta.env.DEV &&
+      import.meta.env.VITE_USE_DEVELOPMENT_JOB_DRAFT_STUB === 'true'
+    ) {
+      return buildDevelopmentStubSuggestion(customerRequest)
+    }
+
+    try {
+      const draft = await modelCoordinatorService.draftJob(
+        activeProfile,
+        customerRequest,
+      )
+
+      return {
+        customerName: draft.customerName,
+        customerPhone: draft.customerPhone,
+        description: draft.description,
+        dueDate: draft.dueDate,
+        location: draft.location,
+        needsReview: [
+          ...draft.missingFields,
+          ...draft.uncertainFields,
+          ...draft.warnings,
+        ],
+        priority: draft.priority,
+        requiredSkills: draft.requiredSkills,
+        serviceAddress: draft.serviceAddress,
+        serviceType: draft.serviceType,
+        source: 'gemini',
+        title: draft.title,
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new AiJobUnderstandingError(error.message)
+      }
+
+      throw new AiJobUnderstandingError(
+        'AI drafting is temporarily unavailable. Complete the form manually.',
+      )
+    }
   },
 }
 
@@ -110,6 +148,7 @@ function buildDevelopmentStubSuggestion(
   return {
     title,
     description: customerRequest,
+    dueDate: null,
     serviceType: serviceMatch,
     requiredSkills,
     priority,

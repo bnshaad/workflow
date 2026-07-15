@@ -13,8 +13,10 @@ export { JobPriorities, JOB_PRIORITY_VALUES } from './jobPriority'
 export type { JobPriority } from './jobPriority'
 export type {
   AssignmentAlgorithmVersion,
+  AssignmentOverrideReason,
   AssignmentRecommendation,
   AssignmentRecommendationCandidate,
+  AssignmentRecommendationDecision,
   AssignmentRecommendationMode,
   AssignmentRecommendationStatus,
   AssignmentScoreBreakdown,
@@ -29,3 +31,29 @@ export {
 } from './jobStatus'
 export type { JobStatus } from './jobStatus'
 export type { UserAvailability, UserProfile, UserRole } from './user'
+export {
+  CriticalActionTypes,
+  SupportedCoordinatorIntents,
+} from './coordinator'
+export type {
+  ActionProposalExecutionResult,
+  ActionProposalStatus,
+  CoordinatorAgent,
+  CoordinatorExecution,
+  CoordinatorFallback,
+  CoordinatorRequest,
+  CoordinatorResponse,
+  CoordinatorResult,
+  CoordinatorRoute,
+  CoordinatorUiContext,
+  CriticalActionType,
+  HighestWorkloadEmployee,
+  JobDraftSuggestion,
+  ModelIntentClassification,
+  OpenJobsSummary,
+  ProposedAction,
+  ProposedCreateJobPayload,
+  SupportedCoordinatorIntent,
+  UrgentUnassignedJob,
+  WorkloadSnapshot,
+} from './coordinator'

@@ -19,11 +19,10 @@ Last Updated: July 2026
 | AI Job Understanding | ✓ | ✓ | — |
 | Intelligent Task Assignment | ✓ | ✓ | Assigned outcome only |
 | Explainable AI | ✓ | ✓ | Assigned-job context only |
-| Manager Recommendation Feedback | ✓ | ✓ | — |
-| AI-Assisted Assignment Evaluation | ✓ | ✓ | — |
-| Decision Support Alerts | ✓ | ✓ | — |
-| Controlled Conversational Workflow Assistant | ✓ | ✓ | — |
-| Grounded Knowledge Assistant | ✓ | ✓ | ✓ |
+| Adaptive Learning Feedback | ✓ | ✓ | — |
+| Decision Support | ✓ | ✓ | — |
+| Conversational AI | ✓ | ✓ | ✓ |
+| Knowledge Assistant | ✓ | ✓ | ✓ |
 | Work Proof Upload | — | Review only | ✓ |
 | Issue Reporting | — | Resolve only | ✓ |
 
@@ -34,6 +33,6 @@ Last Updated: July 2026
 - Admin and Manager access the Web Management Portal.
 - Employee access is through the Mobile Field Application.
 - Employee mobile dashboard content is limited to Today's Jobs, Assigned Jobs, Notifications, and Quick Actions.
-- Decision Support Alerts provide limited Action Needed dashboard alerts.
-- Grounded Knowledge Assistant retrieves only from trusted approved sources and must cite or show source references.
+- Decision Support provides dashboard insights, operational recommendations, and natural-language operational queries.
+- Knowledge Assistant retrieves only from SOP, User Guide, FAQ, Product Documentation, and Equipment Manuals.
 - Firestore Security Rules must enforce the same role boundaries server-side.

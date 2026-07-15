@@ -6,7 +6,6 @@ import {
   limit as limitResults,
   orderBy,
   query,
-  setDoc,
   Timestamp,
   where,
   writeBatch,
@@ -17,7 +16,6 @@ import {
 import { FirebaseError } from 'firebase/app'
 import { firestore } from '@/services/firestore'
 import { requireActiveProfile, requireTenantAccess } from '@/services/common'
-import { DEFAULT_JOB_STATUS } from '@/constants/jobConstants'
 import { canAssignWorker, canEditJob, Roles } from '@/permissions'
 import type {
   CreateJobInput,
@@ -37,6 +35,7 @@ import {
   validateCreateJob,
   validateJobStatus,
 } from '@/validators/jobValidator'
+import { buildNewJobDocument } from '../../../../../shared/jobCreation.ts'
 
 export interface JobService {
   createJob(profile: UserProfile, input: CreateJobInput): Promise<Job>
@@ -188,42 +187,37 @@ export const jobService: JobService = {
 
     const jobReference = doc(collection(firestore, JOBS_COLLECTION))
     const timestamp = Timestamp.now()
-    const job: Job = {
+    const job: Job = buildNewJobDocument({
+      createdAt: timestamp,
+      createdBy: activeProfile.id,
+      dueDate: input.dueDate,
       id: jobReference.id,
       organizationId,
-      title: input.title.trim(),
-      description: input.description.trim(),
-      customerName: input.customerName.trim(),
-      customerPhone: input.customerPhone.trim(),
-      serviceAddress: input.serviceAddress.trim(),
-      location: input.location.trim(),
-      priority: input.priority,
-      status: DEFAULT_JOB_STATUS,
-      statusUpdatedAt: null,
-      statusUpdatedBy: null,
-      requiredSkills: input.requiredSkills,
-      assignedEmployeeIds: [],
-      assignedAt: null,
-      assignedBy: null,
-      startedAt: null,
-      startedBy: null,
-      createdBy: activeProfile.id,
+      payload: input,
+      toTimestamp: (date) => Timestamp.fromDate(date),
+    })
+
+    const auditLogReference = doc(collection(firestore, AUDIT_LOGS_COLLECTION))
+    const auditLog = {
+      id: auditLogReference.id,
+      organizationId,
+      isActive: true,
       createdAt: timestamp,
       updatedAt: timestamp,
-      dueDate: input.dueDate ? Timestamp.fromDate(input.dueDate) : null,
-      attachments: [],
-      workProofCount: 0,
-      issueCount: 0,
-      aiRecommendation: null,
-      manualOverride: false,
-      overrideReason: null,
-      completedAt: null,
-      completedBy: null,
-      isActive: true,
+      actorId: activeProfile.id,
+      action: 'job_created',
+      entityId: job.id,
+      entityType: 'job',
+      metadata: {
+        jobId: job.id,
+      },
     }
+    const batch = writeBatch(firestore)
 
-    // Future: add audit log entry, notification fan-out, and AI Job Understanding hooks.
-    await setDoc(jobReference, job)
+    batch.set(jobReference, job)
+    batch.set(auditLogReference, auditLog)
+
+    await batch.commit()
 
     return job
   },

@@ -15,39 +15,27 @@ The engine recommends suitable workers for jobs while keeping managers responsib
 
 ---
 
-# 2. Current Implementation Baseline
+# 2. Scope
 
-Status:
-
-- Implemented
-
-The current assignment engine baseline is deterministic, rule-based, weighted scoring, and explainable.
-
-It is human-in-the-loop.
+The MVP assignment engine is rule-based and explainable.
 
 It does not use machine-learning training, automatic model updates, or autonomous assignment.
-
-The system must never automatically assign employees.
-
-Managers remain responsible for final assignment decisions.
 
 ---
 
 # 3. Inputs
 
-The engine may evaluate:
+The approved engine may eventually evaluate the inputs below. Section 11 defines the smaller subset currently scored by `rule-based-v1`:
 
 - Required skills
 - Worker skills
 - Worker availability
 - Current workload
 - Job priority
-- Location relevance when data becomes available
+- Location relevance
 - Previous performance
 
 All inputs must come from approved Workflow data in Firestore.
-
-Missing data must be shown transparently and must not be invented.
 
 ---
 
@@ -68,24 +56,12 @@ Each recommendation must be understandable to a manager.
 
 Managers may:
 
+- Accept the recommendation.
+- Override the recommendation.
 - Select a different worker.
 - Record an override reason.
 
 The system must never automatically finalize assignments without manager approval.
-
-The manager decision flow is:
-
-1. Accept recommended employee.
-2. Choose another employee.
-3. Record a short override reason when overriding.
-
-Suggested override reasons:
-
-- Better local availability
-- Customer requested this technician
-- Manager preference
-- Special experience required
-- Other
 
 ---
 
@@ -103,23 +79,22 @@ The MVP stores:
 - Overridden recommendation
 - Override reason
 - Selected worker when overridden
-- Feedback for evaluation and future insight generation
 
 ---
 
-# 7. Feedback and Learning Boundary
+# 7. Adaptive Learning Boundary
 
-Feedback in the MVP means storing manager decisions for later analysis.
+Adaptive Learning in the MVP means storing feedback for later analysis.
 
 The MVP does not automatically adjust scoring weights.
 
-Do not describe feedback as automatic model retraining or automatic weight adjustment.
+Future versions may implement adaptive scoring after enough validated data exists.
 
 ---
 
 # 8. Explainability Requirements
 
-Every recommendation must include reasons such as:
+Approved explanation categories may eventually include:
 
 - Skill match
 - Availability
@@ -147,72 +122,7 @@ The service should:
 
 ---
 
-# 10. Planned Upgrade: Explainable Hybrid MCDM Assignment Model
-
-Status:
-
-- Planned next phase
-
-The planned upgrade is named the Explainable Hybrid MCDM Assignment Model.
-
-Architecture:
-
-```text
-Eligibility filtering
-↓
-Normalized criteria values
-↓
-AHP-derived weight profile
-↓
-TOPSIS candidate ranking
-↓
-Explanation generation
-↓
-Manager approval or override
-```
-
-AHP/TOPSIS is a future enhancement and is not currently implemented.
-
-Future manager-facing assignment presets may include:
-
-- Balanced
-- Urgent Response
-- Best Expertise
-- Fair Workload
-
-Each preset maps to a predefined internal weight profile.
-
-The manager must not configure technical weights or view mathematical matrices.
-
----
-
-# 11. AI-Assisted Assignment Evaluation
-
-Status:
-
-- Planned next phase
-
-Evaluation compares the manual assignment baseline with AI-assisted assignment outcomes.
-
-Planned descriptive metrics:
-
-- Recommendations generated
-- Accepted recommendations
-- Acceptance rate
-- Overrides
-- Common override reasons
-- Completion rate
-- Assignment-to-start time
-- Assignment-to-completion time
-- Workload distribution
-
-Metrics must be descriptive and based only on valid available data.
-
-Do not claim statistical significance or prediction accuracy without sufficient evidence.
-
----
-
-# 12. Out of Scope
+# 10. Out of Scope
 
 The MVP excludes:
 
@@ -222,3 +132,19 @@ The MVP excludes:
 - Route optimization
 - Shift planning
 - External optimization engines
+
+# 11. Verified `rule-based-v1` Implementation
+
+The authoritative scoring function is shared by the existing recommendation service and the trusted read-only Workforce Intelligence callable. It ranks active employee candidates who are not on leave, sorts by total score and then employee name, and returns at most five candidates.
+
+Current score contributions are:
+
+- Skill match: up to 35 points
+- Availability: up to 25 points
+- Active assigned or in-progress workload: up to 20 points
+- Historical completion ratio: up to 10 points
+- Location relevance: 0 points until verified employee service-area or location-history data exists
+
+The current employee `performanceScore` field is not used by `rule-based-v1`; historical performance is derived from the latest 100 tenant jobs. Job priority is also not currently scored. These fields must not be described as active criteria until the engine changes through an approved phase.
+
+The `getWorkforceRecommendation` callable is read-only. It authenticates the caller, reloads an active manager or admin profile, derives `organizationId` from that trusted profile, requires an active open job in the same tenant, loads tenant-scoped eligible employees and bounded job history, and invokes the shared engine. It does not persist a recommendation, create a proposal, or assign, reassign, or unassign an employee.

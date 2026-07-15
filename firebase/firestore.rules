@@ -120,6 +120,16 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isAllowedOverrideReason(reason) {
+      return reason == 'Better local availability'
+        || reason == 'Customer requested this employee'
+        || reason == 'Special experience required'
+        || reason == 'Workload balancing'
+        || reason == 'Recommended employee unavailable'
+        || reason == 'Manager preference'
+        || reason == 'Other';
+    }
+
     function isAllowedStatusTransition(fromStatus, toStatus) {
       return (fromStatus == 'draft' && (toStatus == 'open' || toStatus == 'cancelled'))
         || (fromStatus == 'open' && (toStatus == 'assigned' || toStatus == 'cancelled'))
@@ -349,6 +359,99 @@ service cloud.firestore {
         && request.resource.data.candidates is list
         && request.resource.data.candidates.size() <= 5
         && sameOrganization(request.resource.data.organizationId);
+      allow update: if canManageWebJobs()
+        && resource.data.isActive == true
+        && resource.data.status == 'generated'
+        && sameOrganization(resource.data.organizationId)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'decidedAt',
+          'decidedBy',
+          'decision',
+          'overrideNote',
+          'overrideReason',
+          'recommendedEmployeeId',
+          'recommendationCriteriaSnapshot',
+          'recommendationScoreSnapshot',
+          'selectedEmployeeId',
+          'status',
+          'updatedAt'
+        ])
+        && request.resource.data.organizationId == resource.data.organizationId
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.jobId == resource.data.jobId
+        && request.resource.data.generatedBy == resource.data.generatedBy
+        && request.resource.data.generatedAt == resource.data.generatedAt
+        && request.resource.data.algorithmVersion == resource.data.algorithmVersion
+        && request.resource.data.assignmentMode == resource.data.assignmentMode
+        && request.resource.data.candidates == resource.data.candidates
+        && request.resource.data.decidedBy == request.auth.uid
+        && request.resource.data.decidedAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.recommendedEmployeeId is string
+        && request.resource.data.selectedEmployeeId is string
+        && request.resource.data.recommendationScoreSnapshot is number
+        && request.resource.data.recommendationCriteriaSnapshot is map
+        && (
+          (
+            request.resource.data.decision == 'accepted'
+            && request.resource.data.status == 'accepted'
+            && request.resource.data.selectedEmployeeId == request.resource.data.recommendedEmployeeId
+            && request.resource.data.overrideReason == null
+            && request.resource.data.overrideNote == null
+          )
+          || (
+            request.resource.data.decision == 'overridden'
+            && request.resource.data.status == 'overridden'
+            && request.resource.data.selectedEmployeeId != request.resource.data.recommendedEmployeeId
+            && isAllowedOverrideReason(request.resource.data.overrideReason)
+            && (
+              (
+                request.resource.data.overrideReason == 'Other'
+                && (
+                  request.resource.data.overrideNote == null
+                  || request.resource.data.overrideNote is string
+                )
+              )
+              || (
+                request.resource.data.overrideReason != 'Other'
+                && request.resource.data.overrideNote == null
+              )
+            )
+          )
+        );
+      allow delete: if false;
+    }
+
+    // Durable critical-action proposals are created by the requesting manager
+    // and executed only by the trusted server-side callable function.
+    match /actionProposals/{proposalId} {
+      allow get, list: if canManageWebJobs()
+        && resource.data.isActive == true
+        && resource.data.requestedBy == request.auth.uid
+        && sameOrganization(resource.data.organizationId);
+      allow create: if canManageWebJobs()
+        && hasStandardBusinessFields(request.resource.data)
+        && request.resource.data.id == proposalId
+        && request.resource.data.organizationId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationId
+        && request.resource.data.requestedBy == request.auth.uid
+        && request.resource.data.actionType == 'create_job'
+        && request.resource.data.status == 'prepared'
+        && request.resource.data.version == 1
+        && request.resource.data.requiresConfirmation == true
+        && request.resource.data.payload is map
+        && request.resource.data.payloadHash is string
+        && request.resource.data.summary is string
+        && request.resource.data.warnings is list
+        && request.resource.data.warnings.size() <= 5
+        && request.resource.data.idempotencyKey == 'create_job:' + proposalId
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.confirmedAt == null
+        && request.resource.data.processingStartedAt == null
+        && request.resource.data.completedAt == null
+        && request.resource.data.resultJobId == null
+        && request.resource.data.failureCode == null
+        && request.resource.data.failureSummary == null
+        && request.resource.data.isActive == true;
       allow update, delete: if false;
     }
 
@@ -372,6 +475,7 @@ service cloud.firestore {
           && request.resource.data.actorId == request.auth.uid
           && (
             request.resource.data.action == 'job.status_updated'
+            || request.resource.data.action == 'job_created'
             || request.resource.data.action == 'assignment_recommendations_generated'
             || request.resource.data.action == 'job_employees_assigned'
             || request.resource.data.action == 'job_employees_reassigned'
@@ -380,10 +484,15 @@ service cloud.firestore {
           && request.resource.data.entityType == 'job'
           && (
             !(
-              request.resource.data.action == 'assignment_recommendations_generated'
+              request.resource.data.action == 'job_created'
+              || request.resource.data.action == 'assignment_recommendations_generated'
               || request.resource.data.action == 'job_employees_assigned'
               || request.resource.data.action == 'job_employees_reassigned'
               || request.resource.data.action == 'job_employees_unassigned'
+            )
+            || (
+              request.resource.data.action == 'job_created'
+              && request.resource.data.metadata.jobId == request.resource.data.entityId
             )
             || (
               request.resource.data.action == 'assignment_recommendations_generated'
@@ -410,7 +519,19 @@ service cloud.firestore {
                     request.resource.data.action == 'job_employees_assigned'
                     && request.resource.data.metadata.fromStatus == 'open'
                     && request.resource.data.metadata.toStatus == 'assigned'
-                    && request.resource.data.metadata.assignmentMode == 'manual'
+                    && (
+                      request.resource.data.metadata.assignmentMode == 'manual'
+                      || (
+                        request.resource.data.metadata.assignmentMode == 'ai_recommendation'
+                        && request.resource.data.metadata.recommendationId is string
+                        && request.resource.data.metadata.recommendedEmployeeId is string
+                        && request.resource.data.metadata.selectedEmployeeId is string
+                        && (
+                          request.resource.data.metadata.decision == 'accepted'
+                          || request.resource.data.metadata.decision == 'overridden'
+                        )
+                      )
+                    )
                     && request.resource.data.metadata.newEmployeeIds.size() > 0
                   )
                   || (

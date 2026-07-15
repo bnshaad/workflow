@@ -39,11 +39,8 @@ The MVP demonstrates:
 - Notifications
 - Audit logs
 - Explainable AI-assisted assignment
-- Manager accept / override recommendation feedback
-- AI-assisted assignment evaluation
-- Controlled Conversational Workflow Assistant
-- Grounded RAG Knowledge Assistant
-- Action Needed operational alerts
+- Conversational AI for guided workflow actions
+- Knowledge Assistant grounded in approved documentation
 
 ---
 
@@ -64,8 +61,7 @@ Includes:
 - Team
 - Assignment recommendation review
 - Explainable AI
-- Action Needed alerts
-- Feedback insights
+- Decision Support
 - Settings according to role
 - Audit logs according to role
 
@@ -85,8 +81,8 @@ Includes:
 - Work Proof
 - Issue Reporting
 - Notifications
-- Controlled Conversational Workflow Assistant
-- Grounded Knowledge Assistant
+- Conversational AI
+- Knowledge Assistant
 
 ---
 
@@ -114,76 +110,45 @@ Managers review and confirm extracted information before job creation.
 
 ## Intelligent Task Assignment
 
-The implemented assignment baseline recommends suitable workers using deterministic rule-based weighted scoring.
-
-Score factors are skills, availability, workload, location relevance when data becomes available, and historical performance.
-
-The system must never automatically assign employees.
-
-Managers remain responsible for final assignment decisions.
-
-Missing data must be shown transparently and must not be invented.
+The assignment engine recommends suitable workers using skills, availability, workload, location relevance, priority, and historical performance data.
 
 ## Explainable AI
 
 Every recommendation must include transparent reasons and a score.
 
-## Manager Recommendation Feedback
+## Adaptive Learning
 
-The planned next phase stores:
+The MVP stores:
 
 - Accepted recommendation
 - Overridden recommendation
 - Override reason
 
-Feedback is stored for evaluation and future insight generation.
+The MVP does not automatically adjust model weights. Future versions may implement adaptive scoring.
 
-The MVP does not automatically adjust model weights.
+## Decision Support
 
-## AI-Assisted Assignment Evaluation
+Decision Support provides:
 
-The planned next phase evaluates AI-assisted assignment outcomes against a manual assignment baseline using descriptive metrics such as acceptance rate, overrides, completion rate, assignment-to-start time, assignment-to-completion time, and workload distribution.
+- Dashboard insights
+- Operational recommendations
+- Natural-language operational queries
 
-Metrics must use only valid available data.
+## Conversational AI
 
-## Explainable Hybrid MCDM Assignment Model
-
-The Explainable Hybrid MCDM Assignment Model is a planned next phase.
-
-It uses eligibility filtering, normalized criteria values, an AHP-derived weight profile, TOPSIS candidate ranking, explanation generation, and manager approval or override.
-
-AHP/TOPSIS is not currently implemented.
-
-## Controlled Conversational Workflow Assistant
-
-The planned assistant supports limited manager-safe requests and must confirm before any write action.
-
-It is not a general-purpose autonomous chatbot.
+Conversational AI guides users through approved workflow actions such as creating jobs, updating status, reporting issues, completing jobs, or summarizing completed work.
 
 AI Job Summary belongs inside this workflow and is not a standalone feature.
 
-## Grounded RAG Knowledge Assistant
+## Knowledge Assistant
 
-The planned knowledge assistant retrieves answers only from trusted sources such as:
+Knowledge Assistant retrieves answers only from:
 
-- SOPs
-- AC/electronics service manuals
-- Safety instructions
-- Installation guides
-- FAQs
-- Customer visit checklists
-
-Responses must cite or show trusted source references.
-
-If no trusted answer exists, the assistant must clearly state that.
-
-## Decision Support Alerts
-
-Action Needed alerts may include urgent jobs still unassigned, overloaded technicians, overdue jobs, and jobs with no matching skilled employee.
-
-Alerts must remain limited, actionable, and non-intrusive.
-
-No notification system is required for these MVP dashboard alerts.
+- SOP
+- User Guide
+- FAQ
+- Product Documentation
+- Equipment Manuals
 
 ---
 
@@ -216,8 +181,6 @@ The following are excluded from the MVP:
 - AI conversations outside approved Workflow use cases
 - Machine-learning training
 - Automatic ML weight adjustment
-- Automatic model retraining
-- Autonomous weight changes
 - Predictive workforce forecasting
 - Advanced reporting dashboards
 - Payroll
@@ -257,12 +220,8 @@ The following are excluded from the MVP:
 - AI Job Understanding
 - Intelligent Task Assignment
 - Explainable AI
-- Manager Accept / Override Recommendation Feedback
-- AI-Assisted Assignment Evaluation
-- Explainable Hybrid MCDM Assignment Upgrade
-- Secure Gemini Job Understanding Integration
-- Decision Support Alerts
-- Feedback Insights
+- Adaptive Learning
+- Decision Support
 
 ```text
 WEB COMPLETE
@@ -279,8 +238,8 @@ WEB COMPLETE
 
 ## Phase F: Mobile AI
 
-- Controlled Conversational Workflow Assistant
-- Grounded RAG Knowledge Assistant
+- Conversational AI
+- Knowledge Assistant
 
 ## Phase G: Platform Completion
 
@@ -303,3 +262,22 @@ The MVP is complete when:
 - Work proof and issues are captured.
 - Notifications and audit logs support operational traceability.
 - The architecture remains compatible with Firebase Spark.
+
+# 10. Multi-Agent MVP Scope Update (2026-07-13)
+
+In scope:
+
+- One efficient coordinator
+- Job Intelligence, Workforce Intelligence, Operations Insight, and Knowledge specialists introduced incrementally
+- Typed, allowlisted read tools
+- Structured proposed actions for critical writes
+- Explicit confirmation and audit records
+- Step, call, and cost limits
+
+Out of scope:
+
+- Autonomous write execution
+- Unrestricted agent loops
+- Automatic model retraining or assignment-weight changes
+- Broad general-purpose agents
+

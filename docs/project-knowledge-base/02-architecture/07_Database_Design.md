@@ -36,18 +36,17 @@ The design remains compatible with Firebase Spark by minimizing collections, rea
 
 # 3. Approved Collections
 
-Workflow uses only these top-level collections:
+The approved collection vocabulary is listed below. The current web application actively uses the bolded operational collections. `tasks` is superseded terminology and is not the active Firestore collection.
 
-```text
-organizations
-users
-jobs
-recommendations
-incidents
-notifications
-auditLogs
-jobActivities
-```
+- `organizations`
+- `users`
+- `jobs`
+- `jobActivities`
+- `recommendations`
+- `incidents`
+- `notifications`
+- `auditLogs`
+- `actionProposals`
 
 Do not create additional top-level collections without approval.
 
@@ -190,7 +189,7 @@ jobs
 
 Purpose:
 
-Stores operational jobs.
+Stores the primary operational entity. Older `tasks` and `assignedUserId` terminology is superseded by `jobs` and `assignedEmployeeIds`.
 
 Fields:
 
@@ -203,35 +202,48 @@ Fields:
 | priority | String | Yes |
 | status | String | Yes |
 | requiredSkills | Array | Yes |
+| assignedEmployeeIds | Array | Yes |
+| assignedAt | Timestamp | Nullable |
+| assignedBy | String | Nullable |
 | location | String | Optional |
 | dueDate | Timestamp | Optional |
-| assignedEmployeeIds | Array | Yes |
-| recommendationId | String | Optional |
-| assignment | Object | Optional |
-| proof | Object | Optional |
-| recommendationSummary | Object | Optional |
-| incidentSummary | Object | Optional |
-| timeline | Array | Optional |
+| statusUpdatedAt | Timestamp | Nullable |
+| statusUpdatedBy | String | Nullable |
+| startedAt | Timestamp | Nullable |
+| startedBy | String | Nullable |
+| completedAt | Timestamp | Nullable |
+| completedBy | String | Nullable |
+| workProofCount | Number | Yes |
+| issueCount | Number | Yes |
+| aiRecommendation | Map | Nullable |
+| manualOverride | Boolean | Yes |
+| overrideReason | String | Nullable |
 | isActive | Boolean | Yes |
 | createdBy | String | Yes |
 | createdAt | Timestamp | Yes |
 | updatedAt | Timestamp | Yes |
 
-Embedded objects:
-
-- Assignment
-- Proof
-- Recommendation Summary
-- Incident Summary
-- Job Activity references
-
-Embedding these objects reduces reads for job details and list views.
-
-Detailed job timeline events are stored in `jobActivities`.
+Job lifecycle activity is stored as separate append-only `jobActivities` documents rather than as an embedded timeline.
 
 ---
 
-# 9. Recommendations Collection
+# 9. Job Activities Collection
+
+Collection:
+
+```text
+jobActivities
+```
+
+Purpose:
+
+Stores append-only job lifecycle events. Implemented event types include status changes, assignment, reassignment, unassignment, employee start, and employee completion.
+
+Fields include `id`, `organizationId`, `jobId`, `type`, `fromStatus`, `toStatus`, optional employee fields, `description`, `createdBy`, `isActive`, `createdAt`, and `updatedAt`.
+
+---
+
+# 10. Recommendations Collection
 
 Collection:
 
@@ -250,25 +262,32 @@ Fields:
 | id | String | Yes |
 | organizationId | String | Yes |
 | jobId | String | Yes |
-| recommendedUserId | String | Yes |
-| recommendedUserName | String | Yes |
-| score | Number | Yes |
-| reasonBreakdown | Map | Yes |
-| decision | String | Yes |
+| candidates | Array | Yes |
+| algorithmVersion | String | Yes |
+| assignmentMode | String | Yes |
+| status | String | Yes |
+| decision | String | Nullable |
 | overrideReason | String | Optional |
-| selectedUserId | String | Optional |
+| recommendedEmployeeId | String | Optional |
+| selectedEmployeeId | String | Optional |
+| recommendationCriteriaSnapshot | Map | Optional |
+| recommendationScoreSnapshot | Number | Optional |
+| generatedAt | Timestamp | Yes |
+| generatedBy | String | Yes |
+| decidedAt | Timestamp | Optional |
+| decidedBy | String | Optional |
 | createdAt | Timestamp | Yes |
 | updatedAt | Timestamp | Optional |
 
 Decision values:
 
 ```text
-pending
+generated
 accepted
 overridden
 ```
 
-Manager Recommendation Feedback stores:
+Adaptive Learning in the MVP stores:
 
 - Accepted recommendation
 - Overridden recommendation
@@ -278,7 +297,7 @@ It does not automatically adjust machine-learning weights.
 
 ---
 
-# 10. Incidents Collection
+# 11. Incidents Collection
 
 Collection:
 
@@ -309,7 +328,7 @@ Fields:
 
 ---
 
-# 11. Notifications Collection
+# 12. Notifications Collection
 
 Collection:
 
@@ -336,7 +355,7 @@ Fields:
 
 ---
 
-# 12. Audit Logs Collection
+# 13. Audit Logs Collection
 
 Collection:
 
@@ -356,104 +375,75 @@ Fields:
 |-------|------|----------|
 | id | String | Yes |
 | organizationId | String | Yes |
-| userId | String | Yes |
-| userRole | String | Yes |
+| actorId | String | Yes |
 | action | String | Yes |
 | entityType | String | Yes |
 | entityId | String | Yes |
-| details | Map | Optional |
-| timestamp | Timestamp | Yes |
+| metadata | Map | Optional |
+| createdAt | Timestamp | Yes |
+| updatedAt | Timestamp | Yes |
+| isActive | Boolean | Yes |
 
 ---
 
-# 13. Job Activities Collection
+# 14. Action Proposals Collection
 
 Collection:
 
 ```text
-jobActivities
+actionProposals
 ```
 
 Purpose:
 
-Stores job timeline events and field execution activity.
+Stores durable, user-visible, confirmation-bound proposals for critical coordinator actions. It is not an audit-log substitute and it does not store model conversations, hidden reasoning, tokens, or secrets.
 
-Fields:
+The first supported action is `create_job`. Client rules allow the requesting active manager or admin to create and read only their own tenant-scoped `prepared` proposals. Clients cannot update or delete proposals. The trusted callable function owns execution-state transitions.
 
-| Field | Type | Required |
-|-------|------|----------|
-| id | String | Yes |
-| organizationId | String | Yes |
-| jobId | String | Yes |
-| type | String | Yes |
-| description | String | Yes |
-| performedBy | String | Optional |
-| metadata | Map | Optional |
-| isActive | Boolean | Yes |
-| createdAt | Timestamp | Yes |
-| updatedAt | Timestamp | Yes |
+Required fields include `id`, `proposalId`, `actionType`, `organizationId`, `requestedBy`, `payload`, `payloadHash`, `summary`, `warnings`, `status`, `idempotencyKey`, `version`, `isActive`, `createdAt`, `updatedAt`, `expiresAt`, `confirmedAt`, `processingStartedAt`, `completedAt`, `resultJobId`, `failureCode`, and `failureSummary`.
 
-Job activities support job detail timelines, dashboard recent activity, and evaluation metrics.
+Lifecycle:
+
+```text
+prepared -> processing -> completed
+                    -> failed
+                    -> reconciliation_required
+prepared -> expired
+prepared -> cancelled
+```
+
+`proposalId` is the deterministic create-job ID. A completed proposal returns its existing `resultJobId`; the server refuses client updates, altered payloads, cross-tenant access, and concurrent execution.
 
 ---
 
-# 14. AI Data Model
+# 15. AI Data Model
 
 The MVP reuses existing operational collections.
 
-No additional AI top-level collections are required.
+No additional model-output or conversational top-level collections are required. `actionProposals` is a critical-action workflow collection, not an AI memory store.
 
 ## AI Job Understanding
 
-Suggested extracted fields may be stored on a task draft or task document when confirmed by the manager.
+The current development stub returns an editable draft to the Create Job screen. It does not persist AI extraction output before the manager creates the job.
 
-Optional task field:
-
-- aiExtractedFields
-
-## Intelligent Task Assignment and Explainable AI
+## Intelligent Job Assignment and Explainable AI
 
 Stored in:
 
 - recommendations
-- jobs.recommendationSummary
+- jobs.aiRecommendation
 
-## Manager Recommendation Feedback
+## Adaptive Learning
 
 Stored in:
 
 - recommendations.decision
 - recommendations.overrideReason
-- recommendations.selectedUserId
-
-Feedback is stored for evaluation and future insight generation.
+- recommendations.selectedEmployeeId
 
 The MVP does not store or update ML weights.
 
-Feedback must not be described as automatic model retraining or automatic weight adjustment.
-
-## AI-Assisted Assignment Evaluation
-
-Status:
-
-- Planned next phase
-
-Evaluation uses valid available data from:
-
-- recommendations
-- jobs
-- users
-- incidents
-- auditLogs
-- jobActivities
-
-Planned descriptive metrics include recommendations generated, accepted recommendations, acceptance rate, overrides, common override reasons, completion rate, assignment-to-start time, assignment-to-completion time, and workload distribution.
-
-Evaluation compares the manual assignment baseline with AI-assisted assignment outcomes.
-
-Do not claim statistical significance or prediction accuracy without sufficient evidence.
-
-## Decision Support Alerts and Feedback Insights
+## Decision Support
 
 Uses existing operational data:
 
@@ -462,52 +452,29 @@ Uses existing operational data:
 - recommendations
 - incidents
 
-No dedicated Decision Support Alerts collection is required for MVP.
+No dedicated Decision Support collection is required for MVP.
 
-## Controlled Conversational Workflow Assistant
+## Conversational AI
 
 Uses existing application services.
 
-The Controlled Conversational Workflow Assistant is planned for limited manager-safe requests such as showing urgent unassigned jobs, finding available technicians, summarizing open jobs, creating a job draft, and opening assignment review.
+No conversational summary persistence is implemented.
 
-It must confirm before any write action and open existing review or action flows rather than silently changing data.
+## Knowledge Assistant
 
-It is not a general-purpose autonomous chatbot.
+Retrieves from approved documentation:
 
-AI Job Summary is part of the controlled assistant workflow and may be stored as `jobActivities` or task notes only when confirmed by the user.
-
-## Grounded Knowledge Assistant
-
-The Grounded Knowledge Assistant retrieves from approved documentation:
-
-- SOPs
-- AC/electronics service manuals
-- Safety instructions
-- Installation guides
-- FAQs
-- Customer visit checklists
+- SOP
+- User Guide
+- FAQ
+- Product Documentation
+- Equipment Manuals
 
 A Firestore knowledge collection is not required for the MVP.
 
-Responses must cite or show trusted source references.
-
-If no trusted answer exists, the assistant must clearly state that.
-
-Web crawling, unrestricted document ingestion, and multi-agent retrieval are outside MVP scope.
-
-## Gemini Boundary
-
-Gemini is planned only for AI Job Understanding, the Controlled Conversational Workflow Assistant, and the Grounded RAG Knowledge Assistant.
-
-Gemini is not the employee assignment engine.
-
-Production Gemini integration must use a secure backend or trusted runtime path.
-
-API keys must never be placed in frontend code, localStorage, sessionStorage, or commits.
-
 ---
 
-# 15. Query Strategy
+# 16. Query Strategy
 
 Dashboard:
 
@@ -539,7 +506,7 @@ Notifications:
 
 ---
 
-# 16. Security Strategy
+# 17. Security Strategy
 
 Firestore Security Rules must enforce:
 
@@ -551,30 +518,38 @@ Firestore Security Rules must enforce:
 
 ---
 
-# 17. Firebase Spark Compatibility
+# 18. Firebase Deployment and Cost Boundary
 
-The design remains Spark compatible by:
+The Firestore data model remains lightweight by:
 
-- Using only seven top-level collections
-- Avoiding Cloud Functions as a requirement
-- Avoiding custom backend services
-- Embedding task-specific data
+- Using the approved top-level collection vocabulary
+- Limiting Cloud Functions to authenticated, idempotent critical-action execution
+- Avoiding general custom backend services
+- Keeping job activity in bounded tenant-scoped reads
 - Keeping reads low
 - Reusing existing collections for AI data
 - Avoiding unnecessary listeners
 
+Deploying the `functions/` package may require a billing-enabled Firebase project, even if function usage stays within free quotas. This is a deployment prerequisite to verify against the target Firebase project, not an assumption that the project has billing enabled.
+
 ---
 
-# 18. Future Enhancements
+# 19. Future Enhancements
 
 Future versions may add:
 
+- Adaptive scoring
 - Offline synchronization
 - Push notifications
 - Route optimization
 - Advanced reporting
 - Inventory
 - ERP integration
-- Automatic learning or automatic model-weight adjustment
 
 These features are excluded from the MVP.
+
+# 20. Verified Implementation Note (2026-07-13)
+
+The active operational collections are `users`, `jobs`, `jobActivities`, `recommendations`, `auditLogs`, and `actionProposals`; `organizations` remains the approved tenant collection. `incidents` and `notifications` are approved but their rules currently deny access. No knowledge-document collection or model-conversation collection is implemented.
+
+Create-job proposals are durable, tenant-scoped records. They are not business actions until the manager explicitly confirms the displayed, unexpired proposal and the trusted callable completes the write. The repository does not persist hidden model reasoning.

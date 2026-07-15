@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test:rules": "tsc -p tsconfig.test.json && node --test \"$PWD\"/node_modules/.tmp/web-tests/apps/web-app/scripts/*.test.js",
     "seed:demo": "node scripts/seedDemoDataset.mjs"
   },
   "dependencies": {

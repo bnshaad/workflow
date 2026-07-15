@@ -6,6 +6,7 @@ import {
   limit as limitResults,
   orderBy,
   query,
+  runTransaction,
   Timestamp,
   where,
   writeBatch,
@@ -18,30 +19,54 @@ import {
   JobStatuses,
   type AssignmentRecommendation,
   type AssignmentRecommendationCandidate,
+  type AssignmentRecommendationDecision,
+  type AssignmentOverrideReason,
   type AssignmentScoreBreakdown,
   type Job,
+  type JobActivity,
   type JobPriority,
   type JobStatus,
   type UserProfile,
 } from '@/types'
 import { Roles } from '@/permissions/roles'
 import { validateJobStatus } from '@/validators/jobValidator'
+import {
+  buildRecommendationDecisionEvaluationMetrics,
+  incrementOverrideReasonDistribution,
+  validateRecommendationDecisionInput,
+  type RecommendationDecisionEvaluationMetrics,
+} from './assignmentRecommendationDecisionRules'
+import {
+  ASSIGNMENT_ALGORITHM_VERSION,
+  isEligibleRecommendationEmployee,
+  rankAssignmentCandidates,
+} from '../../../../../shared/assignmentRecommendation.ts'
 
 const JOBS_COLLECTION = 'jobs'
 const USERS_COLLECTION = 'users'
 const RECOMMENDATIONS_COLLECTION = 'recommendations'
+const JOB_ACTIVITIES_COLLECTION = 'jobActivities'
 const AUDIT_LOGS_COLLECTION = 'auditLogs'
-const ALGORITHM_VERSION = 'rule-based-v1'
-const TOP_CANDIDATE_LIMIT = 5
+const ALGORITHM_VERSION = ASSIGNMENT_ALGORITHM_VERSION
 const HISTORICAL_JOB_LIMIT = 100
 
 export type GenerateAssignmentRecommendationsResult = {
   recommendation: AssignmentRecommendation
 }
 
-type HistoricalPerformance = {
-  completedJobs: number
-  consideredJobs: number
+export type DecideAssignmentRecommendationInput = {
+  decision: AssignmentRecommendationDecision
+  overrideNote?: string
+  overrideReason?: AssignmentOverrideReason | ''
+  recommendationId: string
+  selectedEmployeeId: string
+}
+
+export type DecideAssignmentRecommendationResult = {
+  activity: JobActivity
+  assignedEmployee: UserProfile
+  job: Job
+  recommendation: AssignmentRecommendation
 }
 
 type RecommendationEmployee = UserProfile & {
@@ -57,14 +82,232 @@ export class AssignmentRecommendationError extends Error {
 }
 
 export interface AssignmentRecommendationService {
+  decideAssignmentRecommendation(
+    profile: UserProfile,
+    organizationId: string,
+    input: DecideAssignmentRecommendationInput,
+  ): Promise<DecideAssignmentRecommendationResult>
   generateAssignmentRecommendations(
     profile: UserProfile,
     organizationId: string,
     jobId: string,
   ): Promise<GenerateAssignmentRecommendationsResult>
+  getRecommendationDecisionMetrics(
+    profile: UserProfile,
+    organizationId: string,
+  ): Promise<RecommendationDecisionEvaluationMetrics>
 }
 
 export const assignmentRecommendationService: AssignmentRecommendationService = {
+  async decideAssignmentRecommendation(profile, organizationId, input) {
+    const activeProfile = requireActiveProfile(profile)
+    requireTenantAccess(activeProfile, organizationId)
+
+    if (!canAssignWorker(activeProfile)) {
+      throw new AssignmentRecommendationError(
+        'You do not have permission to assign employees.',
+      )
+    }
+
+    return runTransaction(firestore, async (transaction) => {
+      const recommendationReference = doc(
+        firestore,
+        RECOMMENDATIONS_COLLECTION,
+        input.recommendationId,
+      )
+      const recommendationSnapshot = await transaction.get(
+        recommendationReference,
+      )
+
+      if (!recommendationSnapshot.exists()) {
+        throw new AssignmentRecommendationError('Recommendation not found.')
+      }
+
+      const recommendation = mapAssignmentRecommendation(
+        recommendationSnapshot.id,
+        recommendationSnapshot.data(),
+      )
+
+      if (
+        !recommendation.isActive ||
+        recommendation.organizationId !== organizationId
+      ) {
+        throw new AssignmentRecommendationError('Recommendation not found.')
+      }
+
+      if (recommendation.status !== 'generated') {
+        throw new AssignmentRecommendationError(
+          'This recommendation decision has already been recorded.',
+        )
+      }
+
+      const recommendedCandidate = recommendation.candidates[0] ?? null
+      const recommendedEmployeeId = recommendedCandidate?.employeeId ?? ''
+      const validation = validateRecommendationDecisionInput({
+        decision: input.decision,
+        overrideNote: input.overrideNote,
+        overrideReason: input.overrideReason,
+        recommendedEmployeeId,
+        selectedEmployeeId: input.selectedEmployeeId,
+      })
+
+      if (!validation.isValid) {
+        throw new AssignmentRecommendationError(validation.errors.join(' '))
+      }
+
+      const jobReference = doc(
+        firestore,
+        JOBS_COLLECTION,
+        recommendation.jobId,
+      )
+      const employeeReference = doc(
+        firestore,
+        USERS_COLLECTION,
+        input.selectedEmployeeId,
+      )
+      const [jobSnapshot, employeeSnapshot] = await Promise.all([
+        transaction.get(jobReference),
+        transaction.get(employeeReference),
+      ])
+
+      if (!jobSnapshot.exists()) {
+        throw new AssignmentRecommendationError('Job not found.')
+      }
+
+      if (!employeeSnapshot.exists()) {
+        throw new AssignmentRecommendationError(
+          'Selected employee is not eligible.',
+        )
+      }
+
+      const currentJob = mapJob(jobSnapshot.id, jobSnapshot.data())
+      const selectedEmployee = mapUserProfile(employeeSnapshot.data())
+
+      if (
+        !currentJob.isActive ||
+        currentJob.organizationId !== organizationId ||
+        currentJob.id !== recommendation.jobId
+      ) {
+        throw new AssignmentRecommendationError('Job not found.')
+      }
+
+      if (currentJob.status !== JobStatuses.Open) {
+        throw new AssignmentRecommendationError('Only open jobs can be assigned.')
+      }
+
+      if (
+        !isEligibleRecommendationEmployee(selectedEmployee) ||
+        selectedEmployee.organizationId !== organizationId ||
+        selectedEmployee.id !== input.selectedEmployeeId
+      ) {
+        throw new AssignmentRecommendationError(
+          'Selected employee is not eligible.',
+        )
+      }
+
+      const timestamp = Timestamp.now()
+      const employeeIds = [selectedEmployee.id]
+      const employeeNames = [selectedEmployee.displayName]
+      const isOverride = input.decision === 'overridden'
+      const activityReference = doc(
+        collection(firestore, JOB_ACTIVITIES_COLLECTION),
+      )
+      const auditLogReference = doc(collection(firestore, AUDIT_LOGS_COLLECTION))
+      const activity: JobActivity = {
+        id: activityReference.id,
+        organizationId,
+        isActive: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        jobId: currentJob.id,
+        type: 'employees_assigned',
+        fromStatus: currentJob.status,
+        toStatus: JobStatuses.Assigned,
+        employeeIds,
+        employeeNames,
+        createdBy: activeProfile.id,
+        description: isOverride
+          ? `Assigned ${selectedEmployee.displayName} after manager override.`
+          : `Assigned ${selectedEmployee.displayName} from recommendation.`,
+      }
+      const recommendationUpdate = {
+        decidedAt: timestamp,
+        decidedBy: activeProfile.id,
+        decision: input.decision,
+        overrideNote: validation.normalizedOverrideNote,
+        overrideReason: validation.normalizedOverrideReason,
+        recommendedEmployeeId,
+        recommendationCriteriaSnapshot:
+          recommendedCandidate?.scoreBreakdown ?? null,
+        recommendationScoreSnapshot: recommendedCandidate?.totalScore ?? null,
+        selectedEmployeeId: selectedEmployee.id,
+        status: input.decision,
+        updatedAt: timestamp,
+      }
+      const updatedRecommendation: AssignmentRecommendation = {
+        ...recommendation,
+        ...recommendationUpdate,
+      }
+      const updatedJob: Job = {
+        ...currentJob,
+        assignedEmployeeIds: employeeIds,
+        assignedAt: timestamp,
+        assignedBy: activeProfile.id,
+        status: JobStatuses.Assigned,
+        statusUpdatedAt: timestamp,
+        statusUpdatedBy: activeProfile.id,
+        updatedAt: timestamp,
+      }
+      const auditLog = {
+        id: auditLogReference.id,
+        organizationId,
+        isActive: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        actorId: activeProfile.id,
+        action: 'job_employees_assigned',
+        entityId: currentJob.id,
+        entityType: 'job',
+        metadata: {
+          assignmentMode: 'ai_recommendation',
+          decision: input.decision,
+          employeeIds,
+          employeeNames,
+          fromStatus: currentJob.status,
+          jobId: currentJob.id,
+          newEmployeeIds: employeeIds,
+          newEmployeeNames: employeeNames,
+          overrideReason: validation.normalizedOverrideReason,
+          previousEmployeeIds: currentJob.assignedEmployeeIds,
+          recommendationId: recommendation.id,
+          recommendedEmployeeId,
+          selectedEmployeeId: selectedEmployee.id,
+          toStatus: JobStatuses.Assigned,
+        },
+      }
+
+      transaction.update(jobReference, {
+        assignedEmployeeIds: employeeIds,
+        assignedAt: timestamp,
+        assignedBy: activeProfile.id,
+        status: JobStatuses.Assigned,
+        statusUpdatedAt: timestamp,
+        statusUpdatedBy: activeProfile.id,
+        updatedAt: timestamp,
+      })
+      transaction.update(recommendationReference, recommendationUpdate)
+      transaction.set(activityReference, activity)
+      transaction.set(auditLogReference, auditLog)
+
+      return {
+        activity,
+        assignedEmployee: selectedEmployee,
+        job: updatedJob,
+        recommendation: updatedRecommendation,
+      }
+    })
+  },
+
   async generateAssignmentRecommendations(profile, organizationId, jobId) {
     const activeProfile = requireActiveProfile(profile)
     requireTenantAccess(activeProfile, organizationId)
@@ -81,7 +324,8 @@ export const assignmentRecommendationService: AssignmentRecommendationService = 
       readEligibleEmployees(organizationId),
       readHistoricalJobs(organizationId),
     ])
-    const candidates = rankCandidates(job, employees, historicalJobs)
+    const candidates: AssignmentRecommendationCandidate[] =
+      rankAssignmentCandidates(job, employees, historicalJobs)
     const timestamp = Timestamp.now()
     const recommendationReference = doc(
       collection(firestore, RECOMMENDATIONS_COLLECTION),
@@ -128,6 +372,49 @@ export const assignmentRecommendationService: AssignmentRecommendationService = 
 
     return { recommendation }
   },
+
+  async getRecommendationDecisionMetrics(profile, organizationId) {
+    const activeProfile = requireActiveProfile(profile)
+    requireTenantAccess(activeProfile, organizationId)
+
+    if (!canAssignWorker(activeProfile)) {
+      throw new AssignmentRecommendationError(
+        'You do not have permission to view recommendation decisions.',
+      )
+    }
+
+    const recommendationsQuery = query(
+      collection(firestore, RECOMMENDATIONS_COLLECTION),
+      where('organizationId', '==', organizationId),
+      where('isActive', '==', true),
+      limitResults(200),
+    )
+    const snapshot = await getDocs(recommendationsQuery)
+
+    const recommendations = snapshot.docs.map((recommendationDocument) =>
+      mapAssignmentRecommendation(
+        recommendationDocument.id,
+        recommendationDocument.data(),
+      ),
+    )
+    const metrics = buildRecommendationDecisionEvaluationMetrics(
+      recommendations,
+    )
+
+    return recommendations.reduce((currentMetrics, recommendation) => {
+      if (recommendation.decision !== 'overridden') {
+        return currentMetrics
+      }
+
+      return {
+        ...currentMetrics,
+        overrideReasonDistribution: incrementOverrideReasonDistribution(
+          currentMetrics.overrideReasonDistribution,
+          recommendation.overrideReason,
+        ),
+      }
+    }, metrics)
+  },
 }
 
 async function readOpenJob(organizationId: string, jobId: string) {
@@ -163,7 +450,7 @@ async function readEligibleEmployees(organizationId: string) {
 
   return snapshot.docs
     .map((employeeDocument) => mapUserProfile(employeeDocument.data()))
-    .filter((employee) => isEligibleForRecommendation(employee))
+    .filter((employee) => isEligibleRecommendationEmployee(employee))
 }
 
 async function readHistoricalJobs(organizationId: string) {
@@ -181,268 +468,63 @@ async function readHistoricalJobs(organizationId: string) {
   )
 }
 
-function rankCandidates(
-  job: Job,
-  employees: RecommendationEmployee[],
-  historicalJobs: Job[],
-) {
-  return employees
-    .map((employee) => scoreEmployee(job, employee, historicalJobs))
-    .sort((firstCandidate, secondCandidate) => {
-      return (
-        secondCandidate.totalScore - firstCandidate.totalScore ||
-        firstCandidate.employeeName.localeCompare(secondCandidate.employeeName)
-      )
-    })
-    .slice(0, TOP_CANDIDATE_LIMIT)
-    .map((candidate, index) => ({
-      ...candidate,
-      rank: index + 1,
-    }))
-}
-
-function scoreEmployee(
-  job: Job,
-  employee: RecommendationEmployee,
-  historicalJobs: Job[],
-): AssignmentRecommendationCandidate {
-  const skillScore = scoreSkillMatch(job.requiredSkills, employee.skills)
-  const availabilityScore = scoreAvailability(employee)
-  const workloadScore = scoreWorkload(
-    getActiveWorkload(employee.id, historicalJobs),
-  )
-  const locationScore = scoreLocationRelevance(job.location)
-  const performanceScore = scoreHistoricalPerformance(
-    getHistoricalPerformance(employee.id, historicalJobs),
-  )
-  const scoreBreakdown: AssignmentScoreBreakdown = {
-    availability: availabilityScore.score,
-    locationRelevance: locationScore.score,
-    performance: performanceScore.score,
-    skillMatch: skillScore.score,
-    workload: workloadScore.score,
-  }
-  const totalScore =
-    scoreBreakdown.skillMatch +
-    scoreBreakdown.availability +
-    scoreBreakdown.workload +
-    scoreBreakdown.locationRelevance +
-    scoreBreakdown.performance
-
-  return {
-    employeeId: employee.id,
-    employeeName: employee.displayName,
-    rank: 0,
-    totalScore,
-    scoreBreakdown,
-    explanationReasons: [
-      ...skillScore.reasons,
-      ...availabilityScore.reasons,
-      ...workloadScore.reasons,
-      ...locationScore.reasons,
-      ...performanceScore.reasons,
-    ],
-  }
-}
-
-function scoreSkillMatch(requiredSkills: string[], employeeSkills: string[]) {
-  const normalizedRequiredSkills = normalizeList(requiredSkills)
-  const normalizedEmployeeSkills = normalizeList(employeeSkills)
-
-  if (normalizedRequiredSkills.length === 0) {
-    return {
-      score: 0,
-      reasons: ['Insufficient data: job has no required skills.'],
-    }
-  }
-
-  if (normalizedEmployeeSkills.length === 0) {
-    return {
-      score: 0,
-      reasons: ['No employee skills are available for matching.'],
-    }
-  }
-
-  const matchedSkills = normalizedRequiredSkills.filter((requiredSkill) =>
-    normalizedEmployeeSkills.includes(requiredSkill),
-  )
-  const score = Math.round(
-    (matchedSkills.length / normalizedRequiredSkills.length) * 35,
-  )
-
-  return {
-    score,
-    reasons:
-      matchedSkills.length > 0
-        ? [
-            `Matched ${matchedSkills.length} of ${normalizedRequiredSkills.length} required skill(s).`,
-          ]
-        : ['No required skills matched.'],
-  }
-}
-
-function scoreAvailability(employee: RecommendationEmployee) {
-  if (!employee.availabilityKnown) {
-    return {
-      score: 0,
-      reasons: ['Insufficient availability data for scoring.'],
-    }
-  }
-
-  const normalizedAvailability = employee.availability.toLowerCase()
-
-  if (normalizedAvailability === 'available') {
-    return {
-      score: 25,
-      reasons: ['Employee is marked available.'],
-    }
-  }
-
-  if (normalizedAvailability === 'busy') {
-    return {
-      score: 12,
-      reasons: ['Employee is marked busy, so availability is reduced.'],
-    }
-  }
-
-  return {
-    score: 0,
-    reasons: ['Insufficient availability data for scoring.'],
-  }
-}
-
-function scoreWorkload(activeTaskCount: number) {
-  if (!Number.isFinite(activeTaskCount)) {
-    return {
-      score: 0,
-      reasons: ['Insufficient workload data for scoring.'],
-    }
-  }
-
-  if (activeTaskCount <= 0) {
-    return {
-      score: 20,
-      reasons: ['Employee has no active assigned jobs.'],
-    }
-  }
-
-  if (activeTaskCount === 1) {
-    return {
-      score: 16,
-      reasons: ['Employee has a light active workload.'],
-    }
-  }
-
-  if (activeTaskCount === 2) {
-    return {
-      score: 12,
-      reasons: ['Employee has a moderate active workload.'],
-    }
-  }
-
-  if (activeTaskCount === 3) {
-    return {
-      score: 8,
-      reasons: ['Employee has a high active workload.'],
-    }
-  }
-
-  return {
-    score: activeTaskCount === 4 ? 4 : 0,
-    reasons: ['Employee has a very high active workload.'],
-  }
-}
-
-function scoreLocationRelevance(jobLocation: string) {
-  if (jobLocation.trim().length === 0) {
-    return {
-      score: 0,
-      reasons: ['Insufficient data: job has no location note.'],
-    }
-  }
-
-  return {
-    score: 0,
-    reasons: [
-      'Insufficient data: employee service area or location history is not available.',
-    ],
-  }
-}
-
-function scoreHistoricalPerformance(performance: HistoricalPerformance) {
-  if (performance.consideredJobs === 0) {
-    return {
-      score: 0,
-      reasons: ['Insufficient historical completion data for performance scoring.'],
-    }
-  }
-
-  const score = Math.round(
-    (performance.completedJobs / performance.consideredJobs) * 10,
-  )
-
-  return {
-    score,
-    reasons: [
-      `Completed ${performance.completedJobs} of ${performance.consideredJobs} historical assigned job(s).`,
-    ],
-  }
-}
-
-function getHistoricalPerformance(
-  employeeId: string,
-  historicalJobs: Job[],
-): HistoricalPerformance {
-  const consideredJobs = historicalJobs.filter((job) => {
-    return (
-      job.assignedEmployeeIds.includes(employeeId) &&
-      (job.status === JobStatuses.Completed ||
-        job.status === JobStatuses.Cancelled)
-    )
-  })
-  const completedJobs = consideredJobs.filter((job) => {
-    return job.status === JobStatuses.Completed && job.completedAt !== null
-  })
-
-  return {
-    completedJobs: completedJobs.length,
-    consideredJobs: consideredJobs.length,
-  }
-}
-
-function getActiveWorkload(employeeId: string, historicalJobs: Job[]) {
-  return historicalJobs.filter((job) => {
-    return (
-      job.assignedEmployeeIds.includes(employeeId) &&
-      (job.status === JobStatuses.Assigned ||
-        job.status === JobStatuses.InProgress)
-    )
-  }).length
-}
-
-function isEligibleForRecommendation(employee: RecommendationEmployee) {
-  const availability = employee.availability.toLowerCase()
-
-  return (
-    employee.role === Roles.Employee &&
-    !employee.isUnavailable &&
-    availability !== 'leave'
-  )
-}
-
-function normalizeList(values: string[]) {
-  return Array.from(
-    new Set(
-      values
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean),
-    ),
-  )
-}
-
 function requireJobId(jobId: string) {
   if (jobId.trim().length === 0) {
     throw new AssignmentRecommendationError('Job ID is required.')
+  }
+}
+
+function mapAssignmentRecommendation(
+  id: string,
+  data: DocumentData,
+): AssignmentRecommendation {
+  const decision = readRecommendationDecision(data.decision)
+  const candidates = Array.isArray(data.candidates)
+    ? data.candidates.map(mapAssignmentRecommendationCandidate)
+    : []
+
+  return {
+    id: readString(data, 'id', id),
+    organizationId: readString(data, 'organizationId'),
+    isActive: readBoolean(data, 'isActive'),
+    createdAt: readTimestamp(data.createdAt),
+    updatedAt: readTimestamp(data.updatedAt),
+    jobId: readString(data, 'jobId'),
+    generatedBy: readString(data, 'generatedBy'),
+    generatedAt: readTimestamp(data.generatedAt),
+    algorithmVersion:
+      data.algorithmVersion === ALGORITHM_VERSION
+        ? ALGORITHM_VERSION
+        : ALGORITHM_VERSION,
+    assignmentMode: 'ai_recommendation',
+    candidates,
+    status: readRecommendationStatus(data.status),
+    decidedAt: readOptionalTimestamp(data.decidedAt),
+    decidedBy: readOptionalString(data.decidedBy),
+    decision,
+    overrideNote: readStringOrNull(data.overrideNote),
+    overrideReason: readOverrideReason(data.overrideReason),
+    recommendedEmployeeId: readStringOrNull(data.recommendedEmployeeId),
+    recommendationCriteriaSnapshot: readScoreBreakdownOrNull(
+      data.recommendationCriteriaSnapshot,
+    ),
+    recommendationScoreSnapshot: readNumberOrNull(
+      data.recommendationScoreSnapshot,
+    ),
+    selectedEmployeeId: readStringOrNull(data.selectedEmployeeId),
+  }
+}
+
+function mapAssignmentRecommendationCandidate(
+  data: DocumentData,
+): AssignmentRecommendationCandidate {
+  return {
+    employeeId: readString(data, 'employeeId'),
+    employeeName: readString(data, 'employeeName', 'Workflow employee'),
+    explanationReasons: readStringArray(data.explanationReasons),
+    rank: readNumber(data, 'rank'),
+    scoreBreakdown: readScoreBreakdown(data.scoreBreakdown),
+    totalScore: readNumber(data, 'totalScore'),
   }
 }
 
@@ -529,12 +611,24 @@ function readNumber(data: DocumentData, key: string) {
     : 0
 }
 
+function readNumberOrNull(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
 function readTimestamp(value: unknown) {
   return value instanceof Timestamp ? value : Timestamp.fromMillis(0)
 }
 
+function readOptionalTimestamp(value: unknown) {
+  return value instanceof Timestamp ? value : undefined
+}
+
 function readTimestampOrNull(value: unknown) {
   return value instanceof Timestamp ? value : null
+}
+
+function readOptionalString(value: unknown) {
+  return typeof value === 'string' ? value : undefined
 }
 
 function readJobStatus(value: unknown): JobStatus {
@@ -548,6 +642,56 @@ function readJobPriority(value: unknown): JobPriority {
     value === 'Urgent'
     ? value
     : 'Medium'
+}
+
+function readRecommendationStatus(
+  value: unknown,
+): AssignmentRecommendation['status'] {
+  return value === 'accepted' || value === 'overridden' || value === 'generated'
+    ? value
+    : 'generated'
+}
+
+function readRecommendationDecision(
+  value: unknown,
+): AssignmentRecommendation['decision'] {
+  return value === 'accepted' || value === 'overridden' ? value : undefined
+}
+
+function readOverrideReason(
+  value: unknown,
+): AssignmentRecommendation['overrideReason'] {
+  return value === 'Better local availability' ||
+    value === 'Customer requested this employee' ||
+    value === 'Special experience required' ||
+    value === 'Workload balancing' ||
+    value === 'Recommended employee unavailable' ||
+    value === 'Manager preference' ||
+    value === 'Other'
+    ? value
+    : null
+}
+
+function readScoreBreakdown(value: unknown): AssignmentScoreBreakdown {
+  const data = isRecord(value) ? value : {}
+
+  return {
+    availability: readNumber(data, 'availability'),
+    locationRelevance: readNumber(data, 'locationRelevance'),
+    performance: readNumber(data, 'performance'),
+    skillMatch: readNumber(data, 'skillMatch'),
+    workload: readNumber(data, 'workload'),
+  }
+}
+
+function readScoreBreakdownOrNull(
+  value: unknown,
+): AssignmentScoreBreakdown | null {
+  return isRecord(value) ? readScoreBreakdown(value) : null
+}
+
+function isRecord(value: unknown): value is DocumentData {
+  return typeof value === 'object' && value !== null
 }
 
 function readAvailabilityInfo(value: unknown): {

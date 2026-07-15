@@ -16,12 +16,14 @@ import { useAuth } from '@/hooks'
 import { canAssignWorker, canEditJob } from '@/permissions'
 import {
   AssignmentRecommendationError,
+  ASSIGNMENT_OVERRIDE_REASONS,
   assignmentRecommendationService,
 } from '@/services/recommendations'
 import { jobService } from '@/services/jobs'
 import {
   type AssignmentRecommendation,
   type AssignmentRecommendationCandidate,
+  type AssignmentOverrideReason,
   type AssignmentScoreBreakdown,
   getAllowedJobStatusTransitions,
   JOB_STATUS_LABELS,
@@ -69,11 +71,29 @@ export function JobDetailsPage() {
     useState<AssignmentRecommendation | null>(null)
   const [recommendationErrorMessage, setRecommendationErrorMessage] =
     useState('')
+  const [
+    recommendationDecisionErrorMessage,
+    setRecommendationDecisionErrorMessage,
+  ] = useState('')
+  const [
+    recommendationDecisionSuccessMessage,
+    setRecommendationDecisionSuccessMessage,
+  ] = useState('')
+  const [recommendationDecisionMode, setRecommendationDecisionMode] =
+    useState<'override' | null>(null)
+  const [overrideNote, setOverrideNote] = useState('')
+  const [overrideReason, setOverrideReason] = useState<
+    AssignmentOverrideReason | ''
+  >('')
+  const [selectedRecommendationEmployeeId, setSelectedRecommendationEmployeeId] =
+    useState('')
   const [statusErrorMessage, setStatusErrorMessage] = useState('')
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([])
   const [selectedStatus, setSelectedStatus] = useState<JobStatus | ''>('')
   const [isAssigning, setIsAssigning] = useState(false)
   const [isGeneratingRecommendation, setIsGeneratingRecommendation] =
+    useState(false)
+  const [isDecidingRecommendation, setIsDecidingRecommendation] =
     useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isManagingAssignment, setIsManagingAssignment] = useState(false)
@@ -94,7 +114,13 @@ export function JobDetailsPage() {
       setManageAssignmentErrorMessage('')
       setManageAssignmentSuccessMessage('')
       setRecommendation(null)
+      setRecommendationDecisionErrorMessage('')
+      setRecommendationDecisionSuccessMessage('')
+      setRecommendationDecisionMode(null)
       setRecommendationErrorMessage('')
+      setOverrideNote('')
+      setOverrideReason('')
+      setSelectedRecommendationEmployeeId('')
       setStatusErrorMessage('')
 
       try {
@@ -201,6 +227,12 @@ export function JobDetailsPage() {
         )
 
       setRecommendation(result.recommendation)
+      setRecommendationDecisionErrorMessage('')
+      setRecommendationDecisionSuccessMessage('')
+      setRecommendationDecisionMode(null)
+      setOverrideNote('')
+      setOverrideReason('')
+      setSelectedRecommendationEmployeeId('')
     } catch (error) {
       if (error instanceof AssignmentRecommendationError) {
         setRecommendationErrorMessage(error.message)
@@ -211,6 +243,145 @@ export function JobDetailsPage() {
       }
     } finally {
       setIsGeneratingRecommendation(false)
+    }
+  }
+
+  async function handleAcceptRecommendation(
+    candidate: AssignmentRecommendationCandidate,
+  ) {
+    if (!profile || !job || !recommendation) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Assign ${candidate.employeeName} to this job from the recommendation?`,
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    await submitRecommendationDecision({
+      decision: 'accepted',
+      selectedEmployeeId: candidate.employeeId,
+    })
+  }
+
+  function handleChooseAnotherEmployee(
+    candidate: AssignmentRecommendationCandidate,
+  ) {
+    setRecommendationDecisionMode('override')
+    setRecommendationDecisionErrorMessage('')
+    setRecommendationDecisionSuccessMessage('')
+    setOverrideNote('')
+    setOverrideReason('')
+    setSelectedRecommendationEmployeeId('')
+    setAssignmentSearch('')
+
+    const firstAlternativeEmployee = assignableEmployees.find(
+      (employee) => employee.id !== candidate.employeeId,
+    )
+
+    if (firstAlternativeEmployee) {
+      setSelectedRecommendationEmployeeId(firstAlternativeEmployee.id)
+    }
+  }
+
+  function toggleRecommendationEmployeeSelection(employeeId: string) {
+    setSelectedRecommendationEmployeeId((currentEmployeeId) =>
+      currentEmployeeId === employeeId ? '' : employeeId,
+    )
+  }
+
+  async function handleConfirmRecommendationOverride() {
+    if (!profile || !job || !recommendation) {
+      return
+    }
+
+    if (!overrideReason) {
+      setRecommendationDecisionErrorMessage(
+        'Select an override reason before confirming the assignment.',
+      )
+      return
+    }
+
+    const selectedEmployee = assignableEmployees.find(
+      (employee) => employee.id === selectedRecommendationEmployeeId,
+    )
+    const selectedEmployeeName =
+      selectedEmployee?.displayName ?? 'the selected employee'
+    const confirmed = window.confirm(
+      `Override the recommendation and assign ${selectedEmployeeName}?`,
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    await submitRecommendationDecision({
+      decision: 'overridden',
+      overrideNote,
+      overrideReason,
+      selectedEmployeeId: selectedRecommendationEmployeeId,
+    })
+  }
+
+  async function submitRecommendationDecision(
+    input:
+      | { decision: 'accepted'; selectedEmployeeId: string }
+      | {
+          decision: 'overridden'
+          overrideNote: string
+          overrideReason: AssignmentOverrideReason
+          selectedEmployeeId: string
+        },
+  ) {
+    if (!profile || !job || !recommendation) {
+      return
+    }
+
+    setIsDecidingRecommendation(true)
+    setRecommendationDecisionErrorMessage('')
+    setRecommendationDecisionSuccessMessage('')
+
+    try {
+      const result =
+        await assignmentRecommendationService.decideAssignmentRecommendation(
+          profile,
+          job.organizationId,
+          {
+            recommendationId: recommendation.id,
+            ...input,
+          },
+        )
+
+      setJob(result.job)
+      setActivities((currentActivities) => [
+        result.activity,
+        ...currentActivities,
+      ])
+      setRecommendation(result.recommendation)
+      setRecommendationDecisionMode(null)
+      setSelectedRecommendationEmployeeId('')
+      setOverrideReason('')
+      setOverrideNote('')
+      setAssignmentSearch('')
+      setManagedEmployeeIds(result.job.assignedEmployeeIds)
+      setRecommendationDecisionSuccessMessage(
+        input.decision === 'accepted'
+          ? 'Recommendation accepted and assignment recorded.'
+          : 'Override recorded and assignment confirmed.',
+      )
+    } catch (error) {
+      if (error instanceof AssignmentRecommendationError) {
+        setRecommendationDecisionErrorMessage(error.message)
+      } else {
+        setRecommendationDecisionErrorMessage(
+          'Unable to record the recommendation decision. Please try again.',
+        )
+      }
+    } finally {
+      setIsDecidingRecommendation(false)
     }
   }
 
@@ -428,11 +599,17 @@ export function JobDetailsPage() {
               filteredAssignableEmployees={filteredAssignableEmployees}
               filteredManageableEmployees={filteredManageableEmployees}
               handleAssignEmployees={handleAssignEmployees}
+              handleAcceptRecommendation={handleAcceptRecommendation}
+              handleChooseAnotherEmployee={handleChooseAnotherEmployee}
+              handleConfirmRecommendationOverride={
+                handleConfirmRecommendationOverride
+              }
               handleGenerateRecommendations={handleGenerateRecommendations}
               handleStatusUpdate={handleStatusUpdate}
               handleUnassignAllEmployees={handleUnassignAllEmployees}
               handleUpdateAssignedEmployees={handleUpdateAssignedEmployees}
               isAssigning={isAssigning}
+              isDecidingRecommendation={isDecidingRecommendation}
               isGeneratingRecommendation={isGeneratingRecommendation}
               isManagingAssignment={isManagingAssignment}
               isUpdatingStatus={isUpdatingStatus}
@@ -442,15 +619,32 @@ export function JobDetailsPage() {
               manageAssignmentSuccessMessage={manageAssignmentSuccessMessage}
               managedEmployeeIds={managedEmployeeIds}
               recommendation={recommendation}
+              recommendationDecisionErrorMessage={
+                recommendationDecisionErrorMessage
+              }
+              recommendationDecisionMode={recommendationDecisionMode}
+              recommendationDecisionSuccessMessage={
+                recommendationDecisionSuccessMessage
+              }
               recommendationErrorMessage={recommendationErrorMessage}
               selectedEmployeeIds={selectedEmployeeIds}
+              selectedRecommendationEmployeeId={
+                selectedRecommendationEmployeeId
+              }
               selectedStatus={selectedStatus}
+              overrideNote={overrideNote}
+              overrideReason={overrideReason}
               setAssignmentSearch={setAssignmentSearch}
               setManageAssignmentSearch={setManageAssignmentSearch}
+              setOverrideNote={setOverrideNote}
+              setOverrideReason={setOverrideReason}
               setSelectedStatus={setSelectedStatus}
               statusErrorMessage={statusErrorMessage}
               toggleEmployeeSelection={toggleEmployeeSelection}
               toggleManagedEmployeeSelection={toggleManagedEmployeeSelection}
+              toggleRecommendationEmployeeSelection={
+                toggleRecommendationEmployeeSelection
+              }
             />
           </div>
         </aside>
@@ -639,11 +833,15 @@ function AssignmentDecisionPanel({
   filteredAssignableEmployees,
   filteredManageableEmployees,
   handleAssignEmployees,
+  handleAcceptRecommendation,
+  handleChooseAnotherEmployee,
+  handleConfirmRecommendationOverride,
   handleGenerateRecommendations,
   handleStatusUpdate,
   handleUnassignAllEmployees,
   handleUpdateAssignedEmployees,
   isAssigning,
+  isDecidingRecommendation,
   isGeneratingRecommendation,
   isManagingAssignment,
   isUpdatingStatus,
@@ -653,15 +851,24 @@ function AssignmentDecisionPanel({
   manageAssignmentSuccessMessage,
   managedEmployeeIds,
   recommendation,
+  recommendationDecisionErrorMessage,
+  recommendationDecisionMode,
+  recommendationDecisionSuccessMessage,
   recommendationErrorMessage,
   selectedEmployeeIds,
+  selectedRecommendationEmployeeId,
   selectedStatus,
+  overrideNote,
+  overrideReason,
   setAssignmentSearch,
   setManageAssignmentSearch,
+  setOverrideNote,
+  setOverrideReason,
   setSelectedStatus,
   statusErrorMessage,
   toggleEmployeeSelection,
   toggleManagedEmployeeSelection,
+  toggleRecommendationEmployeeSelection,
 }: {
   allowedStatuses: JobStatus[]
   assignedEmployeeNames: string[]
@@ -675,11 +882,19 @@ function AssignmentDecisionPanel({
   filteredAssignableEmployees: UserProfile[]
   filteredManageableEmployees: UserProfile[]
   handleAssignEmployees: () => Promise<void>
+  handleAcceptRecommendation: (
+    candidate: AssignmentRecommendationCandidate,
+  ) => Promise<void>
+  handleChooseAnotherEmployee: (
+    candidate: AssignmentRecommendationCandidate,
+  ) => void
+  handleConfirmRecommendationOverride: () => Promise<void>
   handleGenerateRecommendations: () => Promise<void>
   handleStatusUpdate: () => Promise<void>
   handleUnassignAllEmployees: () => Promise<void>
   handleUpdateAssignedEmployees: () => Promise<void>
   isAssigning: boolean
+  isDecidingRecommendation: boolean
   isGeneratingRecommendation: boolean
   isManagingAssignment: boolean
   isUpdatingStatus: boolean
@@ -689,15 +904,24 @@ function AssignmentDecisionPanel({
   manageAssignmentSuccessMessage: string
   managedEmployeeIds: string[]
   recommendation: AssignmentRecommendation | null
+  recommendationDecisionErrorMessage: string
+  recommendationDecisionMode: 'override' | null
+  recommendationDecisionSuccessMessage: string
   recommendationErrorMessage: string
   selectedEmployeeIds: string[]
+  selectedRecommendationEmployeeId: string
   selectedStatus: JobStatus | ''
+  overrideNote: string
+  overrideReason: AssignmentOverrideReason | ''
   setAssignmentSearch: (value: string) => void
   setManageAssignmentSearch: (value: string) => void
+  setOverrideNote: (value: string) => void
+  setOverrideReason: (value: AssignmentOverrideReason | '') => void
   setSelectedStatus: (value: JobStatus | '') => void
   statusErrorMessage: string
   toggleEmployeeSelection: (employeeId: string) => void
   toggleManagedEmployeeSelection: (employeeId: string) => void
+  toggleRecommendationEmployeeSelection: (employeeId: string) => void
 }) {
   const isOpen = job.status === JobStatuses.Open
   const isAssigned = job.status === JobStatuses.Assigned
@@ -723,15 +947,38 @@ function AssignmentDecisionPanel({
             canAssignEmployees={canAssignEmployees}
             canGenerateRecommendations={canGenerateRecommendations}
             filteredAssignableEmployees={filteredAssignableEmployees}
+            handleAcceptRecommendation={handleAcceptRecommendation}
+            handleChooseAnotherEmployee={handleChooseAnotherEmployee}
+            handleConfirmRecommendationOverride={
+              handleConfirmRecommendationOverride
+            }
             handleAssignEmployees={handleAssignEmployees}
             handleGenerateRecommendations={handleGenerateRecommendations}
             isAssigning={isAssigning}
+            isDecidingRecommendation={isDecidingRecommendation}
             isGeneratingRecommendation={isGeneratingRecommendation}
+            overrideNote={overrideNote}
+            overrideReason={overrideReason}
             recommendation={recommendation}
+            recommendationDecisionErrorMessage={
+              recommendationDecisionErrorMessage
+            }
+            recommendationDecisionMode={recommendationDecisionMode}
+            recommendationDecisionSuccessMessage={
+              recommendationDecisionSuccessMessage
+            }
             recommendationErrorMessage={recommendationErrorMessage}
             selectedEmployeeIds={selectedEmployeeIds}
+            selectedRecommendationEmployeeId={
+              selectedRecommendationEmployeeId
+            }
             setAssignmentSearch={setAssignmentSearch}
+            setOverrideNote={setOverrideNote}
+            setOverrideReason={setOverrideReason}
             toggleEmployeeSelection={toggleEmployeeSelection}
+            toggleRecommendationEmployeeSelection={
+              toggleRecommendationEmployeeSelection
+            }
           />
         ) : null}
 
@@ -780,14 +1027,27 @@ function OpenAssignmentControls({
   canGenerateRecommendations,
   filteredAssignableEmployees,
   handleAssignEmployees,
+  handleAcceptRecommendation,
+  handleChooseAnotherEmployee,
+  handleConfirmRecommendationOverride,
   handleGenerateRecommendations,
   isAssigning,
+  isDecidingRecommendation,
   isGeneratingRecommendation,
+  overrideNote,
+  overrideReason,
   recommendation,
+  recommendationDecisionErrorMessage,
+  recommendationDecisionMode,
+  recommendationDecisionSuccessMessage,
   recommendationErrorMessage,
   selectedEmployeeIds,
+  selectedRecommendationEmployeeId,
   setAssignmentSearch,
+  setOverrideNote,
+  setOverrideReason,
   toggleEmployeeSelection,
+  toggleRecommendationEmployeeSelection,
 }: {
   assignmentErrorMessage: string
   assignmentSearch: string
@@ -796,15 +1056,39 @@ function OpenAssignmentControls({
   canGenerateRecommendations: boolean
   filteredAssignableEmployees: UserProfile[]
   handleAssignEmployees: () => Promise<void>
+  handleAcceptRecommendation: (
+    candidate: AssignmentRecommendationCandidate,
+  ) => Promise<void>
+  handleChooseAnotherEmployee: (
+    candidate: AssignmentRecommendationCandidate,
+  ) => void
+  handleConfirmRecommendationOverride: () => Promise<void>
   handleGenerateRecommendations: () => Promise<void>
   isAssigning: boolean
+  isDecidingRecommendation: boolean
   isGeneratingRecommendation: boolean
+  overrideNote: string
+  overrideReason: AssignmentOverrideReason | ''
   recommendation: AssignmentRecommendation | null
+  recommendationDecisionErrorMessage: string
+  recommendationDecisionMode: 'override' | null
+  recommendationDecisionSuccessMessage: string
   recommendationErrorMessage: string
   selectedEmployeeIds: string[]
+  selectedRecommendationEmployeeId: string
   setAssignmentSearch: (value: string) => void
+  setOverrideNote: (value: string) => void
+  setOverrideReason: (value: AssignmentOverrideReason | '') => void
   toggleEmployeeSelection: (employeeId: string) => void
+  toggleRecommendationEmployeeSelection: (employeeId: string) => void
 }) {
+  const recommendedCandidate = recommendation?.candidates[0] ?? null
+  const alternativeEmployees = recommendedCandidate
+    ? filteredAssignableEmployees.filter(
+        (employee) => employee.id !== recommendedCandidate.employeeId,
+      )
+    : filteredAssignableEmployees
+
   return (
     <div className="space-y-4">
       <section className="space-y-3">
@@ -853,12 +1137,45 @@ function OpenAssignmentControls({
         {recommendation ? (
           recommendation.candidates.length > 0 ? (
             <div className="space-y-3">
-              {recommendation.candidates.map((candidate) => (
-                <RecommendationCandidateCard
-                  candidate={candidate}
-                  key={candidate.employeeId}
+              {recommendedCandidate ? (
+                <RecommendedEmployeeDecisionCard
+                  candidate={recommendedCandidate}
+                  disabled={isDecidingRecommendation}
+                  onAcceptRecommendation={handleAcceptRecommendation}
+                  onChooseAnotherEmployee={handleChooseAnotherEmployee}
+                  recommendation={recommendation}
                 />
-              ))}
+              ) : null}
+
+              {recommendationDecisionMode === 'override' ? (
+                <RecommendationOverrideControls
+                  disabled={isDecidingRecommendation}
+                  employees={alternativeEmployees}
+                  onConfirmOverride={handleConfirmRecommendationOverride}
+                  onOverrideNoteChange={setOverrideNote}
+                  onOverrideReasonChange={setOverrideReason}
+                  onSearchChange={setAssignmentSearch}
+                  onToggleEmployee={toggleRecommendationEmployeeSelection}
+                  overrideNote={overrideNote}
+                  overrideReason={overrideReason}
+                  searchValue={assignmentSearch}
+                  selectedEmployeeId={selectedRecommendationEmployeeId}
+                />
+              ) : null}
+
+              {recommendation.candidates.length > 1 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    Other ranked candidates
+                  </p>
+                  {recommendation.candidates.slice(1).map((candidate) => (
+                    <RecommendationCandidateCard
+                      candidate={candidate}
+                      key={candidate.employeeId}
+                    />
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : (
             <p className="rounded-lg border border-dashed border-border bg-background p-3 text-sm text-muted-foreground">
@@ -871,6 +1188,15 @@ function OpenAssignmentControls({
             and explanation reasons.
           </p>
         )}
+
+        <ActionMessage
+          message={recommendationDecisionErrorMessage}
+          tone="danger"
+        />
+        <ActionMessage
+          message={recommendationDecisionSuccessMessage}
+          tone="success"
+        />
       </section>
 
       <SectionDivider />
@@ -1245,15 +1571,156 @@ const scoreBreakdownLabels: Record<keyof AssignmentScoreBreakdown, string> = {
   workload: 'Workload',
 }
 
+function RecommendedEmployeeDecisionCard({
+  candidate,
+  disabled,
+  onAcceptRecommendation,
+  onChooseAnotherEmployee,
+  recommendation,
+}: {
+  candidate: AssignmentRecommendationCandidate
+  disabled: boolean
+  onAcceptRecommendation: (
+    candidate: AssignmentRecommendationCandidate,
+  ) => Promise<void>
+  onChooseAnotherEmployee: (
+    candidate: AssignmentRecommendationCandidate,
+  ) => void
+  recommendation: AssignmentRecommendation
+}) {
+  return (
+    <article className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.08em] text-primary">
+            Recommended employee
+          </p>
+          <p className="mt-1 text-sm font-semibold text-foreground">
+            #{candidate.rank} {candidate.employeeName}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Engine: {recommendation.algorithmVersion}
+          </p>
+        </div>
+        <span className="inline-flex w-fit rounded-full border border-primary/30 bg-card px-3 py-1 text-xs font-medium text-primary">
+          {candidate.totalScore} pts
+        </span>
+      </div>
+
+      <ScoreBreakdown breakdown={candidate.scoreBreakdown} />
+
+      {candidate.explanationReasons.length > 0 ? (
+        <ul className="mt-4 list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">
+          {candidate.explanationReasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <button
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={disabled}
+          onClick={() => void onAcceptRecommendation(candidate)}
+          type="button"
+        >
+          {disabled ? 'Confirming...' : 'Accept Recommendation'}
+        </button>
+        <button
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={disabled}
+          onClick={() => onChooseAnotherEmployee(candidate)}
+          type="button"
+        >
+          Choose Another Employee
+        </button>
+      </div>
+    </article>
+  )
+}
+
+function RecommendationOverrideControls({
+  disabled,
+  employees,
+  onConfirmOverride,
+  onOverrideNoteChange,
+  onOverrideReasonChange,
+  onSearchChange,
+  onToggleEmployee,
+  overrideNote,
+  overrideReason,
+  searchValue,
+  selectedEmployeeId,
+}: {
+  disabled: boolean
+  employees: UserProfile[]
+  onConfirmOverride: () => Promise<void>
+  onOverrideNoteChange: (value: string) => void
+  onOverrideReasonChange: (value: AssignmentOverrideReason | '') => void
+  onSearchChange: (value: string) => void
+  onToggleEmployee: (employeeId: string) => void
+  overrideNote: string
+  overrideReason: AssignmentOverrideReason | ''
+  searchValue: string
+  selectedEmployeeId: string
+}) {
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-background p-3">
+      <SectionHeading
+        description="Choose one eligible employee and record why the recommendation changed."
+        title="Override Recommendation"
+      />
+      <EmployeeSelectionList
+        disabled={disabled}
+        employees={employees}
+        onSearchChange={onSearchChange}
+        onToggleEmployee={onToggleEmployee}
+        searchValue={searchValue}
+        selectedEmployeeIds={selectedEmployeeId ? [selectedEmployeeId] : []}
+      />
+      <select
+        className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={disabled}
+        onChange={(event) =>
+          onOverrideReasonChange(
+            event.target.value as AssignmentOverrideReason | '',
+          )
+        }
+        value={overrideReason}
+      >
+        <option value="">Select override reason</option>
+        {ASSIGNMENT_OVERRIDE_REASONS.map((reason) => (
+          <option key={reason} value={reason}>
+            {reason}
+          </option>
+        ))}
+      </select>
+      {overrideReason === 'Other' ? (
+        <textarea
+          className="min-h-20 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={disabled}
+          onChange={(event) => onOverrideNoteChange(event.target.value)}
+          placeholder="Optional note"
+          value={overrideNote}
+        />
+      ) : null}
+      <button
+        className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={!selectedEmployeeId || !overrideReason || disabled}
+        onClick={() => void onConfirmOverride()}
+        type="button"
+      >
+        {disabled ? 'Confirming...' : 'Confirm Assignment'}
+      </button>
+    </div>
+  )
+}
+
 function RecommendationCandidateCard({
   candidate,
 }: {
   candidate: AssignmentRecommendationCandidate
 }) {
-  const breakdownEntries = Object.entries(candidate.scoreBreakdown) as Array<
-    [keyof AssignmentScoreBreakdown, number]
-  >
-
   return (
     <article className="rounded-lg border border-border bg-background p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1270,21 +1737,7 @@ function RecommendationCandidateCard({
         </span>
       </div>
 
-      <div className="mt-4 grid gap-2">
-        {breakdownEntries.map(([scoreKey, scoreValue]) => (
-          <div
-            className="grid grid-cols-[minmax(80px,1fr)_48px] gap-3 text-xs"
-            key={scoreKey}
-          >
-            <span className="text-muted-foreground">
-              {scoreBreakdownLabels[scoreKey]}
-            </span>
-            <span className="text-right font-medium text-foreground">
-              {scoreValue}
-            </span>
-          </div>
-        ))}
-      </div>
+      <ScoreBreakdown breakdown={candidate.scoreBreakdown} />
 
       <ul className="mt-4 list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">
         {candidate.explanationReasons.map((reason) => (
@@ -1292,6 +1745,34 @@ function RecommendationCandidateCard({
         ))}
       </ul>
     </article>
+  )
+}
+
+function ScoreBreakdown({
+  breakdown,
+}: {
+  breakdown: AssignmentScoreBreakdown
+}) {
+  const breakdownEntries = Object.entries(breakdown) as Array<
+    [keyof AssignmentScoreBreakdown, number]
+  >
+
+  return (
+    <div className="mt-4 grid gap-2">
+      {breakdownEntries.map(([scoreKey, scoreValue]) => (
+        <div
+          className="grid grid-cols-[minmax(80px,1fr)_48px] gap-3 text-xs"
+          key={scoreKey}
+        >
+          <span className="text-muted-foreground">
+            {scoreBreakdownLabels[scoreKey]}
+          </span>
+          <span className="text-right font-medium text-foreground">
+            {scoreValue}
+          </span>
+        </div>
+      ))}
+    </div>
   )
 }
 
