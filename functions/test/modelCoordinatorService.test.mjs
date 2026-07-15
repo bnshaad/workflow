@@ -92,6 +92,29 @@ test('accepts only the fixed workforce intent enum from a fake provider', async 
   )
 })
 
+test('rejects critical operational mutations before calling the model', async () => {
+  let modelCalls = 0
+  const service = createModelCoordinatorService({
+    async generateJson() {
+      modelCalls += 1
+      return {
+        confidence: 0.99,
+        intent: 'show_overdue_jobs',
+        requiresClarification: false,
+      }
+    },
+  })
+
+  const result = await service.classifyIntent({
+    message: 'Cancel every overdue job.',
+    uiContext: 'jobs',
+  })
+
+  assert.equal(modelCalls, 0)
+  assert.equal(result.intent, 'unsupported')
+  assert.equal(result.requiresClarification, false)
+})
+
 test('rejects malformed classifications and invalid draft fields', async () => {
   const malformedClassification = createModelCoordinatorService(
     fakeProvider({ intent: 'unknown_tool' }),

@@ -6,10 +6,10 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  ListFilter,
   Plus,
   RefreshCcw,
   UserPlus,
-  UsersRound,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
@@ -24,7 +24,13 @@ import {
   type DashboardSummary,
   type RecentDashboardActivity,
 } from '@/services/dashboard'
+import { workflowCoordinator } from '@/services/coordinator'
 import { JobStatuses, JOB_STATUS_LABELS, type JobStatus } from '@/types'
+import type {
+  OperationsAttentionItem,
+  OperationsIntelligenceResult,
+  OperationsIntent,
+} from '../../../../shared/operationsIntelligence.ts'
 
 type MetricItem = {
   icon: ComponentType<SVGProps<SVGSVGElement>>
@@ -43,8 +49,6 @@ type ActionNeededItem = {
   label: string
   tone: 'danger' | 'default' | 'primary' | 'warning'
 }
-
-const HIGH_WORKLOAD_THRESHOLD = 3
 
 const statusMetricOrder: JobStatus[] = [
   JobStatuses.Open,
@@ -80,6 +84,11 @@ export function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
+  const [operationsError, setOperationsError] = useState('')
+  const [operationsInsight, setOperationsInsight] =
+    useState<OperationsIntelligenceResult | null>(null)
+  const [operationsIntent, setOperationsIntent] =
+    useState<OperationsIntent | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -132,16 +141,49 @@ export function DashboardPage() {
   }, [summary])
   const canCreateJobs = profile ? canCreateJob(profile) : false
 
+  async function loadOperationsInsight(
+    intent: Exclude<OperationsIntent, 'explain_job_attention_flag'>,
+    message: string,
+  ) {
+    if (!profile) return
+
+    setOperationsIntent(intent)
+    setOperationsError('')
+
+    try {
+      const response = await workflowCoordinator.handle(profile, {
+        message,
+        uiContext: 'dashboard',
+      })
+
+      if (
+        response.kind !== 'result' ||
+        !isOperationsIntelligenceResult(response.data, intent)
+      ) {
+        throw new Error('The operations request was not completed.')
+      }
+
+      setOperationsInsight(response.data)
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Operations insight failed to load.', error)
+      }
+      setOperationsError('Unable to load this operations view. Try again.')
+    } finally {
+      setOperationsIntent(null)
+    }
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
-        title="Dashboard"
+        title="Today"
         description={formatDashboardContext(new Date())}
         actions={
           <>
             {canCreateJobs ? (
               <Link
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 sm:w-auto"
+                className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 sm:w-auto"
                 to="/jobs/create"
               >
                 <Plus aria-hidden="true" className="size-4" />
@@ -149,10 +191,10 @@ export function DashboardPage() {
               </Link>
             ) : null}
             <Link
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-5 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 sm:w-auto"
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 sm:w-auto"
               to="/jobs"
             >
-              View Open Jobs
+              Open jobs
               <ArrowRight aria-hidden="true" className="size-4" />
             </Link>
           </>
@@ -169,39 +211,231 @@ export function DashboardPage() {
         <>
           <ActionNeededPanel items={actionNeededItems} />
 
+          <OperationsInsightPanel
+            errorMessage={operationsError}
+            insight={operationsInsight}
+            loadingIntent={operationsIntent}
+            onSelect={loadOperationsInsight}
+          />
+
           <section
             aria-labelledby="job-status-overview-heading"
-            className="space-y-3"
+            className="space-y-2.5"
           >
             <div>
               <h2
                 className="text-base font-semibold text-foreground"
                 id="job-status-overview-heading"
               >
-                Job Status Overview
+                Jobs
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Current job counts by operational state.
-              </p>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+            <div className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
               {metrics.map((metric) => (
                 <MetricCard key={metric.label} {...metric} />
               ))}
             </div>
           </section>
 
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             <EmployeeWorkload summary={summary} />
             <RecentActivity summary={summary} />
           </div>
         </>
       ) : (
-        <section className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
-          No dashboard data is available yet.
+        <section className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          Dashboard data is not available.
         </section>
       )}
     </div>
+  )
+}
+
+const operationsCommands: Array<{
+  intent: Exclude<OperationsIntent, 'explain_job_attention_flag'>
+  label: string
+  message: string
+}> = [
+  {
+    intent: 'show_jobs_requiring_attention',
+    label: 'Needs attention',
+    message: 'Show jobs requiring attention',
+  },
+  {
+    intent: 'show_overdue_jobs',
+    label: 'Overdue',
+    message: 'Show overdue jobs',
+  },
+  {
+    intent: 'show_workload_distribution',
+    label: 'Workload',
+    message: 'Show workload distribution',
+  },
+  {
+    intent: 'summarize_open_operations',
+    label: 'Open summary',
+    message: 'Summarize open operations',
+  },
+]
+
+function OperationsInsightPanel({
+  errorMessage,
+  insight,
+  loadingIntent,
+  onSelect,
+}: {
+  errorMessage: string
+  insight: OperationsIntelligenceResult | null
+  loadingIntent: OperationsIntent | null
+  onSelect: (
+    intent: Exclude<OperationsIntent, 'explain_job_attention_flag'>,
+    message: string,
+  ) => void
+}) {
+  const attentionItems = insight ? getAttentionItems(insight) : []
+
+  return (
+    <section
+      aria-labelledby="operations-insight-heading"
+      className="overflow-hidden rounded-lg border border-border bg-card"
+    >
+      <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <ListFilter aria-hidden="true" className="size-4 text-muted-foreground" />
+            <h2
+              className="text-base font-semibold text-foreground"
+              id="operations-insight-heading"
+            >
+              Operations insight
+            </h2>
+          </div>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Read-only views from current job data.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Operations views">
+          {operationsCommands.map((command) => (
+            <button
+              className="inline-flex h-8 items-center rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-wait disabled:opacity-60"
+              disabled={loadingIntent !== null}
+              key={command.intent}
+              onClick={() => onSelect(command.intent, command.message)}
+              type="button"
+            >
+              {loadingIntent === command.intent ? 'Loading…' : command.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {errorMessage ? (
+        <p className="border-t border-border px-4 py-3 text-sm text-destructive" role="alert">
+          {errorMessage}
+        </p>
+      ) : insight ? (
+        <div className="border-t border-border">
+          <div className="space-y-1 px-4 py-3 text-sm text-foreground">
+            {insight.summary.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
+          {attentionItems.length > 0 ? (
+            <div className="divide-y divide-border border-t border-border">
+              {attentionItems.map((item) => (
+                <OperationsAttentionRow item={item} key={item.jobId} />
+              ))}
+            </div>
+          ) : null}
+          {insight.data.intent === 'show_workload_distribution' ? (
+            <div className="divide-y divide-border border-t border-border">
+              {insight.data.employees.map((employee) => (
+                <div
+                  className="flex items-center justify-between gap-4 px-4 py-2.5"
+                  key={employee.employeeId}
+                >
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {employee.displayName}
+                  </span>
+                  <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                    {employee.assignedJobCount} assigned / {employee.inProgressJobCount} in progress
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <p className="border-t border-border px-4 py-3 text-sm text-muted-foreground">
+          Choose a view to inspect current operations.
+        </p>
+      )}
+    </section>
+  )
+}
+
+function OperationsAttentionRow({ item }: { item: OperationsAttentionItem }) {
+  return (
+    <div className="flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <Link
+          className="truncate text-sm font-medium text-foreground hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          to={`/jobs/${item.jobId}`}
+        >
+          {item.title}
+        </Link>
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {item.attentionReasons.map((reason) => (
+            <span
+              className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+              key={reason}
+            >
+              {formatAttentionReason(reason)}
+            </span>
+          ))}
+        </div>
+      </div>
+      <Link
+        className="shrink-0 text-sm font-medium text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+        to={`/jobs/${item.jobId}`}
+      >
+        Open job
+      </Link>
+    </div>
+  )
+}
+
+function getAttentionItems(insight: OperationsIntelligenceResult) {
+  const data = insight.data
+  if ('items' in data) return data.items
+  if (data.intent === 'summarize_open_operations') return data.attentionItems
+  if (data.intent === 'explain_job_attention_flag') return [data.item]
+  return []
+}
+
+function formatAttentionReason(reason: OperationsAttentionItem['attentionReasons'][number]) {
+  switch (reason) {
+    case 'urgent_unassigned':
+      return 'Priority · unassigned'
+    case 'assigned_not_started_after_due':
+      return 'Assigned · past due'
+    case 'in_progress_overdue':
+      return 'In progress · past due'
+    case 'overdue':
+      return 'Overdue'
+  }
+}
+
+function isOperationsIntelligenceResult(
+  value: unknown,
+  intent: OperationsIntent,
+): value is OperationsIntelligenceResult {
+  if (!value || typeof value !== 'object') return false
+  const result = value as OperationsIntelligenceResult
+  return (
+    result.intent === intent &&
+    result.data?.intent === intent &&
+    Array.isArray(result.summary)
   )
 }
 
@@ -233,10 +467,6 @@ function buildMetricItems(summary: DashboardSummary): MetricItem[] {
 }
 
 function buildActionNeededItems(summary: DashboardSummary): ActionNeededItem[] {
-  const overloadedEmployeeCount = summary.employeeWorkload.filter(
-    (employee) => employee.activeJobCount >= HIGH_WORKLOAD_THRESHOLD,
-  ).length
-
   const items: ActionNeededItem[] = [
     {
       actionLabel: 'View Jobs',
@@ -257,15 +487,6 @@ function buildActionNeededItems(summary: DashboardSummary): ActionNeededItem[] {
       tone: 'danger',
     },
     {
-      actionHref: '#employee-workload',
-      actionLabel: 'Review Workload',
-      count: overloadedEmployeeCount,
-      description: `Employees have ${HIGH_WORKLOAD_THRESHOLD} or more active jobs.`,
-      icon: UsersRound,
-      label: 'High employee workload',
-      tone: 'primary',
-    },
-    {
       actionLabel: 'View Jobs',
       actionTo: '/jobs',
       count: summary.actionNeeded.openUnassignedJobs,
@@ -283,9 +504,9 @@ function ActionNeededPanel({ items }: { items: ActionNeededItem[] }) {
   return (
     <section
       aria-labelledby="action-needed-heading"
-      className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
+      className="rounded-lg border border-border bg-card"
     >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2
             className="text-base font-semibold text-foreground"
@@ -293,9 +514,7 @@ function ActionNeededPanel({ items }: { items: ActionNeededItem[] }) {
           >
             Action Needed
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Operational items that may need manager attention.
-          </p>
+          <p className="mt-0.5 text-sm text-muted-foreground">Jobs that need a decision.</p>
         </div>
         <StatusBadge tone={items.length > 0 ? 'warning' : 'success'}>
           {items.length > 0 ? `${items.length} active` : 'Clear'}
@@ -303,14 +522,14 @@ function ActionNeededPanel({ items }: { items: ActionNeededItem[] }) {
       </div>
 
       {items.length > 0 ? (
-        <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
+        <div className="divide-y divide-border border-t border-border">
           {items.map((item) => (
             <ActionNeededCard item={item} key={item.label} />
           ))}
         </div>
       ) : (
-        <div className="mt-4 rounded-lg border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-          No urgent operational issues right now.
+        <div className="border-t border-border px-4 py-3 text-sm text-muted-foreground">
+          Nothing needs attention right now.
         </div>
       )}
     </section>
@@ -320,18 +539,18 @@ function ActionNeededPanel({ items }: { items: ActionNeededItem[] }) {
 function ActionNeededCard({ item }: { item: ActionNeededItem }) {
   const Icon = item.icon
   const toneClass = {
-    danger: 'border-destructive/20 bg-destructive/5 text-destructive',
-    default: 'border-border bg-background text-foreground',
-    primary: 'border-primary/20 bg-primary/5 text-primary',
-    warning: 'border-amber-500/20 bg-amber-500/5 text-amber-600',
+    danger: 'text-destructive',
+    default: 'text-muted-foreground',
+    primary: 'text-primary',
+    warning: 'text-amber-600',
   }[item.tone]
 
   return (
     <article
-      className={`grid gap-3 rounded-lg border p-3.5 transition-shadow hover:shadow-sm sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:items-center ${toneClass}`}
+      className={`grid gap-3 px-4 py-3 hover:bg-background sm:grid-cols-[40px_minmax(0,1fr)_auto] sm:items-center ${toneClass}`}
     >
       <div className="flex items-center gap-3 sm:block">
-        <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-card/80 text-lg font-semibold tracking-tight">
+        <span className="inline-flex size-8 shrink-0 items-center justify-center text-lg font-semibold tracking-tight">
           {item.count}
         </span>
         <div className="min-w-0 sm:hidden">
@@ -358,7 +577,7 @@ function ActionNeededCard({ item }: { item: ActionNeededItem }) {
 
 function ActionNeededLink({ item }: { item: ActionNeededItem }) {
   const className =
-    'inline-flex h-8 w-fit items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30'
+    'inline-flex h-8 w-fit items-center justify-center gap-1.5 rounded-md px-2 text-sm font-medium text-primary transition-colors hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary/30'
 
   if (item.actionHref) {
     return (
@@ -382,17 +601,15 @@ function EmployeeWorkload({ summary }: { summary: DashboardSummary }) {
 
   return (
     <section
-      className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
+      className="overflow-hidden rounded-lg border border-border bg-card"
       id="employee-workload"
     >
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div>
           <h2 className="text-base font-semibold text-foreground">
             Employee Workload
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Assigned and in-progress jobs.
-          </p>
+          <p className="mt-0.5 text-sm text-muted-foreground">Assigned and in progress.</p>
         </div>
         <Link
           className="shrink-0 text-sm font-medium text-primary transition hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -402,11 +619,11 @@ function EmployeeWorkload({ summary }: { summary: DashboardSummary }) {
         </Link>
       </div>
 
-      <div className="mt-4 space-y-2">
+      <div className="divide-y divide-border">
         {workload.length > 0 ? (
           workload.map((employee) => (
             <div
-              className="flex items-center justify-between gap-4 rounded-md border border-border bg-background px-3 py-2"
+              className="flex items-center justify-between gap-4 px-4 py-2.5 hover:bg-background"
               key={employee.employeeId}
             >
               <div className="min-w-0">
@@ -418,14 +635,14 @@ function EmployeeWorkload({ summary }: { summary: DashboardSummary }) {
                   {employee.inProgressJobCount} in progress
                 </p>
               </div>
-              <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-card text-sm font-semibold text-foreground">
+              <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
                 {employee.activeJobCount}
               </span>
             </div>
           ))
         ) : (
-          <p className="rounded-md border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-            No active employee workload yet.
+          <p className="px-4 py-3 text-sm text-muted-foreground">
+            No active assignments.
           </p>
         )}
       </div>
@@ -437,15 +654,13 @@ function RecentActivity({ summary }: { summary: DashboardSummary }) {
   const recentActivities = summary.recentActivities.slice(0, 5)
 
   return (
-    <section className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
-      <div className="flex items-center justify-between gap-3">
+    <section className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div>
           <h2 className="text-base font-semibold text-foreground">
             Recent Activity
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Latest job lifecycle events.
-          </p>
+          <p className="mt-0.5 text-sm text-muted-foreground">Latest job changes.</p>
         </div>
         <Link
           className="shrink-0 text-sm font-medium text-primary transition hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -455,14 +670,14 @@ function RecentActivity({ summary }: { summary: DashboardSummary }) {
         </Link>
       </div>
 
-      <div className="mt-4 space-y-2">
+      <div className="divide-y divide-border">
         {recentActivities.length > 0 ? (
           recentActivities.map((activity) => (
             <CompactActivityItem activity={activity} key={activity.id} />
           ))
         ) : (
-          <p className="rounded-md border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-            No recent job activity yet.
+          <p className="px-4 py-3 text-sm text-muted-foreground">
+            No recent activity.
           </p>
         )}
       </div>
@@ -476,8 +691,8 @@ function CompactActivityItem({
   activity: RecentDashboardActivity
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2">
-      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-card text-muted-foreground">
+    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-background">
+      <span className="inline-flex size-7 shrink-0 items-center justify-center text-muted-foreground">
         <ActivityIcon type={activity.activityType} />
       </span>
       <div className="min-w-0">
@@ -513,10 +728,10 @@ function ActivityIcon({
 
 function DashboardLoadingState() {
   return (
-    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+    <section className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
       {Array.from({ length: 6 }, (_, index) => (
         <div
-          className="min-h-[116px] animate-pulse rounded-xl border border-border bg-card p-4 shadow-sm"
+          className="min-h-[100px] animate-pulse bg-card p-3.5"
           key={index}
         >
           <div className="h-4 w-28 rounded-full bg-muted" />
@@ -554,7 +769,7 @@ function formatActivityTime(timestamp: { toDate: () => Date }) {
 }
 
 function formatDashboardContext(date: Date) {
-  return `Operational snapshot for ${new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(undefined, {
     dateStyle: 'full',
-  }).format(date)}.`
+  }).format(date)
 }

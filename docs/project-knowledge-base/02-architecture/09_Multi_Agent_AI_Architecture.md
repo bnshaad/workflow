@@ -25,7 +25,7 @@ User request
 
 ## 3. Agents
 
-The boundaries below are the approved target architecture. The active specialist slices are Job Intelligence and read-only Workforce Intelligence. Existing operations routes remain deterministic coordinator tools; Operations Intelligence is the next specialist phase.
+The boundaries below are the approved target architecture. The active specialist slices are Job Intelligence, read-only Workforce Intelligence, and bounded read-only Operations Intelligence.
 
 ### Coordinator
 
@@ -55,9 +55,12 @@ The coordinator must not directly write to Firestore.
 
 ### Operations Intelligence Agent
 
-- Summarize authorized operational data
-- Detect overdue jobs, urgent unassigned work, workload imbalance, and similar rule-backed conditions
-- Prefer deterministic queries and thresholds over LLM-only conclusions
+- Summarize authorized, tenant-scoped operational data from one trusted callable
+- Report urgent unassigned jobs, overdue jobs, deterministic attention flags, ranked workload counts, and open-operation counts
+- Explain attention flags using only returned rule codes
+- Never claim overload because no approved threshold exists
+- Never predict delay, risk, failure, or burnout
+- Never write, prepare proposals, notify users, or change job or employee state
 
 ### Knowledge Agent
 
@@ -144,18 +147,26 @@ A conversational "yes" without an active, displayed, unexpired proposal is not s
 
 ## 9. Verified implementation boundary
 
-The repository currently contains a typed TypeScript coordinator foundation in the manager web application. Exact supported commands use fixed deterministic routes with zero model calls:
+The repository currently contains a typed TypeScript coordinator foundation in the manager web application. Exact supported commands use fixed deterministic routes with zero model calls. Operations Intelligence supports:
 
 - Show urgent unassigned jobs
-- Summarize open jobs
-- Show employee workload ordered by active jobs
+- Show overdue jobs
+- Show jobs requiring attention
+- Show workforce workload distribution
+- Summarize open operations
+- Explain why the current job is flagged
+
+Other implemented coordinator commands remain:
+
 - Recommend an employee for the current job
 - Explain the current top recommendation
 - Compare the top two candidates
 - Prepare an editable job draft
 - Prepare a proposed create-job action from an editable structured draft
 
-When no exact route matches, the coordinator may make one server-side Gemini classification call. The fixed model classification allowlist includes the existing operations and drafting intents plus `recommend_employee_for_job`, `explain_recommendation`, and `compare_top_candidates`. The returned intent must pass a strict client and server contract, meet the confidence threshold, and map to a fixed allowlisted tool. Low-confidence, malformed, clarifying, and unsupported results fall back to existing screens. The model cannot select arbitrary tools or functions.
+When no exact route matches, the coordinator may make one server-side Gemini classification call. The fixed model classification allowlist includes the six operations intents and drafting intents plus `recommend_employee_for_job`, `explain_recommendation`, and `compare_top_candidates`. The returned intent must pass a strict client and server contract, meet the confidence threshold, and map to a fixed allowlisted tool. Low-confidence, malformed, clarifying, and unsupported results fall back to existing screens. The model cannot select arbitrary tools or functions. An operations request invokes at most one classifier and one trusted operations tool, with no recursive specialist calls.
+
+The trusted Operations Intelligence callable reloads the active manager or admin profile and derives the tenant from it. It reads at most the latest 200 active jobs and, for workload, at most 100 active employee profiles; public attention and workload lists are capped at 10. High or Urgent open jobs with no assignment are urgent unassigned. Active jobs past due are overdue unless completed or cancelled. Assigned-past-due and in-progress-past-due are explicit attention reasons. Workload counts only assigned and in-progress jobs. Summaries are deterministic formatting over the returned contract and never add missing facts, overload thresholds, predictions, or risk language.
 
 The first Workforce Intelligence slice is read-only. It requires a current job ID, invokes `getWorkforceRecommendation` once, and presents only candidate names, ranks, scores, engine reasons, and warnings returned by `rule-based-v1`. Candidate comparison and explanation are deterministic formatting steps; the model does not calculate scores, add facts, alter ranking, persist a recommendation, create a proposal, or execute assignment.
 
@@ -165,7 +176,7 @@ The Gemini provider uses the single server-side model `gemini-3.1-flash-lite`. D
 
 The job-creation proposal is stored in `actionProposals`, binds to the requesting user and organization, expires after five minutes, and preserves a payload hash. Confirmation calls the `confirmCreateJobProposal` Firebase callable by proposal ID only. The callable reloads trusted profile and proposal data, atomically claims `processing`, validates the canonical payload, writes the job and audit record through the Admin SDK, and records `completed`, `failed`, `expired`, or `reconciliation_required` as appropriate. The proposal ID is the deterministic job ID, so retries return the completed job rather than creating another.
 
-No conversational UI, RAG, knowledge retrieval, Genkit setup, assignment execution, model-based authorization, or autonomous critical-action execution is implemented in this phase. The Gemini provider is implemented behind a Firebase Secret and a local emulator-only opt-in; no public deployment exists.
+No broad conversational UI, RAG, knowledge retrieval, Genkit setup, assignment execution, model-based authorization, or autonomous critical-action execution is implemented in this phase. The dashboard contains only a compact operations insight panel with fixed read-only views. The Gemini provider is implemented behind a Firebase Secret and a local emulator-only opt-in; no public deployment exists.
 
 Workflow remains on Spark with Auth, Firestore, and Functions emulators. Public deployment and Blaze are deferred until public access is required. Local real-Gemini testing requires gitignored `functions/.secret.local`, explicit `WORKFLOW_USE_REAL_GEMINI=true`, and `npm run test:ai:local`; the command refuses CI and non-emulator endpoints and uses synthetic text only. Without opt-in, model callables fail closed, and automated tests use fake providers. The controlled local smoke passed with all classification scenarios, complete and incomplete drafts, concise metadata-only output, and zero protected collection changes.
 
@@ -177,13 +188,13 @@ The current model boundary reuses the existing minimal trusted boundary:
 - Firestore for operational data
 - Firebase Storage for approved documents and proof
 - Existing TypeScript services for business rules
-- Firebase callable Functions for model classification, draft extraction, and trusted read-only workforce ranking
+- Firebase callable Functions for model classification, draft extraction, trusted read-only workforce ranking, and trusted read-only operations insight
 - `GEMINI_API_KEY` as a Firebase Secret bound only to those callables
 - An approved model provider for language understanding only when deterministic routing is insufficient
 
 Do not place privileged multi-agent tools or secrets directly in the browser.
 
-The durable proposal ledger retains its server-verified payload hash, lifecycle, and idempotency key for create-job execution. Each additional critical action still requires its own validation, audit, lifecycle, and reconciliation design before it may use this boundary. Operations Intelligence is the next specialist phase; the Knowledge Agent and any broader approved coordinator UI remain future work.
+The durable proposal ledger retains its server-verified payload hash, lifecycle, and idempotency key for create-job execution. Each additional critical action still requires its own validation, audit, lifecycle, and reconciliation design before it may use this boundary. The Knowledge Agent and any broader approved coordinator UI remain future work.
 
 ## 11. Evaluation
 

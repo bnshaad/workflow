@@ -1,20 +1,10 @@
-import { JobPriorities, JobStatuses } from '../../types'
-import type {
-  JobDraftSuggestion,
-  OpenJobsSummary,
-  UrgentUnassignedJob,
-  WorkloadSnapshot,
-} from '../../types/coordinator'
-import { getDashboardJobMetrics, getEmployeeWorkloadSummary } from '../dashboard'
+import type { JobDraftSuggestion } from '../../types/coordinator'
 import { jobUnderstandingService } from '../ai'
 import { modelCoordinatorService } from '../ai'
 import { actionProposalService } from '../actionProposals'
-import { jobService } from '../jobs'
+import { operationsIntelligenceService } from '../operations'
 import { workforceRecommendationService } from '../recommendations'
 import type { CoordinatorTools } from './workflowCoordinator'
-
-const MAX_URGENT_UNASSIGNED_JOBS = 20
-const MAX_WORKLOAD_EMPLOYEES = 10
 
 export const workflowCoordinatorTools: CoordinatorTools = {
   async classifyCoordinatorIntent(profile, request) {
@@ -37,44 +27,8 @@ export const workflowCoordinatorTools: CoordinatorTools = {
     return toJobDraftSuggestion(suggestion)
   },
 
-  async getOpenJobsSummary(profile): Promise<OpenJobsSummary> {
-    const metrics = await getDashboardJobMetrics(profile, profile.organizationId)
-
-    return {
-      openJobCount: metrics.statusCounts[JobStatuses.Open],
-      totalJobCount: metrics.totalJobs,
-    }
-  },
-
-  async getUrgentUnassignedJobs(profile): Promise<UrgentUnassignedJob[]> {
-    const jobs = await jobService.listJobs(profile, profile.organizationId, {
-      limit: MAX_URGENT_UNASSIGNED_JOBS,
-    })
-
-    return jobs
-      .filter(
-        (job) =>
-          job.status === JobStatuses.Open &&
-          job.priority === JobPriorities.Urgent &&
-          job.assignedEmployeeIds.length === 0,
-      )
-      .slice(0, MAX_URGENT_UNASSIGNED_JOBS)
-      .map((job) => ({
-        dueDate: job.dueDate?.toDate().toISOString() ?? null,
-        id: job.id,
-        priority: job.priority,
-        title: job.title,
-      }))
-  },
-
-  async getWorkloadSnapshot(profile): Promise<WorkloadSnapshot> {
-    const workload = await getEmployeeWorkloadSummary(profile, profile.organizationId)
-
-    return {
-      employees: workload.slice(0, MAX_WORKLOAD_EMPLOYEES),
-      note:
-        'No organization workload threshold is configured. Employees are shown by active job count.',
-    }
+  async getOperationsInsight(profile, intent, jobId) {
+    return operationsIntelligenceService.getInsight(profile, intent, jobId)
   },
 
   async getWorkforceRecommendation(profile, jobId) {

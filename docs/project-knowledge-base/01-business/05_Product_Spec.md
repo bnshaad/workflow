@@ -117,6 +117,7 @@ Contents:
 - Open Issues
 - Recent Activity
 - Quick Actions
+- Compact read-only operations insight views for attention, overdue work, workload distribution, and open-operation counts
 
 Decision Support may surface dashboard insights and operational recommendations, but it does not replace dashboard content.
 

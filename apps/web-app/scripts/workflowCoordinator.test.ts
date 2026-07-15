@@ -8,6 +8,11 @@ import type {
   UserProfile,
 } from '../src/types/index.ts'
 import type { WorkforceRecommendationResult } from '../../../shared/workforceIntelligence.ts'
+import type {
+  OperationsAttentionItem,
+  OperationsIntent,
+  OperationsToolResult,
+} from '../../../shared/operationsIntelligence.ts'
 import {
   WorkflowCoordinator,
   type CoordinatorTools,
@@ -78,6 +83,7 @@ function createTools() {
   let classificationCalls = 0
   let confirmationCalls = 0
   let preparationCalls = 0
+  let operationsCalls = 0
   let workforceCalls = 0
   const tools: CoordinatorTools = {
     async classifyCoordinatorIntent() {
@@ -115,31 +121,9 @@ function createTools() {
         title: '',
       }
     },
-    async getOpenJobsSummary() {
-      return { openJobCount: 3, totalJobCount: 8 }
-    },
-    async getUrgentUnassignedJobs() {
-      return [
-        {
-          dueDate: null,
-          id: 'job-urgent',
-          priority: 'Urgent',
-          title: 'Urgent repair',
-        },
-      ]
-    },
-    async getWorkloadSnapshot() {
-      return {
-        employees: [
-          {
-            activeJobCount: 4,
-            displayName: 'Worker One',
-            employeeId: 'worker-1',
-            inProgressJobCount: 1,
-          },
-        ],
-        note: 'No threshold configured.',
-      }
+    async getOperationsInsight(_profile, intent) {
+      operationsCalls += 1
+      return operationsResult(intent)
     },
     async getWorkforceRecommendation(_profile, jobId) {
       workforceCalls += 1
@@ -151,8 +135,71 @@ function createTools() {
     getClassificationCalls: () => classificationCalls,
     getConfirmationCalls: () => confirmationCalls,
     getPreparationCalls: () => preparationCalls,
+    getOperationsCalls: () => operationsCalls,
     getWorkforceCalls: () => workforceCalls,
     tools,
+  }
+}
+
+function operationsResult(intent: OperationsIntent): OperationsToolResult {
+  const base = {
+    generatedAt: '2026-07-15T00:00:00.000Z',
+    isTruncated: false,
+    sourceJobLimit: 200,
+  }
+
+  if (intent === 'show_workload_distribution') {
+    return {
+      ...base,
+      employeeIsTruncated: false,
+      employees: [],
+      intent,
+      note: 'No organization workload threshold is configured.',
+      sourceEmployeeLimit: 100,
+    }
+  }
+
+  if (intent === 'summarize_open_operations') {
+    return {
+      ...base,
+      attentionItems: [],
+      counts: {
+        assigned: 2,
+        draft: 1,
+        inProgress: 1,
+        open: 3,
+        overdue: 1,
+        urgentUnassigned: 1,
+      },
+      intent,
+    }
+  }
+
+  if (intent === 'explain_job_attention_flag') {
+    return {
+      ...base,
+      intent,
+      item: attentionItem(),
+      sourceJobLimit: 1,
+    }
+  }
+
+  return {
+    ...base,
+    intent,
+    items: intent === 'show_urgent_unassigned_jobs' ? [attentionItem()] : [],
+  }
+}
+
+function attentionItem(): OperationsAttentionItem {
+  return {
+    assignedEmployeeCount: 0,
+    attentionReasons: ['urgent_unassigned'],
+    dueDate: null,
+    jobId: 'job-urgent',
+    priority: 'Urgent',
+    status: 'open',
+    title: 'Urgent repair',
   }
 }
 
@@ -192,15 +239,10 @@ function createCoordinator(tools: CoordinatorTools) {
 
 test('routes an exact urgent-jobs command to only the operations tool', async () => {
   const { getClassificationCalls, tools } = createTools()
-  let workloadCalls = 0
-  let urgentCalls = 0
-  tools.getUrgentUnassignedJobs = async () => {
-    urgentCalls += 1
-    return []
-  }
-  tools.getWorkloadSnapshot = async () => {
-    workloadCalls += 1
-    return { employees: [], note: 'No threshold configured.' }
+  const calledIntents: OperationsIntent[] = []
+  tools.getOperationsInsight = async (_profile, intent) => {
+    calledIntents.push(intent)
+    return operationsResult(intent)
   }
   const coordinator = createCoordinator(tools)
 
@@ -212,8 +254,7 @@ test('routes an exact urgent-jobs command to only the operations tool', async ()
   assert.equal(result.kind, 'result')
   assert.equal(result.route.intent, 'show_urgent_unassigned_jobs')
   assert.equal(result.route.agent, 'operations_insight')
-  assert.equal(urgentCalls, 1)
-  assert.equal(workloadCalls, 0)
+  assert.deepEqual(calledIntents, ['show_urgent_unassigned_jobs'])
   assert.equal(getClassificationCalls(), 0)
   assert.equal(result.execution.modelCalls, 0)
   assert.equal(result.execution.toolCalls, 1)
@@ -238,8 +279,7 @@ test('uses a safe fallback for unsupported or low-confidence requests', async ()
 test('uses one validated model classification to invoke only its allowlisted tool', async () => {
   const { tools } = createTools()
   let classificationCalls = 0
-  let urgentCalls = 0
-  let workloadCalls = 0
+  const calledIntents: OperationsIntent[] = []
   tools.classifyCoordinatorIntent = async () => {
     classificationCalls += 1
     return {
@@ -248,13 +288,9 @@ test('uses one validated model classification to invoke only its allowlisted too
       requiresClarification: false,
     } satisfies ModelIntentClassification
   }
-  tools.getUrgentUnassignedJobs = async () => {
-    urgentCalls += 1
-    return []
-  }
-  tools.getWorkloadSnapshot = async () => {
-    workloadCalls += 1
-    return { employees: [], note: 'No threshold configured.' }
+  tools.getOperationsInsight = async (_profile, intent) => {
+    calledIntents.push(intent)
+    return operationsResult(intent)
   }
   const coordinator = createCoordinator(tools)
 
@@ -267,8 +303,7 @@ test('uses one validated model classification to invoke only its allowlisted too
   assert.equal(result.route.intent, 'show_urgent_unassigned_jobs')
   assert.equal(result.execution.modelCalls, 1)
   assert.equal(classificationCalls, 1)
-  assert.equal(urgentCalls, 1)
-  assert.equal(workloadCalls, 0)
+  assert.deepEqual(calledIntents, ['show_urgent_unassigned_jobs'])
 })
 
 test('rejects low-confidence, malformed, and unknown-tool model output safely', async () => {
@@ -276,7 +311,7 @@ test('rejects low-confidence, malformed, and unknown-tool model output safely', 
   const coordinator = createCoordinator(tools)
   tools.classifyCoordinatorIntent = async () => ({
     confidence: 0.4,
-    intent: 'show_open_jobs_summary',
+    intent: 'summarize_open_operations',
     requiresClarification: false,
   })
 
@@ -296,8 +331,8 @@ test('rejects low-confidence, malformed, and unknown-tool model output safely', 
     message: 'What needs attention?',
     uiContext: 'dashboard',
   })
-  assert.equal(unknownTool.kind, 'result')
-  assert.equal(unknownTool.route.toolName, 'get_urgent_unassigned_jobs')
+  assert.equal(unknownTool.kind, 'fallback')
+  assert.equal(unknownTool.execution.toolCalls, 0)
 
   tools.classifyCoordinatorIntent = async () => ({ intent: 'unknown' }) as never
   const malformed = await coordinator.handle(managerProfile, {
@@ -390,10 +425,7 @@ test('rejects an unauthorized coordinator confirmation before calling the adapte
 
 test('invalid tool output falls back without returning unvalidated data', async () => {
   const { tools } = createTools()
-  tools.getOpenJobsSummary = async () => ({
-    openJobCount: 'three',
-    totalJobCount: 8,
-  }) as never
+  tools.getOperationsInsight = async () => ({ intent: 'unknown' }) as never
   const coordinator = createCoordinator(tools)
 
   const result = await coordinator.handle(managerProfile, {
@@ -402,7 +434,7 @@ test('invalid tool output falls back without returning unvalidated data', async 
   })
 
   assert.equal(result.kind, 'fallback')
-  assert.match(result.route.reason, /invalid data/)
+  assert.match(result.route.reason, /invalid data|mismatched intent/)
 })
 
 test('routes a deterministic workforce request to one read-only tool call', async () => {
@@ -434,8 +466,7 @@ test('uses one model classification and one fixed workforce tool', async () => {
       confidence: 0.94,
       intent: 'compare_top_candidates',
       requiresClarification: false,
-      toolName: 'assign_employee',
-    } as never
+    }
   }
   const coordinator = createCoordinator(tools)
 
@@ -483,7 +514,7 @@ test('unrelated and unknown workforce requests never invoke the workforce tool',
     message: 'Summarize open jobs',
     uiContext: 'job_details',
   })
-  assert.equal(unrelated.route.intent, 'show_open_jobs_summary')
+  assert.equal(unrelated.route.intent, 'summarize_open_operations')
   assert.equal(getWorkforceCalls(), 0)
 
   tools.classifyCoordinatorIntent = async () => ({

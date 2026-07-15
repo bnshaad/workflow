@@ -19,6 +19,12 @@ import type { JobActivityType, UserProfile } from '@/types'
 import type { JobPriority } from '@/types/jobPriority'
 import { JobStatuses, type JobStatus } from '@/types/jobStatus'
 import { validateJobStatus } from '@/validators/jobValidator'
+import {
+  buildOperationsWorkloadDistribution,
+  isOverdueOperation,
+  isUrgentUnassignedOperation,
+  type OperationsJobInput,
+} from '../../../../../shared/operationsIntelligence.ts'
 
 const JOBS_COLLECTION = 'jobs'
 const JOB_ACTIVITIES_COLLECTION = 'jobActivities'
@@ -231,12 +237,7 @@ function buildDashboardJobMetrics(
       dueDateJobCount += 1
     }
 
-    if (
-      job.dueDate &&
-      job.dueDate.toMillis() < now &&
-      job.status !== JobStatuses.Completed &&
-      job.status !== JobStatuses.Cancelled
-    ) {
+    if (isOverdueOperation(toOperationsJobInput(job), now)) {
       overdueJobs += 1
     }
   }
@@ -266,19 +267,11 @@ function buildDashboardActionNeededSummary(
       openUnassignedJobs += 1
     }
 
-    if (
-      isOpenUnassigned &&
-      (job.priority === 'Urgent' || job.priority === 'High')
-    ) {
+    if (isUrgentUnassignedOperation(toOperationsJobInput(job))) {
       highPriorityOpenUnassignedJobs += 1
     }
 
-    if (
-      job.dueDate &&
-      job.dueDate.toMillis() < now &&
-      job.status !== JobStatuses.Completed &&
-      job.status !== JobStatuses.Cancelled
-    ) {
+    if (isOverdueOperation(toOperationsJobInput(job), now)) {
       overdueActiveJobs += 1
     }
   }
@@ -294,31 +287,22 @@ function buildEmployeeWorkloadSummary(
   employees: DashboardEmployeeRecord[],
   jobs: DashboardJobRecord[],
 ) {
-  return employees
-    .map((employee) => {
-      const assignedJobs = jobs.filter((job) =>
-        job.assignedEmployeeIds.includes(employee.id),
-      )
+  return buildOperationsWorkloadDistribution(
+    employees,
+    jobs.map(toOperationsJobInput),
+  )
+}
 
-      return {
-        activeJobCount: assignedJobs.filter(
-          (job) =>
-            job.status === JobStatuses.Assigned ||
-            job.status === JobStatuses.InProgress,
-        ).length,
-        assignedJobCount: assignedJobs.filter(
-          (job) => job.status === JobStatuses.Assigned,
-        ).length,
-        displayName: employee.displayName,
-        employeeId: employee.id,
-        inProgressJobCount: assignedJobs.filter(
-          (job) => job.status === JobStatuses.InProgress,
-        ).length,
-      }
-    })
-    .sort((firstEmployee, secondEmployee) => {
-      return secondEmployee.activeJobCount - firstEmployee.activeJobCount
-    })
+function toOperationsJobInput(job: DashboardJobRecord): OperationsJobInput {
+  return {
+    assignedEmployeeIds: job.assignedEmployeeIds,
+    dueAtMillis: job.dueDate?.toMillis() ?? null,
+    id: job.id,
+    isActive: job.isActive,
+    priority: job.priority,
+    status: job.status,
+    title: job.title,
+  }
 }
 
 function buildRecentActivitySummary(

@@ -134,7 +134,7 @@ Decision Support provides:
 Examples:
 
 - Urgent jobs awaiting assignment
-- Workers with high workload
+- Ranked worker workload counts, without an overload claim unless an approved threshold is added
 - Available skilled workers
 - Delayed jobs
 - Frequently overridden recommendation patterns
@@ -204,4 +204,3 @@ The approved specialist boundaries are:
 - Knowledge Retrieval
 
 Adaptive learning in the MVP remains feedback collection and pattern analysis only.
-

@@ -9,6 +9,12 @@ import { hashProposalPayload } from '../../../../../shared/actionProposal.ts'
 
 const VALID_CREATE_JOB_CONTEXTS = new Set(['create_job', 'unknown'])
 const VALID_WORKFORCE_CONTEXTS = new Set(['job_details', 'unknown'])
+const VALID_OPERATIONS_CONTEXTS = new Set([
+  'dashboard',
+  'job_details',
+  'jobs',
+  'unknown',
+])
 
 export const COORDINATOR_LIMITS = {
   classificationConfidenceThreshold: 0.8,
@@ -26,11 +32,7 @@ export const AGENT_TOOL_ALLOWLIST = {
     'prepare_create_job_proposal',
   ],
   knowledge: [],
-  operations_insight: [
-    'get_open_jobs_summary',
-    'get_workload_snapshot',
-    'get_urgent_unassigned_jobs',
-  ],
+  operations_insight: ['get_operations_insight'],
   workforce_intelligence: ['get_workforce_recommendation'],
 } as const
 
@@ -47,27 +49,83 @@ export function routeCoordinatorRequest(
 ): CoordinatorRoute {
   const message = normalizeCommand(request.message)
 
-  if (matches(message, ['show urgent unassigned jobs', 'urgent unassigned jobs'])) {
+  if (
+    VALID_OPERATIONS_CONTEXTS.has(request.uiContext) &&
+    matches(message, ['show urgent unassigned jobs', 'urgent unassigned jobs'])
+  ) {
     return deterministicRoute(
       SupportedCoordinatorIntents.ShowUrgentUnassignedJobs,
       'operations_insight',
-      'get_urgent_unassigned_jobs',
+      'get_operations_insight',
     )
   }
 
-  if (matches(message, ['summarize open jobs', 'show open jobs summary'])) {
+  if (
+    VALID_OPERATIONS_CONTEXTS.has(request.uiContext) &&
+    matches(message, ['show overdue jobs', 'overdue jobs'])
+  ) {
     return deterministicRoute(
-      SupportedCoordinatorIntents.ShowOpenJobsSummary,
+      SupportedCoordinatorIntents.ShowOverdueJobs,
       'operations_insight',
-      'get_open_jobs_summary',
+      'get_operations_insight',
     )
   }
 
-  if (matches(message, ['show overloaded employees', 'show employee workload'])) {
+  if (
+    VALID_OPERATIONS_CONTEXTS.has(request.uiContext) &&
+    matches(message, ['show jobs requiring attention', 'what needs attention today'])
+  ) {
     return deterministicRoute(
-      SupportedCoordinatorIntents.ShowOverloadedEmployees,
+      SupportedCoordinatorIntents.ShowJobsRequiringAttention,
       'operations_insight',
-      'get_workload_snapshot',
+      'get_operations_insight',
+    )
+  }
+
+  if (
+    VALID_OPERATIONS_CONTEXTS.has(request.uiContext) &&
+    matches(message, [
+      'show workforce workload distribution',
+      'show workload distribution',
+      'show employee workload',
+      'which technicians are overloaded',
+    ])
+  ) {
+    return deterministicRoute(
+      SupportedCoordinatorIntents.ShowWorkloadDistribution,
+      'operations_insight',
+      'get_operations_insight',
+    )
+  }
+
+  if (
+    VALID_OPERATIONS_CONTEXTS.has(request.uiContext) &&
+    matches(message, [
+      'summarize current open operations',
+      'summarize open operations',
+      'summarize open jobs',
+      'show open jobs summary',
+    ])
+  ) {
+    return deterministicRoute(
+      SupportedCoordinatorIntents.SummarizeOpenOperations,
+      'operations_insight',
+      'get_operations_insight',
+    )
+  }
+
+  if (
+    VALID_OPERATIONS_CONTEXTS.has(request.uiContext) &&
+    Boolean(request.jobId?.trim()) &&
+    matches(message, [
+      'explain job attention flag',
+      'why is this job flagged',
+    ])
+  ) {
+    return deterministicRoute(
+      SupportedCoordinatorIntents.ExplainJobAttentionFlag,
+      'operations_insight',
+      'get_operations_insight',
     )
   }
 

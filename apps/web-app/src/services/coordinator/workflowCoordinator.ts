@@ -5,14 +5,11 @@ import type {
   CoordinatorRequest,
   CoordinatorResponse,
   CoordinatorRoute,
-  HighestWorkloadEmployee,
   JobDraftSuggestion,
   ModelIntentClassification,
-  OpenJobsSummary,
+  OperationsIntelligenceResult,
   ProposedAction,
   ProposedCreateJobPayload,
-  UrgentUnassignedJob,
-  WorkloadSnapshot,
   WorkforceIntelligenceResult,
 } from '../../types/coordinator'
 import type { UserProfile } from '../../types/user'
@@ -22,11 +19,17 @@ import {
   validateProposedCreateJobPayload,
 } from './coordinatorRules.ts'
 import { WorkforceIntelligenceAgent } from './workforceIntelligenceAgent.ts'
+import { OperationsIntelligenceAgent } from './operationsIntelligenceAgent.ts'
 import { isModelCoordinatorIntent } from '../../../../../shared/coordinatorModel.ts'
 import type {
   WorkforceIntent,
   WorkforceRecommendationResult,
 } from '../../../../../shared/workforceIntelligence.ts'
+import {
+  isOperationsIntent,
+  type OperationsIntent,
+  type OperationsToolResult,
+} from '../../../../../shared/operationsIntelligence.ts'
 
 export type CoordinatorTools = {
   classifyCoordinatorIntent: (
@@ -45,11 +48,11 @@ export type CoordinatorTools = {
     profile: UserProfile,
     customerRequest: string,
   ) => Promise<JobDraftSuggestion>
-  getOpenJobsSummary: (profile: UserProfile) => Promise<OpenJobsSummary>
-  getUrgentUnassignedJobs: (
+  getOperationsInsight: (
     profile: UserProfile,
-  ) => Promise<UrgentUnassignedJob[]>
-  getWorkloadSnapshot: (profile: UserProfile) => Promise<WorkloadSnapshot>
+    intent: OperationsIntent,
+    jobId?: string,
+  ) => Promise<OperationsToolResult>
   getWorkforceRecommendation: (
     profile: UserProfile,
     jobId: string,
@@ -96,10 +99,8 @@ export class WorkflowCoordinator {
     request: CoordinatorRequest,
   ): Promise<CoordinatorResponse<
     | JobDraftSuggestion
-    | OpenJobsSummary
+    | OperationsIntelligenceResult
     | ProposedAction<ProposedCreateJobPayload>
-    | UrgentUnassignedJob[]
-    | WorkloadSnapshot
     | WorkforceIntelligenceResult
   >> {
     const correlationId = request.requestId?.trim() || this.createId()
@@ -132,28 +133,34 @@ export class WorkflowCoordinator {
 
     try {
       switch (route.intent) {
-        case 'show_urgent_unassigned_jobs': {
+        case 'show_urgent_unassigned_jobs':
+        case 'show_overdue_jobs':
+        case 'show_jobs_requiring_attention':
+        case 'show_workload_distribution':
+        case 'summarize_open_operations':
+        case 'explain_job_attention_flag': {
+          const intent = route.intent as OperationsIntent
+          const jobId = request.jobId?.trim()
+          if (intent === 'explain_job_attention_flag' && !jobId) {
+            throw new CoordinatorValidationError(
+              'A current job is required to explain an attention flag.',
+            )
+          }
+
+          const activeProfile = this.requireDashboardProfile(profile)
+          const agent = new OperationsIntelligenceAgent({
+            getInsight: (trustedProfile, trustedIntent, trustedJobId) =>
+              this.tools.getOperationsInsight(
+                trustedProfile,
+                trustedIntent,
+                trustedJobId,
+              ),
+          })
           const data = await this.runReadTool(
-            () => this.tools.getUrgentUnassignedJobs(this.requireDashboardProfile(profile)),
+            () => agent.handle(activeProfile, intent, jobId),
             execution,
           )
-          assertUrgentUnassignedJobs(data)
-          return this.result(correlationId, route, execution, data)
-        }
-        case 'show_open_jobs_summary': {
-          const data = await this.runReadTool(
-            () => this.tools.getOpenJobsSummary(this.requireDashboardProfile(profile)),
-            execution,
-          )
-          assertOpenJobsSummary(data)
-          return this.result(correlationId, route, execution, data)
-        }
-        case 'show_overloaded_employees': {
-          const data = await this.runReadTool(
-            () => this.tools.getWorkloadSnapshot(this.requireDashboardProfile(profile)),
-            execution,
-          )
-          assertWorkloadSnapshot(data)
+          assertOperationsIntelligenceResult(data, intent)
           return this.result(correlationId, route, execution, data)
         }
         case 'recommend_employee_for_job':
@@ -444,32 +451,22 @@ function canManageCoordinatorJobs(profile: UserProfile) {
   return profile.role === 'admin' || profile.role === 'manager'
 }
 
-function assertUrgentUnassignedJobs(value: unknown): asserts value is UrgentUnassignedJob[] {
-  if (!Array.isArray(value) || value.some((job) => !isUrgentUnassignedJob(job))) {
-    throw new CoordinatorValidationError('The urgent-job tool returned invalid data.')
-  }
-}
-
-function assertOpenJobsSummary(value: unknown): asserts value is OpenJobsSummary {
+function assertOperationsIntelligenceResult(
+  value: unknown,
+  intent: OperationsIntent,
+): asserts value is OperationsIntelligenceResult {
+  const result = value as OperationsIntelligenceResult
   if (
-    !value ||
-    typeof value !== 'object' ||
-    typeof (value as OpenJobsSummary).openJobCount !== 'number' ||
-    typeof (value as OpenJobsSummary).totalJobCount !== 'number'
+    !result ||
+    result.intent !== intent ||
+    result.data?.intent !== intent ||
+    !isOperationsIntent(result.intent) ||
+    !Array.isArray(result.summary) ||
+    result.summary.some((line) => typeof line !== 'string')
   ) {
-    throw new CoordinatorValidationError('The open-jobs tool returned invalid data.')
-  }
-}
-
-function assertWorkloadSnapshot(value: unknown): asserts value is WorkloadSnapshot {
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    !Array.isArray((value as WorkloadSnapshot).employees) ||
-    typeof (value as WorkloadSnapshot).note !== 'string' ||
-    (value as WorkloadSnapshot).employees.some((employee) => !isWorkloadEmployee(employee))
-  ) {
-    throw new CoordinatorValidationError('The workload tool returned invalid data.')
+    throw new CoordinatorValidationError(
+      'The operations tool returned invalid data.',
+    )
   }
 }
 
@@ -492,25 +489,15 @@ function modelClassificationRoute(
 ): CoordinatorRoute {
   switch (classification.intent) {
     case 'show_urgent_unassigned_jobs':
-      return modelRoute(
+    case 'show_overdue_jobs':
+    case 'show_jobs_requiring_attention':
+    case 'show_workload_distribution':
+    case 'summarize_open_operations':
+    case 'explain_job_attention_flag':
+      return operationsModelRoute(
         classification,
-        'show_urgent_unassigned_jobs',
-        'operations_insight',
-        'get_urgent_unassigned_jobs',
-      )
-    case 'show_open_jobs_summary':
-      return modelRoute(
-        classification,
-        'show_open_jobs_summary',
-        'operations_insight',
-        'get_open_jobs_summary',
-      )
-    case 'show_overloaded_employees':
-      return modelRoute(
-        classification,
-        'show_overloaded_employees',
-        'operations_insight',
-        'get_workload_snapshot',
+        request,
+        classification.intent,
       )
     case 'recommend_employee_for_job':
       return workforceModelRoute(classification, request, 'recommend_employee_for_job')
@@ -530,6 +517,30 @@ function modelClassificationRoute(
     case 'unsupported':
       return unsupportedModelRoute(classification)
   }
+}
+
+function operationsModelRoute(
+  classification: ModelIntentClassification,
+  request: CoordinatorRequest,
+  intent: OperationsIntent,
+): CoordinatorRoute {
+  if (
+    intent === 'explain_job_attention_flag' &&
+    !request.jobId?.trim()
+  ) {
+    return unsupportedModelRoute(classification)
+  }
+
+  return ['dashboard', 'job_details', 'jobs', 'unknown'].includes(
+    request.uiContext,
+  )
+    ? modelRoute(
+        classification,
+        intent,
+        'operations_insight',
+        'get_operations_insight',
+      )
+    : unsupportedModelRoute(classification)
 }
 
 function workforceModelRoute(
@@ -601,35 +612,15 @@ function isValidModelClassification(
   value: unknown,
 ): value is ModelIntentClassification {
   return (
-    Boolean(value) &&
+    value !== null &&
     typeof value === 'object' &&
+    !('toolName' in value) &&
     isModelCoordinatorIntent((value as ModelIntentClassification).intent) &&
     typeof (value as ModelIntentClassification).confidence === 'number' &&
     Number.isFinite((value as ModelIntentClassification).confidence) &&
     (value as ModelIntentClassification).confidence >= 0 &&
     (value as ModelIntentClassification).confidence <= 1 &&
     typeof (value as ModelIntentClassification).requiresClarification === 'boolean'
-  )
-}
-
-function isUrgentUnassignedJob(value: unknown): value is UrgentUnassignedJob {
-  return (
-    Boolean(value) &&
-    typeof value === 'object' &&
-    typeof (value as UrgentUnassignedJob).id === 'string' &&
-    typeof (value as UrgentUnassignedJob).title === 'string' &&
-    (value as UrgentUnassignedJob).priority === 'Urgent'
-  )
-}
-
-function isWorkloadEmployee(value: unknown): value is HighestWorkloadEmployee {
-  return (
-    Boolean(value) &&
-    typeof value === 'object' &&
-    typeof (value as HighestWorkloadEmployee).employeeId === 'string' &&
-    typeof (value as HighestWorkloadEmployee).displayName === 'string' &&
-    typeof (value as HighestWorkloadEmployee).activeJobCount === 'number' &&
-    typeof (value as HighestWorkloadEmployee).inProgressJobCount === 'number'
   )
 }
 
