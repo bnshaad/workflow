@@ -4,6 +4,11 @@ import { resolve } from 'node:path'
 
 const LOCAL_PROJECT_ID = 'workflow-integration'
 const secretPath = resolve('.secret.local')
+const mode = process.argv[2]
+
+if (mode !== undefined && mode !== '--operations-only') {
+  fail('Only the --operations-only local smoke mode is supported.')
+}
 
 if (process.env.CI) {
   fail('Local real-Gemini smoke testing is disabled in CI.')
@@ -38,7 +43,7 @@ const smoke = spawnSync(
     'auth,firestore,functions',
     '--project',
     LOCAL_PROJECT_ID,
-    'node scripts/localAiSmokeTest.mjs',
+    `node scripts/localAiSmokeTest.mjs${mode ? ` ${mode}` : ''}`,
   ],
   {
     env: {

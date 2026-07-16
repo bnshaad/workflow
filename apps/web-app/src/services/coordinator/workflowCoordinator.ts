@@ -30,6 +30,11 @@ import {
   type OperationsIntent,
   type OperationsToolResult,
 } from '../../../../../shared/operationsIntelligence.ts'
+import {
+  createCoordinatorTelemetryEvent,
+  type CoordinatorErrorCategory,
+  type CoordinatorTelemetryEvent,
+} from './coordinatorTelemetry.ts'
 
 export type CoordinatorTools = {
   classifyCoordinatorIntent: (
@@ -68,7 +73,9 @@ export type CoordinatorOperationalEvent = {
 
 export type WorkflowCoordinatorOptions = {
   createId?: () => string
+  now?: () => number
   onOperationalEvent?: (event: CoordinatorOperationalEvent) => void
+  onTelemetryEvent?: (event: CoordinatorTelemetryEvent) => void
   tools: CoordinatorTools
 }
 
@@ -85,12 +92,16 @@ export class CoordinatorValidationError extends Error {
  */
 export class WorkflowCoordinator {
   private readonly createId: () => string
+  private readonly now: () => number
   private readonly onOperationalEvent: (event: CoordinatorOperationalEvent) => void
+  private readonly onTelemetryEvent: (event: CoordinatorTelemetryEvent) => void
   private readonly tools: CoordinatorTools
 
   constructor(options: WorkflowCoordinatorOptions) {
     this.createId = options.createId ?? createCoordinatorId
+    this.now = options.now ?? Date.now
     this.onOperationalEvent = options.onOperationalEvent ?? (() => undefined)
+    this.onTelemetryEvent = options.onTelemetryEvent ?? (() => undefined)
     this.tools = options.tools
   }
 
@@ -103,8 +114,11 @@ export class WorkflowCoordinator {
     | ProposedAction<ProposedCreateJobPayload>
     | WorkforceIntelligenceResult
   >> {
+    const startedAt = this.now()
     const correlationId = request.requestId?.trim() || this.createId()
     let route = routeCoordinatorRequest(request)
+    const routeSource =
+      route.intent && route.toolName ? 'deterministic' : 'model'
     const execution: CoordinatorExecution = {
       modelCalls: 0,
       steps: 1,
@@ -123,11 +137,21 @@ export class WorkflowCoordinator {
             reason: error instanceof Error ? error.message : 'The request could not be classified safely.',
           },
           execution,
+          routeSource,
+          startedAt,
+          normalizeCoordinatorError(error, 'classification'),
         )
       }
 
       if (!route.intent || !route.toolName) {
-        return this.fallback(correlationId, route, execution)
+        return this.fallback(
+          correlationId,
+          route,
+          execution,
+          routeSource,
+          startedAt,
+          normalizeRouteFailure(route),
+        )
       }
     }
 
@@ -161,7 +185,14 @@ export class WorkflowCoordinator {
             execution,
           )
           assertOperationsIntelligenceResult(data, intent)
-          return this.result(correlationId, route, execution, data)
+          return this.result(
+            correlationId,
+            route,
+            execution,
+            data,
+            routeSource,
+            startedAt,
+          )
         }
         case 'recommend_employee_for_job':
         case 'explain_recommendation':
@@ -186,7 +217,14 @@ export class WorkflowCoordinator {
             execution,
           )
           assertWorkforceIntelligenceResult(data, jobId, route.intent)
-          return this.result(correlationId, route, execution, data)
+          return this.result(
+            correlationId,
+            route,
+            execution,
+            data,
+            routeSource,
+            startedAt,
+          )
         }
         case 'prepare_job_draft': {
           const customerRequest = request.customerRequest?.trim() || request.message.trim()
@@ -200,7 +238,14 @@ export class WorkflowCoordinator {
             execution,
           )
           assertJobDraftSuggestion(data)
-          return this.result(correlationId, route, execution, data)
+          return this.result(
+            correlationId,
+            route,
+            execution,
+            data,
+            routeSource,
+            startedAt,
+          )
         }
         case 'prepare_create_job_proposal': {
           if (!request.createJobInput) {
@@ -212,7 +257,14 @@ export class WorkflowCoordinator {
             request.createJobInput,
           )
           execution.steps += 1
-          return this.result(correlationId, route, execution, proposal)
+          return this.result(
+            correlationId,
+            route,
+            execution,
+            proposal,
+            routeSource,
+            startedAt,
+          )
         }
       }
     } catch (error) {
@@ -224,6 +276,9 @@ export class WorkflowCoordinator {
           reason: error instanceof Error ? error.message : 'The request could not be completed safely.',
         },
         execution,
+        routeSource,
+        startedAt,
+        normalizeCoordinatorError(error, 'tool'),
       )
     }
   }
@@ -278,12 +333,31 @@ export class WorkflowCoordinator {
     correlationId: string,
     route: CoordinatorFallback['route'],
     execution: CoordinatorExecution,
+    routeSource: CoordinatorTelemetryEvent['routeSource'],
+    startedAt: number,
+    errorCategory: CoordinatorErrorCategory,
   ): CoordinatorFallback {
     this.onOperationalEvent({
       correlationId,
       intent: route.intent,
       outcome: 'fallback',
       toolCalls: execution.toolCalls,
+    })
+    this.emitTelemetry({
+      correlationId,
+      durationMs: this.now() - startedAt,
+      groundingStatus:
+        execution.toolCalls > 0 && route.agent === 'operations_insight'
+          ? 'failed'
+          : 'not_evaluated',
+      modelCallCount: execution.modelCalls,
+      normalizedError: errorCategory,
+      outcome: 'safe_fallback',
+      routeSource,
+      toolCallCount: execution.toolCalls,
+      toolName: route.toolName,
+      validatedIntent: route.intent,
+      writeAttempted: false,
     })
 
     return {
@@ -401,15 +475,34 @@ export class WorkflowCoordinator {
 
   private result<TData>(
     correlationId: string,
-  route: CoordinatorRoute,
+    route: CoordinatorRoute,
     execution: CoordinatorExecution,
     data: TData,
+    routeSource: CoordinatorTelemetryEvent['routeSource'],
+    startedAt: number,
   ) {
     this.onOperationalEvent({
       correlationId,
       intent: route.intent,
       outcome: 'succeeded',
       toolCalls: execution.toolCalls,
+    })
+    this.emitTelemetry({
+      correlationId,
+      durationMs: this.now() - startedAt,
+      groundingStatus:
+        route.agent === 'operations_insight' ||
+        route.agent === 'workforce_intelligence'
+          ? 'passed'
+          : 'not_applicable',
+      modelCallCount: execution.modelCalls,
+      normalizedError: 'none',
+      outcome: 'success',
+      routeSource,
+      toolCallCount: execution.toolCalls,
+      toolName: route.toolName,
+      validatedIntent: route.intent,
+      writeAttempted: false,
     })
 
     return {
@@ -419,6 +512,11 @@ export class WorkflowCoordinator {
       kind: 'result' as const,
       route,
     }
+  }
+
+  private emitTelemetry(event: CoordinatorTelemetryEvent) {
+    if (event.validatedIntent === 'prepare_create_job_proposal') return
+    this.onTelemetryEvent(createCoordinatorTelemetryEvent(event))
   }
 }
 
@@ -626,6 +724,34 @@ function isValidModelClassification(
 
 function createCoordinatorId() {
   return `coord-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function normalizeRouteFailure(
+  route: CoordinatorRoute,
+): CoordinatorErrorCategory {
+  if (/low|clarification/i.test(route.reason)) return 'low_confidence'
+  if (/invalid data|invalid model|classifier returned invalid/i.test(route.reason)) {
+    return 'invalid_model_output'
+  }
+  if (/current job|required/i.test(route.reason)) return 'missing_context'
+  return 'unsupported'
+}
+
+function normalizeCoordinatorError(
+  error: unknown,
+  phase: 'classification' | 'tool',
+): CoordinatorErrorCategory {
+  const message = error instanceof Error ? error.message : ''
+  if (/timed out|timeout/i.test(message)) return 'timeout'
+  if (/permission|active user|manager access/i.test(message)) {
+    return 'permission_denied'
+  }
+  if (/current job|required/i.test(message)) return 'missing_context'
+  if (/invalid data|mismatched intent|ground/i.test(message)) {
+    return phase === 'tool' ? 'grounding_failed' : 'invalid_model_output'
+  }
+  if (/invalid|validation/i.test(message)) return 'validation_failed'
+  return phase === 'classification' ? 'classification_failed' : 'tool_failed'
 }
 
 function withTimeout<TData>(operation: Promise<TData>, timeoutMs: number) {

@@ -5,6 +5,7 @@ import { confirmCreateJobProposal as confirmCreateJobProposalHandler } from './a
 import { createModelCallableHandlers } from './model/modelCallables.js';
 import { createGeminiModelProvider } from './model/modelProvider.js';
 import { shouldReadGeminiSecret } from './model/modelRuntimeConfiguration.js';
+import { getOperationsInsight as getOperationsInsightHandler } from './operations/operationsIntelligence.js';
 import { getWorkforceRecommendation as getWorkforceRecommendationHandler } from './workforce/workforceRecommendation.js';
 if (getApps().length === 0) {
     initializeApp();
@@ -16,6 +17,10 @@ export const getWorkforceRecommendation = onCall({
     region: 'asia-south1',
     timeoutSeconds: 10,
 }, getWorkforceRecommendationHandler);
+export const getOperationsInsight = onCall({
+    region: 'asia-south1',
+    timeoutSeconds: 10,
+}, getOperationsInsightHandler);
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 function modelHandlers() {
     return createModelCallableHandlers(createGeminiModelProvider(readGeminiApiKey()));

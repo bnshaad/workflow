@@ -1,6 +1,6 @@
 # Multi-Agent AI Architecture
 
-**Implementation status date:** 2026-07-15
+**Implementation status date:** 2026-07-16
 
 ## 1. Purpose
 
@@ -178,7 +178,11 @@ The job-creation proposal is stored in `actionProposals`, binds to the requestin
 
 No broad conversational UI, RAG, knowledge retrieval, Genkit setup, assignment execution, model-based authorization, or autonomous critical-action execution is implemented in this phase. The dashboard contains only a compact operations insight panel with fixed read-only views. The Gemini provider is implemented behind a Firebase Secret and a local emulator-only opt-in; no public deployment exists.
 
-Workflow remains on Spark with Auth, Firestore, and Functions emulators. Public deployment and Blaze are deferred until public access is required. Local real-Gemini testing requires gitignored `functions/.secret.local`, explicit `WORKFLOW_USE_REAL_GEMINI=true`, and `npm run test:ai:local`; the command refuses CI and non-emulator endpoints and uses synthetic text only. Without opt-in, model callables fail closed, and automated tests use fake providers. The controlled local smoke passed with all classification scenarios, complete and incomplete drafts, concise metadata-only output, and zero protected collection changes.
+Workflow remains on Spark with Auth, Firestore, and Functions emulators. Public deployment and Blaze are deferred until public access is required. Local real-Gemini testing requires gitignored `functions/.secret.local`, explicit `WORKFLOW_USE_REAL_GEMINI=true`, and `npm run test:ai:local`; the command refuses CI and non-emulator endpoints and uses synthetic text only. Without opt-in, model callables fail closed, and automated tests use fake providers. The controlled local smoke passed with all classification and draft scenarios, concise metadata-only output, and zero protected collection changes.
+
+The coordinator now has a fixed, versioned synthetic evaluation corpus, `coordinator-functional-v1`. Its 35 cases cover six deterministic Operations commands, six natural or ambiguous Operations requests, six unsupported mutations, thirteen boundary and ambiguity cases, and four other supported no-write coordinator flows. The fake-provider runner executes the real coordinator and verifies validated intent, classifier and model-call budgets, tool selection, tool-call budgets, safe rejection, deterministic grounding, response completeness, structured telemetry, and zero write-capable tool invocations. This is a controlled functional conformance check, not a statistical accuracy benchmark or evidence of production language coverage.
+
+No prompt, customer detail, employee detail, full response, or model payload is placed in coordinator telemetry. The in-process event is limited to `correlationId`, `routeSource`, `validatedIntent`, `toolName`, `modelCallCount`, `toolCallCount`, `durationMs`, `outcome`, `normalizedError`, `groundingStatus`, and the constant `writeAttempted: false`. Values are bounded and normalized before logging. These events are not persisted, exported, or displayed in a UI by this phase, and write-capable proposal paths do not emit a no-write event.
 
 ## 10. Future Firebase fit
 
@@ -198,7 +202,11 @@ The durable proposal ledger retains its server-verified payload hash, lifecycle,
 
 ## 11. Evaluation
 
-Measure:
+The repository command `apps/web-app/: npm run evaluate:coordinator` reports concise controlled functional metrics: routing pass rate, unsupported-request rejection, deterministic classifier bypass, correct tool selection, grounding compliance, no-write safety, response completeness, average model calls, and average tool calls. Results must be described as pass rates over the fixed corpus, never as production accuracy.
+
+The optional `functions/: WORKFLOW_USE_REAL_GEMINI=true npm run evaluate:operations:real` command runs the guarded emulator-only Operations subset over nine synthetic, non-personal real-model requests. It requires a gitignored local key, refuses CI and non-emulator endpoints, emits route summaries rather than prompts or full responses, and asserts that protected collection counts do not change. The 2026-07-16 spot-check passed, including destructive, predictive, and unsupported historical requests; it remains a manual provider check and is not part of the deterministic automated gate.
+
+Future broader evaluation may measure:
 
 - Intent-routing accuracy
 - Unnecessary agent calls

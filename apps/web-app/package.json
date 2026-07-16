@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "evaluate:coordinator": "tsc -p tsconfig.test.json && node scripts/buildCoordinatorEvaluation.mjs && node node_modules/.tmp/coordinator-evaluation/runner.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:rules": "tsc -p tsconfig.test.json && node --test \"$PWD\"/node_modules/.tmp/web-tests/apps/web-app/scripts/*.test.js",
-    "seed:demo": "node scripts/seedDemoDataset.mjs"
+    "test:rules": "tsc -p tsconfig.test.json && node --import ./scripts/registerTestResolver.mjs --test \"$PWD\"/node_modules/.tmp/web-tests/apps/web-app/scripts/*.test.js",
+    "seed:demo": "node scripts/seedDemoDataset.mjs",
+    "seed:demo:emulator": "WORKFLOW_DEMO_SEED_ENABLED=true WORKFLOW_FIREBASE_ENV=development VITE_FIREBASE_PROJECT_ID=workflow-integration FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/seedDemoDataset.mjs --with-auth-emulator --confirm=SEED_WORKFLOW_DEMO_SERVICES"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.2",

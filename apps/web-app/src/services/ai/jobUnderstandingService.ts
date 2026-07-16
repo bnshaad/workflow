@@ -3,7 +3,11 @@ import { requireActiveProfile } from '@/services/common'
 import type { UserProfile } from '@/types'
 import type { JobPriority } from '@/types/jobPriority'
 import { JobPriorities } from '@/types/jobPriority'
-import { modelCoordinatorService } from './modelCoordinatorService'
+import {
+  ModelCoordinatorError,
+  modelCoordinatorService,
+  type ModelCoordinatorDiagnostics,
+} from './modelCoordinatorService'
 
 export type GenerateJobDraftInput = {
   customerRequest: string
@@ -32,9 +36,15 @@ export interface JobUnderstandingService {
 }
 
 export class AiJobUnderstandingError extends Error {
-  constructor(message: string) {
+  readonly diagnostics?: ModelCoordinatorDiagnostics
+
+  constructor(
+    message: string,
+    diagnostics?: ModelCoordinatorDiagnostics,
+  ) {
     super(message)
     this.name = 'AiJobUnderstandingError'
+    this.diagnostics = diagnostics
   }
 }
 
@@ -92,6 +102,9 @@ export const jobUnderstandingService: JobUnderstandingService = {
         title: draft.title,
       }
     } catch (error) {
+      if (error instanceof ModelCoordinatorError) {
+        throw new AiJobUnderstandingError(error.message, error.diagnostics)
+      }
       if (error instanceof Error) {
         throw new AiJobUnderstandingError(error.message)
       }

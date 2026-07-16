@@ -259,7 +259,9 @@ function matches(message: string, commands: string[]) {
   return commands.includes(message)
 }
 
-function normalizeCommand(message: string) {
+function normalizeCommand(message: unknown) {
+  if (typeof message !== 'string') return ''
+
   return message
     .trim()
     .toLowerCase()

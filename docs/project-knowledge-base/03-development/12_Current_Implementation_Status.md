@@ -1,6 +1,6 @@
 # Current Implementation Status
 
-**Status date:** 2026-07-15
+**Status date:** 2026-07-16
 
 ## 1. Current stage
 
@@ -42,6 +42,8 @@ Workflow is past foundation and basic CRUD implementation. The manager web appli
 - Trusted tenant-scoped `getWorkforceRecommendation` callable using the shared deterministic engine without writes
 - Bounded read-only Operations Intelligence with six fixed intents, shared deterministic attention rules, grounded summaries, and one tenant-scoped `getOperationsInsight` callable
 - Compact dashboard operations insight panel with fixed views, reason badges, job links, and loading, error, and empty states
+- Versioned 35-case synthetic coordinator corpus with fake-provider routing, call-budget, allowlisted-tool, grounding, completeness, and no-write verification
+- Privacy-safe in-process coordinator telemetry with bounded structured fields only; no prompts, personal data, full responses, persistence, or telemetry UI
 
 ## 4. Current architectural reality
 
@@ -71,7 +73,7 @@ Older documentation references to a primary `tasks` collection are superseded by
 | Weighted assignment | Deterministic `rule-based-v1` recommendation service with explainable scoring; advisory only |
 | AHP-TOPSIS ranking | Approved future experimental ranking mode; not assumed implemented |
 | Recommendation acceptance/override | Implemented for generated recommendations; accepted/overridden decisions persist with reason and score snapshots |
-| Evaluation metrics | Manual-assignment baseline plus recommendation decision metrics are available as bounded reads |
+| Evaluation metrics | Manual-assignment and recommendation-decision metrics remain available as bounded reads. Coordinator `coordinator-functional-v1` adds controlled functional pass rates over 35 fixed synthetic cases; it is not a statistical accuracy claim. |
 | Multi-agent coordinator | Deterministic-first typed coordinator; exact routes make zero model calls, ambiguous requests may use one server-side Gemini classification call mapped to a fixed allowlist. Operations requests make at most one trusted tool call. No broad assistant UI. |
 | Workforce Intelligence | First read-only slice implemented for recommendation, grounded explanation, and top-two comparison; deterministic engine remains authoritative and no assignment is executed |
 | Operations Intelligence | Read-only specialist implemented for urgent unassigned, overdue, deterministic attention, workload distribution, open-operations summary, and attention explanations; no overload threshold or prediction |
@@ -115,15 +117,26 @@ Not part of the current MVP claim:
 
 ## 9. Local Integration Verification
 
-The repository configures only the Auth (`9099`), Firestore (`8080`), and Functions (`5001`) emulators. Emulator use is opt-in for the web client: Vite development mode must set `VITE_USE_FIREBASE_EMULATORS=true`; `VITE_FIREBASE_EMULATOR_HOST` defaults to `127.0.0.1`. Production builds never connect to local emulators.
+The repository configures only the Auth (`9099`), Firestore (`8080`), and Functions (`5001`) emulators. Create the untracked `apps/web-app/.env.development` file below to select the isolated `workflow-integration` project and enable all three emulators for Vite development. `VITE_FIREBASE_EMULATOR_HOST` defaults to `127.0.0.1`; production builds never connect to local emulators.
+
+```text
+VITE_FIREBASE_PROJECT_ID=workflow-integration
+VITE_USE_FIREBASE_EMULATORS=true
+VITE_FIREBASE_EMULATOR_HOST=127.0.0.1
+```
+
+Vite serves the local web app at `http://127.0.0.1:3000`. Run `npm run seed:demo:emulator` from `apps/web-app` after the emulator suite starts to create the fake local sign-in accounts and matching demo data.
 
 Run these commands from the indicated directories:
 
 ```text
 functions/: npm run emulators
+functions/: npm run emulators:ai (requires `functions/.secret.local`; enables local Gemini for the browser UI)
 functions/: npm run test:integration
 functions/: WORKFLOW_USE_REAL_GEMINI=true npm run test:ai:local
+functions/: WORKFLOW_USE_REAL_GEMINI=true npm run evaluate:operations:real
 functions/: npm run build
+apps/web-app/: npm run evaluate:coordinator
 apps/web-app/: npm run test:rules
 apps/web-app/: npm run lint
 apps/web-app/: npm run build
@@ -135,6 +148,10 @@ For optional local real-Gemini testing, create untracked `functions/.secret.loca
 
 The smoke command automatically asserts allowlisted intent values, destructive-request fallback, the classifier-to-Operations-tool path, deterministic overdue and workload results, required empty fields for the incomplete draft, bounded structured output, and absence of job, proposal, recommendation, or notification writes. It prints only field-presence and list-count summaries; prompts, customer details, secrets, raw responses, and full drafts are not logged.
 
-No Firebase project deployment has been performed. Workflow remains on Spark and uses local emulators; Blaze is deferred until public Functions deployment is required. Node 20 compatibility for Functions was verified on 2026-07-14. The web `test:rules` command compiles its TypeScript tests with the existing compiler into ignored `node_modules/.tmp` output and runs Node's built-in test runner without adding a dependency. The Operations Intelligence verification passed 27 Functions unit tests, 19 emulator integration tests, 29 web tests, both builds, web lint, and the guarded real-Gemini smoke. The current host provides Node 25, so emulator output records the existing Node 20 engine mismatch warning.
+`evaluate:coordinator` validates the fixed `coordinator-functional-v1` corpus and runs it through the production coordinator with fake providers. The 35 cases comprise 6 deterministic Operations commands, 6 ambiguous Operations requests, 6 unsupported mutations, 13 boundary and ambiguity cases, and 4 other supported no-write routes. The report is deliberately limited to controlled functional routing, rejection, classifier bypass, tool selection, grounding, no-write, response completeness, and average call counts. Proposal execution is excluded because the corpus has a strict zero-write boundary.
 
-The real uncertain-write transition is not artificially induced in the emulator suite; its terminal non-retry behavior is integration-tested and its failure classification remains unit-tested. Automated Gemini tests use fake providers; the separate opt-in local smoke passed against real Gemini using synthetic data. No Genkit, RAG, assignment-capable agent, recursive delegation, autonomous actions, or broad assistant UI is implemented.
+Coordinator telemetry is transient and presentation-free. It contains only `correlationId`, `routeSource`, `validatedIntent`, `toolName`, `modelCallCount`, `toolCallCount`, `durationMs`, `outcome`, `normalizedError`, `groundingStatus`, and `writeAttempted: false`. It does not contain raw input, customer or employee data, full responses, tokens, or provider payloads, and this phase adds no telemetry collection or dashboard.
+
+No Firebase project deployment has been performed. Workflow remains on Spark and uses local emulators; Blaze is deferred until public Functions deployment is required. Node 20 compatibility for Functions was verified on 2026-07-14. The web `test:rules` command compiles its TypeScript tests with the existing compiler into ignored `node_modules/.tmp` output and runs Node's built-in test runner without adding a dependency. The 2026-07-17 verification passed 28 Functions unit tests, 19 emulator integration tests, 40 web tests, all 35 controlled coordinator cases, both builds, web lint, `git diff --check`, and the guarded nine-request real-Gemini smoke. The current host provides Node 25, so emulator output records the existing Node 20 engine mismatch warning.
+
+The real uncertain-write transition is not artificially induced in the emulator suite; its terminal non-retry behavior is integration-tested and its failure classification remains unit-tested. Automated Gemini tests use fake providers; the separate 2026-07-16 opt-in local smoke passed all nine real-Gemini requests using synthetic data and preserved protected collection counts. No Genkit, RAG, assignment-capable agent, recursive delegation, autonomous actions, or broad assistant UI is implemented.

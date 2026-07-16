@@ -13,21 +13,30 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
+const functionsRegion = 'asia-south1'
+const useFirebaseEmulators =
+  import.meta.env.DEV &&
+  import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
+const firebaseEmulatorHost =
+  import.meta.env.VITE_FIREBASE_EMULATOR_HOST || '127.0.0.1'
+
 export const firebaseApp = initializeApp(firebaseConfig)
 export const firebaseAuth = getAuth(firebaseApp)
 export const firestore = getFirestore(firebaseApp)
-export const firebaseFunctions = getFunctions(firebaseApp, 'asia-south1')
+export const firebaseFunctions = getFunctions(firebaseApp, functionsRegion)
 export const firebaseStorage = getStorage(firebaseApp)
+export const firebaseRuntime = {
+  functionsMode: useFirebaseEmulators ? 'emulator' : 'production',
+  functionsRegion,
+  functionsUrl: useFirebaseEmulators
+    ? `http://${firebaseEmulatorHost}:5001/${firebaseApp.options.projectId}/${functionsRegion}`
+    : `https://${functionsRegion}-${firebaseApp.options.projectId}.cloudfunctions.net`,
+} as const
 
-if (
-  import.meta.env.DEV &&
-  import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
-) {
-  const host = import.meta.env.VITE_FIREBASE_EMULATOR_HOST || '127.0.0.1'
-
-  connectAuthEmulator(firebaseAuth, `http://${host}:9099`, {
+if (useFirebaseEmulators) {
+  connectAuthEmulator(firebaseAuth, `http://${firebaseEmulatorHost}:9099`, {
     disableWarnings: true,
   })
-  connectFirestoreEmulator(firestore, host, 8080)
-  connectFunctionsEmulator(firebaseFunctions, host, 5001)
+  connectFirestoreEmulator(firestore, firebaseEmulatorHost, 8080)
+  connectFunctionsEmulator(firebaseFunctions, firebaseEmulatorHost, 5001)
 }

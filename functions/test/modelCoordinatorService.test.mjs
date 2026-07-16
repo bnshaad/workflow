@@ -115,6 +115,33 @@ test('rejects critical operational mutations before calling the model', async ()
   assert.equal(result.requiresClarification, false)
 })
 
+test('allows service-request wording while rejecting outbound notifications', async () => {
+  let modelCalls = 0
+  const service = createModelCoordinatorService({
+    async generateJson() {
+      modelCalls += 1
+      return {
+        confidence: 0.98,
+        intent: 'prepare_job_draft',
+        requiresClarification: false,
+      }
+    },
+  })
+
+  const serviceRequest = await service.classifyIntent({
+    message: 'The AC is leaking. Please send someone today.',
+    uiContext: 'jobs',
+  })
+  const notificationRequest = await service.classifyIntent({
+    message: 'Send a notification to the customer.',
+    uiContext: 'jobs',
+  })
+
+  assert.equal(modelCalls, 1)
+  assert.equal(serviceRequest.intent, 'prepare_job_draft')
+  assert.equal(notificationRequest.intent, 'unsupported')
+})
+
 test('rejects malformed classifications and invalid draft fields', async () => {
   const malformedClassification = createModelCoordinatorService(
     fakeProvider({ intent: 'unknown_tool' }),
@@ -219,6 +246,7 @@ test('maps provider timeout, quota, and temporary failures to safe public errors
   assert.deepEqual(
     toPublicModelError(new ModelProviderError('timeout', 'internal detail')),
     {
+      category: 'timeout',
       code: 'deadline-exceeded',
       message: 'AI drafting timed out. Complete the form manually.',
     },
@@ -226,14 +254,38 @@ test('maps provider timeout, quota, and temporary failures to safe public errors
   assert.deepEqual(
     toPublicModelError(new ModelProviderError('quota_exhausted', 'internal detail')),
     {
+      category: 'quota_exhausted',
       code: 'resource-exhausted',
       message: 'AI drafting is temporarily unavailable. Complete the form manually.',
     },
   )
   assert.deepEqual(toPublicModelError(new Error('provider detail')), {
-    code: 'unavailable',
-    message: 'The drafting service is temporarily unavailable. Complete the form manually.',
+    category: 'callable_unavailable',
+    code: 'internal',
+    message: 'The AI drafting callable failed. Please try again later.',
   })
+  assert.deepEqual(
+    toPublicModelError(
+      new ModelProviderError('invalid_response', 'internal detail'),
+    ),
+    {
+      category: 'invalid_response',
+      code: 'data-loss',
+      message: 'AI drafting returned an invalid response. Complete the form manually.',
+    },
+  )
+  assert.deepEqual(
+    toPublicModelError(
+      new ModelProviderError('temporary_failure', 'internal detail', {
+        code: 'schema_or_request_rejected',
+      }),
+    ),
+    {
+      category: 'schema_rejection',
+      code: 'data-loss',
+      message: 'The AI provider rejected the draft schema. Complete the form manually.',
+    },
+  )
 })
 
 test('uses bounded retries and never exposes missing Gemini configuration', async () => {

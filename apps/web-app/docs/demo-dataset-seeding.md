@@ -15,8 +15,9 @@ automatically.
 - Job activities for status, assignment, start, and completion events
 - Audit logs for matching lifecycle events
 
-The script does not create Firebase Authentication users. Create Auth accounts
-separately if you need to sign in as seeded profiles.
+The normal seed script does not create Firebase Authentication users. For the
+local Firebase emulator only, use the dedicated command below to create
+matching fake Auth users and profiles.
 
 ## Safety Requirements
 
@@ -45,6 +46,20 @@ WORKFLOW_DEMO_SEED_ENABLED=true \
 WORKFLOW_FIREBASE_ENV=development \
 npm run seed:demo -- --confirm=SEED_WORKFLOW_DEMO_SERVICES
 ```
+
+## Seed the Local Emulator and Sign In
+
+Start the Firebase emulator suite from `functions/`, then run this from
+`apps/web-app`:
+
+```bash
+npm run seed:demo:emulator
+```
+
+Use `manager@workflow.local` with password `WorkflowDemo-Only-123!`.
+
+This command refuses any project other than `workflow-integration` and requires
+the Auth and Firestore emulator hosts. It never targets Firebase production.
 
 ## Reset and Re-Seed Demo Data
 

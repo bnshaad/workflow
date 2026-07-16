@@ -1,5 +1,5 @@
 import { isJobPriority, } from '../../../shared/jobCreation.js';
-import { isModelCoordinatorIntent, } from '../../../shared/coordinatorModel.js';
+import { MODEL_COORDINATOR_INTENTS, isModelCoordinatorIntent, } from '../../../shared/coordinatorModel.js';
 import { ModelProviderError, } from './modelProvider.js';
 const MAX_TEXT_LENGTH = 2_000;
 const MAX_ARRAY_ITEMS = 10;
@@ -9,10 +9,18 @@ export function createModelCoordinatorService(provider) {
         async classifyIntent(input) {
             const message = requireBoundedText(input.message, 'message');
             const uiContext = requireUiContext(input.uiContext);
+            if (requestsUnsupportedMutation(message)) {
+                return {
+                    clarificationReason: 'Critical operational changes are not supported by the coordinator.',
+                    confidence: 1,
+                    intent: 'unsupported',
+                    requiresClarification: false,
+                };
+            }
             const result = await provider.generateJson({
                 prompt: `Classify this Workflow manager request. UI context: ${uiContext}. Request: ${message}`,
                 responseSchema: intentSchema(),
-                systemInstruction: 'Return JSON only. Choose one supported intent. Do not provide tools, authorization, explanations, or actions.',
+                systemInstruction: 'Return JSON only. Choose one supported intent. Requests to cancel, delete, assign, reassign, unassign, start, complete, change, update, reschedule, notify, or otherwise mutate operations must be unsupported. Do not provide tools, authorization, explanations, or actions.',
             });
             return validateIntentClassification(result);
         },
@@ -27,31 +35,53 @@ export function createModelCoordinatorService(provider) {
         },
     };
 }
+function requestsUnsupportedMutation(message) {
+    return (/\b(cancel|delete|assign|reassign|unassign|start|complete|close|change|update|modify|reschedule|notify)\b/i.test(message) ||
+        /\bsend\s+(?:an?\s+)?(?:notification|message|email|sms|alert)\b/i.test(message));
+}
 export function toPublicModelError(error) {
     if (!(error instanceof ModelProviderError)) {
         return {
-            code: 'unavailable',
-            message: 'The drafting service is temporarily unavailable. Complete the form manually.',
+            category: 'callable_unavailable',
+            code: 'internal',
+            message: 'The AI drafting callable failed. Please try again later.',
+        };
+    }
+    if (error.diagnostics.code === 'schema_or_request_rejected') {
+        return {
+            category: 'schema_rejection',
+            code: 'data-loss',
+            message: 'The AI provider rejected the draft schema. Complete the form manually.',
         };
     }
     switch (error.kind) {
         case 'missing_configuration':
             return {
+                category: 'configuration_missing',
                 code: 'failed-precondition',
                 message: 'AI drafting is not configured. Complete the form manually.',
             };
         case 'quota_exhausted':
             return {
+                category: 'quota_exhausted',
                 code: 'resource-exhausted',
                 message: 'AI drafting is temporarily unavailable. Complete the form manually.',
             };
         case 'timeout':
             return {
+                category: 'timeout',
                 code: 'deadline-exceeded',
                 message: 'AI drafting timed out. Complete the form manually.',
             };
+        case 'invalid_response':
+            return {
+                category: 'invalid_response',
+                code: 'data-loss',
+                message: 'AI drafting returned an invalid response. Complete the form manually.',
+            };
         default:
             return {
+                category: 'provider_unavailable',
                 code: 'unavailable',
                 message: 'AI drafting is temporarily unavailable. Complete the form manually.',
             };
@@ -225,7 +255,7 @@ function intentSchema() {
         properties: {
             clarificationReason: { type: 'string' },
             confidence: { type: 'number' },
-            intent: { enum: ['show_urgent_unassigned_jobs', 'show_open_jobs_summary', 'show_overloaded_employees', 'recommend_employee_for_job', 'explain_recommendation', 'compare_top_candidates', 'prepare_job_draft', 'unsupported'], type: 'string' },
+            intent: { enum: [...MODEL_COORDINATOR_INTENTS], type: 'string' },
             requiresClarification: { type: 'boolean' },
         },
         required: ['intent', 'confidence', 'requiresClarification'],

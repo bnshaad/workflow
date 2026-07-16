@@ -9,6 +9,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "emulators": "npm run build && firebase emulators:start --only auth,firestore,functions --project workflow-integration",
+    "emulators:ai": "WORKFLOW_USE_REAL_GEMINI=true npm run emulators",
+    "evaluate:operations:real": "node scripts/runLocalAiSmokeTest.mjs --operations-only",
     "test:ai:local": "node scripts/runLocalAiSmokeTest.mjs",
     "test": "npm run build && node --test test/*.test.mjs",
     "test:integration": "npm run build && firebase emulators:exec --only auth,firestore,functions --project workflow-integration \"node --test integration/*.test.mjs\""

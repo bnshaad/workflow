@@ -17,7 +17,21 @@ import {
 
 const PROJECT_ID = 'workflow-integration'
 const SYNTHETIC_PASSWORD = 'LocalSmoke-Only-123!'
-const protectedCollections = ['actionProposals', 'jobs', 'recommendations']
+const operationsOnly = process.argv.includes('--operations-only')
+const protectedCollections = [
+  'actionProposals',
+  'jobs',
+  'notifications',
+  'recommendations',
+]
+const operationsIntents = new Set([
+  'show_urgent_unassigned_jobs',
+  'show_overdue_jobs',
+  'show_jobs_requiring_attention',
+  'show_workload_distribution',
+  'summarize_open_operations',
+  'explain_job_attention_flag',
+])
 
 assertLocalOnlyEnvironment()
 
@@ -43,8 +57,13 @@ connectFunctionsEmulator(functions, '127.0.0.1', 5001)
 
 const classify = httpsCallable(functions, 'classifyCoordinatorIntent')
 const draft = httpsCallable(functions, 'draftJobFromRequest')
+const operations = httpsCallable(functions, 'getOperationsInsight')
 let userCreated = false
 let profileCreated = false
+const employeeId = `local-ai-smoke-employee-${suffix}`
+const urgentJobId = `local-ai-smoke-urgent-${suffix}`
+const assignedJobId = `local-ai-smoke-assigned-${suffix}`
+const organizationId = `local-ai-smoke-organization-${suffix}`
 
 try {
   await adminAuth.createUser({
@@ -62,28 +81,109 @@ try {
     email,
     id: uid,
     isActive: true,
-    organizationId: 'local-ai-smoke-organization',
+    organizationId,
     performanceScore: 0,
     role: 'manager',
     skills: [],
     updatedAt: Timestamp.now(),
   })
   profileCreated = true
+  await adminFirestore.collection('users').doc(employeeId).set({
+    createdAt: Timestamp.now(),
+    displayName: 'Synthetic Technician',
+    email: `${employeeId}@example.test`,
+    id: employeeId,
+    isActive: true,
+    organizationId,
+    role: 'employee',
+    updatedAt: Timestamp.now(),
+  })
+  await Promise.all([
+    adminFirestore.collection('jobs').doc(urgentJobId).set({
+      assignedEmployeeIds: [],
+      createdAt: Timestamp.now(),
+      dueDate: Timestamp.fromMillis(Date.now() - 60_000),
+      id: urgentJobId,
+      isActive: true,
+      organizationId,
+      priority: 'High',
+      status: 'open',
+      title: 'Synthetic overdue repair',
+      updatedAt: Timestamp.now(),
+    }),
+    adminFirestore.collection('jobs').doc(assignedJobId).set({
+      assignedEmployeeIds: [employeeId],
+      createdAt: Timestamp.now(),
+      dueDate: Timestamp.fromMillis(Date.now() + 60_000),
+      id: assignedJobId,
+      isActive: true,
+      organizationId,
+      priority: 'Medium',
+      status: 'assigned',
+      title: 'Synthetic assigned repair',
+      updatedAt: Timestamp.now(),
+    }),
+  ])
   await signInWithEmailAndPassword(clientAuth, email, SYNTHETIC_PASSWORD)
 
   const beforeCounts = await readProtectedCollectionCounts()
-  const immediateAttention = await classify({
-    message: 'What work needs immediate attention today?',
-    uiContext: 'dashboard',
-  })
-  assert.equal(immediateAttention.data.intent, 'show_urgent_unassigned_jobs')
-  assert.equal(immediateAttention.data.requiresClarification, false)
+  if (operationsOnly) {
+    const result = await runOperationsOnlySpotCheck(classify, operations)
+    const afterCounts = await readProtectedCollectionCounts()
+    assert.deepEqual(afterCounts, beforeCounts)
+    console.log('Local real-Gemini Operations spot-check passed with synthetic data.')
+    console.log(
+      JSON.stringify(
+        {
+          protectedCollectionCounts: afterCounts,
+          realGeminiRequestCount: result.length,
+          routes: result,
+        },
+        null,
+        2,
+      ),
+    )
+  } else {
+    const immediateAttention = await classify({
+      message: 'What needs attention today?',
+      uiContext: 'dashboard',
+    })
+    assert.equal(operationsIntents.has(immediateAttention.data.intent), true)
+    assert.equal(immediateAttention.data.requiresClarification, false)
+    const immediateInsight = await operations({
+      intent: immediateAttention.data.intent,
+      jobId: urgentJobId,
+    })
+    assert.equal(immediateInsight.data.intent, immediateAttention.data.intent)
 
   const destructive = await classify({
-    message: 'Delete all overdue jobs.',
+    message: 'Cancel every overdue job.',
     uiContext: 'jobs',
   })
   assert.equal(destructive.data.intent, 'unsupported')
+
+  const predictive = await classify({
+    message: 'Predict which open job will fail next.',
+    uiContext: 'dashboard',
+  })
+  assert.equal(predictive.data.intent, 'unsupported')
+
+  const historical = await classify({
+    message: 'Show every job completed today.',
+    uiContext: 'jobs',
+  })
+  assert.equal(historical.data.intent, 'unsupported')
+
+  const overdue = await operations({ intent: 'show_overdue_jobs' })
+  assert.deepEqual(
+    overdue.data.items.map((item) => item.jobId),
+    [urgentJobId],
+  )
+
+  const workload = await operations({ intent: 'show_workload_distribution' })
+  assert.equal(workload.data.employees[0].employeeId, employeeId)
+  assert.equal(workload.data.employees[0].activeJobCount, 1)
+  assert.doesNotMatch(workload.data.note, /overloaded|burnout|risk|predict/i)
 
   const workforceRecommendation = await classify({
     message: 'Who is the best technician for this job?',
@@ -106,17 +206,19 @@ try {
   })
   assert.equal(workforceExplanation.data.intent, 'explain_recommendation')
 
-  const completeDraft = await draft({
+  const sampleDraft = await draft({
     customerRequest:
-      'Customer Fathima reported that the office AC in Kakkanad is leaking water. Contact number is 9876543210. Service is needed before 5 PM today.',
+      'The AC in our office at Kakkanad is leaking water. Please send someone today.',
   })
-  assert.match(completeDraft.data.customerName, /fathima/i)
-  assert.match(completeDraft.data.customerPhone, /9876543210/)
+  assert.equal(sampleDraft.data.customerName, '')
+  assert.equal(sampleDraft.data.customerPhone, '')
   assert.match(
-    `${completeDraft.data.location} ${completeDraft.data.serviceAddress}`,
+    `${sampleDraft.data.location} ${sampleDraft.data.serviceAddress}`,
     /kakkanad/i,
   )
-  assert.equal(Array.isArray(completeDraft.data.uncertainFields), true)
+  assert.equal(sampleDraft.data.description.length > 0, true)
+  assert.equal(sampleDraft.data.title.length > 0, true)
+  assert.equal(Array.isArray(sampleDraft.data.uncertainFields), true)
 
   const incompleteDraft = await draft({
     customerRequest: 'AC problem. Send someone quickly.',
@@ -130,32 +232,76 @@ try {
   const afterCounts = await readProtectedCollectionCounts()
   assert.deepEqual(afterCounts, beforeCounts)
 
-  console.log('Local real-Gemini smoke test passed with synthetic data.')
-  console.log(
-    JSON.stringify(
-      {
-        completeDraftSummary: summarizeDraft(completeDraft.data),
-        destructiveIntent: destructive.data.intent,
-        immediateAttentionIntent: immediateAttention.data.intent,
-        incompleteDraftSummary: summarizeDraft(incompleteDraft.data),
-        protectedCollectionCounts: afterCounts,
-        workforceIntents: [
-          workforceRecommendation.data.intent,
-          workforceComparison.data.intent,
-          workforceExplanation.data.intent,
-        ],
-      },
-      null,
-      2,
-    ),
-  )
+    console.log('Local real-Gemini smoke test passed with synthetic data.')
+    console.log(
+      JSON.stringify(
+        {
+          sampleDraftSummary: summarizeDraft(sampleDraft.data),
+          destructiveIntent: destructive.data.intent,
+          historicalIntent: historical.data.intent,
+          immediateAttentionIntent: immediateAttention.data.intent,
+          operationsChecks: {
+            attentionResultIntent: immediateInsight.data.intent,
+            overdueCount: overdue.data.items.length,
+            workloadEmployeeCount: workload.data.employees.length,
+          },
+          incompleteDraftSummary: summarizeDraft(incompleteDraft.data),
+          predictiveIntent: predictive.data.intent,
+          protectedCollectionCounts: afterCounts,
+          realGeminiRequestCount: 9,
+          workforceIntents: [
+            workforceRecommendation.data.intent,
+            workforceComparison.data.intent,
+            workforceExplanation.data.intent,
+          ],
+        },
+        null,
+        2,
+      ),
+    )
+  }
 } finally {
+  await Promise.all([
+    adminFirestore.collection('jobs').doc(urgentJobId).delete(),
+    adminFirestore.collection('jobs').doc(assignedJobId).delete(),
+    adminFirestore.collection('users').doc(employeeId).delete(),
+  ])
   if (profileCreated) {
     await adminFirestore.collection('users').doc(uid).delete()
   }
   if (userCreated) {
     await adminAuth.deleteUser(uid)
   }
+}
+
+async function runOperationsOnlySpotCheck(classifyCallable, operationsCallable) {
+  const cases = [
+    ['attention', 'What needs attention today?', 'dashboard', 'show_jobs_requiring_attention'],
+    ['critical', 'Is anything operationally critical?', 'dashboard', 'show_urgent_unassigned_jobs'],
+    ['manager-review', 'Which jobs require a manager review?', 'jobs', 'show_jobs_requiring_attention'],
+    ['workload', 'How is work distributed across the team?', 'dashboard', 'show_workload_distribution'],
+    ['overdue', 'Which active jobs are past their deadline?', 'jobs', 'show_overdue_jobs'],
+    ['open-summary', 'Give me an overview of current open operations.', 'dashboard', 'summarize_open_operations'],
+    ['mutation', 'Cancel every overdue job.', 'jobs', 'unsupported'],
+    ['prediction', 'Predict which open job will fail next.', 'dashboard', 'unsupported'],
+    ['historical', 'Show every job completed today.', 'jobs', 'unsupported'],
+  ]
+
+  const routes = []
+  for (const [id, message, uiContext, expectedIntent] of cases) {
+    const classification = await classifyCallable({ message, uiContext })
+    assert.equal(classification.data.intent, expectedIntent)
+    assert.equal(classification.data.requiresClarification, false)
+
+    if (operationsIntents.has(expectedIntent)) {
+      const insight = await operationsCallable({ intent: expectedIntent })
+      assert.equal(insight.data.intent, expectedIntent)
+    }
+
+    routes.push({ id, intent: classification.data.intent })
+  }
+
+  return routes
 }
 
 async function readProtectedCollectionCounts() {

@@ -100,7 +100,9 @@ function assertBoundedPayload(value) {
 }
 function asHttpsError(error) {
     const publicError = toPublicModelError(error);
-    return new HttpsError(publicError.code, publicError.message);
+    return new HttpsError(publicError.code, publicError.message, {
+        category: publicError.category,
+    });
 }
 function logModelFailure(correlationId, operation, requestLength, error, startedAt) {
     const diagnostics = error instanceof ModelProviderError ? error.diagnostics : undefined;

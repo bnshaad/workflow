@@ -7,12 +7,14 @@ import {
   getApps,
   initializeApp,
 } from 'firebase-admin/app'
+import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
 
 const DEMO_ORGANIZATION_ID = 'demo-org-001'
 const DEMO_ORGANIZATION_NAME = 'Workflow Demo Services'
 const SEED_CONFIRMATION = 'SEED_WORKFLOW_DEMO_SERVICES'
 const RESET_CONFIRMATION = 'DELETE_WORKFLOW_DEMO_SERVICES'
+const DEMO_AUTH_PASSWORD = 'WorkflowDemo-Only-123!'
 const JOB_STATUSES = [
   'draft',
   'open',
@@ -31,6 +33,7 @@ loadEnvFile(path.join(appRoot, '.env.local'))
 
 const timestampAnchor = new Date('2026-07-04T09:00:00.000Z')
 let db
+let seedAuthEmulator = false
 
 async function seedDemoDataset() {
   const users = buildUsers()
@@ -61,12 +64,44 @@ async function seedDemoDataset() {
 
   await commitInBatches(writes)
 
+  if (seedAuthEmulator) {
+    await seedDemoAuthUsers(users.all)
+  }
+
   return {
     activities: activityAndAudit.activities.length,
     auditLogs: activityAndAudit.auditLogs.length,
     jobs: jobs.length,
     organizations: 1,
     users: users.all.length,
+  }
+}
+
+async function seedDemoAuthUsers(users) {
+  const auth = getAuth()
+
+  for (const user of users) {
+    try {
+      const existingUser = await auth.getUser(user.id)
+
+      if (existingUser.email !== user.email) {
+        throw new Error(
+          `Auth user ${user.id} is already associated with a different email.`,
+        )
+      }
+    } catch (error) {
+      if (getAuthErrorCode(error) !== 'auth/user-not-found') {
+        throw error
+      }
+
+      await auth.createUser({
+        displayName: user.displayName,
+        email: user.email,
+        emailVerified: true,
+        password: DEMO_AUTH_PASSWORD,
+        uid: user.id,
+      })
+    }
   }
 }
 
@@ -679,6 +714,33 @@ function assertSafeSeedEnvironment(parsedOptions) {
       `Pass --confirm-reset=${RESET_CONFIRMATION} to reset demo data.`,
     )
   }
+
+  if (parsedOptions.withAuthEmulator) {
+    assertLocalAuthEmulator(projectId)
+  }
+}
+
+function assertLocalAuthEmulator(projectId) {
+  const authEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST
+  const firestoreEmulatorHost = process.env.FIRESTORE_EMULATOR_HOST
+
+  if (projectId !== 'workflow-integration') {
+    throw new Error(
+      'Auth demo seeding is restricted to the workflow-integration emulator project.',
+    )
+  }
+
+  if (authEmulatorHost !== '127.0.0.1:9099') {
+    throw new Error(
+      'Set FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 to seed local Auth users.',
+    )
+  }
+
+  if (firestoreEmulatorHost !== '127.0.0.1:8080') {
+    throw new Error(
+      'Set FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 to seed local demo data.',
+    )
+  }
 }
 
 function parseArgs(args) {
@@ -686,6 +748,10 @@ function parseArgs(args) {
     (parsedOptions, arg) => {
       if (arg === '--reset') {
         return { ...parsedOptions, reset: true }
+      }
+
+      if (arg === '--with-auth-emulator') {
+        return { ...parsedOptions, withAuthEmulator: true }
       }
 
       if (arg.startsWith('--confirm=')) {
@@ -701,8 +767,14 @@ function parseArgs(args) {
 
       return parsedOptions
     },
-    { confirm: '', confirmReset: '', reset: false },
+    { confirm: '', confirmReset: '', reset: false, withAuthEmulator: false },
   )
+}
+
+function getAuthErrorCode(error) {
+  return error && typeof error === 'object' && 'code' in error
+    ? error.code
+    : undefined
 }
 
 function loadEnvFile(filePath) {
@@ -799,6 +871,7 @@ async function main() {
 
     const projectId = getRequiredEnv('VITE_FIREBASE_PROJECT_ID')
     db = getFirestore(initializeFirebaseAdmin(projectId))
+    seedAuthEmulator = options.withAuthEmulator
 
     console.log(`Connected Firebase project ID: ${projectId}`)
 

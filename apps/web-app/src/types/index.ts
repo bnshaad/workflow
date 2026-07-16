@@ -50,6 +50,8 @@ export type {
   HighestWorkloadEmployee,
   JobDraftSuggestion,
   ModelIntentClassification,
+  OperationsIntelligenceResult,
+  OperationsIntent,
   OpenJobsSummary,
   ProposedAction,
   ProposedCreateJobPayload,
