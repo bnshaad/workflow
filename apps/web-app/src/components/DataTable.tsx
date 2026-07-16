@@ -16,9 +16,9 @@ export function DataTable<Row extends { id: string }>({
   rows,
 }: DataTableProps<Row>) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+    <div className="overflow-x-auto rounded-lg border border-border bg-card">
       <table className="w-full min-w-[720px] border-collapse text-left">
-        <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+        <thead className="sticky top-0 z-10 bg-background">
           <tr className="border-b border-border bg-background/40">
             {columns.map((column) => (
               <th
@@ -32,7 +32,7 @@ export function DataTable<Row extends { id: string }>({
         </thead>
         <tbody className="divide-y divide-border text-sm">
           {rows.map((row) => (
-            <tr className="transition-colors hover:bg-primary/[0.035]" key={row.id}>
+            <tr className="transition-colors hover:bg-background" key={row.id}>
               {columns.map((column) => (
                 <td className="px-4 py-3 align-middle" key={String(column.key)}>
                   {column.render ? column.render(row) : String(row[column.key as keyof Row])}

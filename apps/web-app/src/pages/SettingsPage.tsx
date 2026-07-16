@@ -101,11 +101,9 @@ function SettingsSection({
   title: string
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card shadow-sm">
-      <div className="flex items-start gap-3 border-b border-border p-4">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon aria-hidden="true" className="size-4" />
-        </span>
+    <section className="rounded-lg border border-border bg-card">
+      <div className="flex items-start gap-3 border-b border-border p-3.5">
+        <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <div>
           <h2 className="text-base font-semibold text-foreground">{title}</h2>
           <p className="mt-1 text-sm leading-5 text-muted-foreground">
@@ -113,7 +111,7 @@ function SettingsSection({
           </p>
         </div>
       </div>
-      <div className="p-3">{children}</div>
+      <div className="p-3.5">{children}</div>
     </section>
   )
 }
@@ -121,10 +119,10 @@ function SettingsSection({
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="mb-1 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+      <p className="mb-1 text-xs font-medium text-muted-foreground">
         {label}
       </p>
-      <div className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground">
+      <div className="border-b border-border pb-2 text-sm text-foreground">
         {value}
       </div>
     </div>
@@ -141,19 +139,19 @@ export function SettingsPage() {
     : false
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         title="Settings"
-        description="Review Business setup, Team access, Audit Logs, and operational Preferences."
+        description="Business details, access, and preferences."
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-3">
           {showBusinessProfile ? (
             <SettingsSection
               icon={BriefcaseBusiness}
               title="Business Profile"
-              description="Admin-focused Business details used across Jobs and Team workflows."
+              description="Details shown across jobs and team views."
             >
               <div className="grid gap-3 md:grid-cols-2">
                 {businessProfile.map((field) => (
@@ -167,7 +165,7 @@ export function SettingsPage() {
             <SettingsSection
               icon={UserRoundCog}
               title="Users & Roles"
-              description="Admin-focused view of mock users and their current access level."
+              description="Current users and access levels."
             >
               <div className="overflow-hidden rounded-lg border border-border">
                 <table className="w-full min-w-[560px] border-collapse text-left text-sm">
@@ -205,17 +203,17 @@ export function SettingsPage() {
           ) : null}
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {showAuditLogs ? (
             <SettingsSection
               icon={ShieldCheck}
               title="Audit Logs"
-              description="Admin-focused activity summary for Jobs, Team, and Issues."
+              description="Recent changes across the workspace."
             >
-              <div className="space-y-2">
+              <div className="divide-y divide-border">
                 {auditLogs.map((log) => (
                   <article
-                    className="rounded-lg border border-border bg-background px-3 py-2"
+                    className="px-1 py-2.5"
                     key={log.id}
                   >
                     <div className="flex items-start justify-between gap-4">
@@ -241,12 +239,12 @@ export function SettingsPage() {
             <SettingsSection
               icon={Bell}
               title="Preferences"
-              description="Manager-visible display preferences for Jobs, Team, and Issues."
+              description="Display and alert preferences."
             >
-              <div className="space-y-2">
+              <div className="divide-y divide-border">
                 {preferences.map((preference) => (
                   <div
-                    className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background px-3 py-2"
+                    className="flex items-center justify-between gap-4 px-1 py-2.5"
                     key={preference.label}
                   >
                     <div>
@@ -267,8 +265,8 @@ export function SettingsPage() {
                       <span
                         className={
                           preference.value
-                            ? 'block size-5 translate-x-5 rounded-full bg-white shadow-sm'
-                            : 'block size-5 rounded-full bg-white shadow-sm'
+                            ? 'block size-5 translate-x-5 rounded-full bg-white'
+                            : 'block size-5 rounded-full bg-white'
                         }
                       />
                     </span>
@@ -280,7 +278,7 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <section className="rounded-xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
+      <section className="border-t border-border px-1 pt-3 text-sm text-muted-foreground">
         <div className="flex items-start gap-3">
           <ClipboardList aria-hidden="true" className="mt-0.5 size-5 text-primary" />
           <p>

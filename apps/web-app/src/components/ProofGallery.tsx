@@ -12,7 +12,7 @@ export function ProofGallery({
   verificationStatus,
 }: ProofGalleryProps) {
   return (
-    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+    <section className="border-t border-border pt-4">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-base font-semibold text-foreground">Work Proof</h2>
         <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">

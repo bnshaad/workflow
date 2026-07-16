@@ -48,7 +48,7 @@ export function AnalyticsPage() {
   useEffect(() => {
     let isMounted = true
 
-    async function loadAnalytics() {
+    async function loadReports() {
       if (!profile) {
         return
       }
@@ -68,11 +68,11 @@ export function AnalyticsPage() {
         }
       } catch (error) {
         if (import.meta.env.DEV) {
-          console.error('Analytics metrics failed to load.', error)
+          console.error('Reports metrics failed to load.', error)
         }
 
         if (isMounted) {
-          setErrorMessage('Unable to load analytics. Please try again.')
+          setErrorMessage('Unable to load reports. Please try again.')
           setSummary(null)
           setBaseline(null)
         }
@@ -83,7 +83,7 @@ export function AnalyticsPage() {
       }
     }
 
-    void loadAnalytics()
+    void loadReports()
 
     return () => {
       isMounted = false
@@ -91,10 +91,10 @@ export function AnalyticsPage() {
   }, [profile])
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
-        title="Analytics"
-        description="Operational performance and assignment evaluation"
+        title="Reports"
+        description="Job and assignment performance."
       />
 
       {isLoading ? (
@@ -110,8 +110,8 @@ export function AnalyticsPage() {
           <FutureEvaluationState />
         </>
       ) : (
-        <section className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
-          No analytics data is available yet.
+        <section className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          Reports are not available.
         </section>
       )}
     </div>
@@ -135,13 +135,13 @@ function OperationsSummary({ summary }: { summary: DashboardSummary }) {
         ) / employeeCount
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-3">
       <div>
         <h2 className="text-base font-semibold text-foreground">
-          Operations Summary
+          Operations
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Job urgency, workload distribution, and overdue job signals.
+          Current workload and overdue work.
         </p>
       </div>
 
@@ -201,7 +201,7 @@ function PriorityBreakdown({ summary }: { summary: DashboardSummary }) {
       <div className="space-y-3">
         {JOB_PRIORITY_OPTIONS.map((priority) => (
           <div
-            className="flex items-center justify-between gap-4 rounded-md border border-border bg-background px-3 py-2"
+            className="flex items-center justify-between gap-4 border-b border-border px-1 py-2 last:border-b-0"
             key={priority}
           >
             <StatusBadge tone={priorityTone[priority]}>{priority}</StatusBadge>
@@ -223,14 +223,14 @@ function ManualAssignmentBaseline({
   const topEmployees = baseline.assignmentCountByEmployee.slice(0, 6)
 
   return (
-    <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <section className="rounded-lg border border-border bg-card p-3.5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-base font-semibold text-foreground">
             Manual Assignment Baseline
           </h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Descriptive outcomes for manager-selected initial assignments.
+            Outcomes from manager-selected assignments.
           </p>
         </div>
         <StatusBadge tone="default">Manual</StatusBadge>
@@ -238,7 +238,7 @@ function ManualAssignmentBaseline({
 
       {baseline.totalManualAssignments > 0 ? (
         <>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 grid grid-cols-1 gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
             <BaselineMetric
               icon={UserPlus}
               label="Manual Assignments"
@@ -300,7 +300,7 @@ function ManualAssignmentBaseline({
             <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
               {topEmployees.map((employee) => (
                 <div
-                  className="flex items-center justify-between gap-4 rounded-md border border-border bg-card px-3 py-2"
+                  className="flex items-center justify-between gap-4 border-b border-border px-1 py-2 last:border-b-0"
                   key={employee.employeeId}
                 >
                   <span className="min-w-0 truncate text-sm text-foreground">
@@ -316,7 +316,7 @@ function ManualAssignmentBaseline({
         </>
       ) : (
         <p className="mt-6 rounded-md border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-          No manual initial assignment audit events are available yet.
+          No manual assignment history is available.
         </p>
       )}
     </section>
@@ -325,7 +325,7 @@ function ManualAssignmentBaseline({
 
 function FutureEvaluationState() {
   return (
-    <section className="rounded-xl border border-dashed border-border bg-card p-4 shadow-sm">
+    <section className="rounded-lg border border-dashed border-border bg-card p-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
@@ -333,8 +333,7 @@ function FutureEvaluationState() {
             AI-Assisted Assignment Evaluation
           </h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-            AI-assisted evaluation will appear after recommendation acceptance
-            and override tracking are implemented.
+            Available after recommendation decisions are tracked.
           </p>
         </div>
         <StatusBadge tone="default">Future</StatusBadge>
@@ -355,15 +354,15 @@ function AnalyticsCard({
   title: string
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <section className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-3.5 py-3">
         <div>
           <h3 className="text-base font-semibold text-foreground">{title}</h3>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
         <Icon aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
       </div>
-      {children}
+      <div className="p-3">{children}</div>
     </section>
   )
 }
@@ -378,15 +377,15 @@ function SummaryStat({
   value: string
 }) {
   return (
-    <div className="rounded-md border border-border bg-background p-3">
-      <p className="text-xs font-medium uppercase leading-5 tracking-[0.08em] text-muted-foreground">
+    <div className="flex items-end justify-between gap-3 border-b border-border px-1 py-2 last:border-b-0">
+      <p className="text-xs font-medium leading-5 text-muted-foreground">
         {label}
       </p>
       <p
         className={
           tone === 'danger'
-            ? 'mt-3 text-2xl font-semibold tracking-tight text-destructive'
-            : 'mt-3 text-2xl font-semibold tracking-tight text-foreground'
+            ? 'text-xl font-semibold tracking-tight text-destructive'
+            : 'text-xl font-semibold tracking-tight text-foreground'
         }
       >
         {value}
@@ -407,7 +406,7 @@ function BaselineMetric({
   value: string
 }) {
   return (
-    <div className="rounded-md border border-border bg-background p-3">
+    <div className="bg-background p-3">
       <div className="flex items-center gap-2 text-muted-foreground">
         <Icon aria-hidden="true" className="size-4 shrink-0" />
         <p className="text-xs font-medium uppercase leading-5 tracking-[0.08em]">
@@ -429,7 +428,7 @@ function AnalyticsLoadingState() {
     <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {Array.from({ length: 8 }, (_, index) => (
         <div
-          className="min-h-[92px] rounded-lg border border-border bg-card p-3 shadow-sm"
+          className="min-h-[92px] rounded-lg border border-border bg-card p-3"
           key={index}
         >
           <div className="h-4 w-28 rounded-full bg-muted" />

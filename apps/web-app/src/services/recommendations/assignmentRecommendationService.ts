@@ -92,6 +92,10 @@ export interface AssignmentRecommendationService {
     organizationId: string,
     jobId: string,
   ): Promise<GenerateAssignmentRecommendationsResult>
+  getGeneratedRecommendationJobIds(
+    profile: UserProfile,
+    organizationId: string,
+  ): Promise<Set<string>>
   getRecommendationDecisionMetrics(
     profile: UserProfile,
     organizationId: string,
@@ -371,6 +375,37 @@ export const assignmentRecommendationService: AssignmentRecommendationService = 
     await batch.commit()
 
     return { recommendation }
+  },
+
+  async getGeneratedRecommendationJobIds(profile, organizationId) {
+    const activeProfile = requireActiveProfile(profile)
+    requireTenantAccess(activeProfile, organizationId)
+
+    if (!canAssignWorker(activeProfile)) {
+      throw new AssignmentRecommendationError(
+        'You do not have permission to view assignment recommendations.',
+      )
+    }
+
+    const recommendationsQuery = query(
+      collection(firestore, RECOMMENDATIONS_COLLECTION),
+      where('organizationId', '==', organizationId),
+      where('isActive', '==', true),
+      limitResults(200),
+    )
+    const snapshot = await getDocs(recommendationsQuery)
+
+    return new Set(
+      snapshot.docs
+        .map((recommendationDocument) =>
+          mapAssignmentRecommendation(
+            recommendationDocument.id,
+            recommendationDocument.data(),
+          ),
+        )
+        .filter((recommendation) => recommendation.status === 'generated')
+        .map((recommendation) => recommendation.jobId),
+    )
   },
 
   async getRecommendationDecisionMetrics(profile, organizationId) {

@@ -32,7 +32,7 @@ const USERS_COLLECTION = 'users'
 const DEFAULT_JOBS_LIMIT = 200
 const DEFAULT_ACTIVITY_LIMIT = 12
 
-type DashboardJobRecord = {
+export type DashboardOperationalJob = {
   assignedEmployeeIds: string[]
   dueDate: Timestamp | null
   id: string
@@ -92,6 +92,7 @@ export type DashboardSummary = {
   actionNeeded: DashboardActionNeededSummary
   employeeWorkload: EmployeeWorkloadSummary[]
   jobMetrics: DashboardJobMetrics
+  operationalJobs: DashboardOperationalJob[]
   recentActivities: RecentDashboardActivity[]
 }
 
@@ -110,6 +111,7 @@ export async function getDashboardSummary(
     actionNeeded: buildDashboardActionNeededSummary(jobs),
     employeeWorkload: buildEmployeeWorkloadSummary(employees, jobs),
     jobMetrics: buildDashboardJobMetrics(jobs),
+    operationalJobs: jobs,
     recentActivities: buildRecentActivitySummary(activities, jobs, employees),
   }
 }
@@ -221,7 +223,7 @@ async function readRecentActivities(
 }
 
 function buildDashboardJobMetrics(
-  jobs: DashboardJobRecord[],
+  jobs: DashboardOperationalJob[],
 ): DashboardJobMetrics {
   const statusCounts = createStatusCounts()
   const priorityCounts = createPriorityCounts()
@@ -252,7 +254,7 @@ function buildDashboardJobMetrics(
 }
 
 function buildDashboardActionNeededSummary(
-  jobs: DashboardJobRecord[],
+  jobs: DashboardOperationalJob[],
 ): DashboardActionNeededSummary {
   const now = Timestamp.now().toMillis()
   let highPriorityOpenUnassignedJobs = 0
@@ -285,7 +287,7 @@ function buildDashboardActionNeededSummary(
 
 function buildEmployeeWorkloadSummary(
   employees: DashboardEmployeeRecord[],
-  jobs: DashboardJobRecord[],
+  jobs: DashboardOperationalJob[],
 ) {
   return buildOperationsWorkloadDistribution(
     employees,
@@ -293,7 +295,7 @@ function buildEmployeeWorkloadSummary(
   )
 }
 
-function toOperationsJobInput(job: DashboardJobRecord): OperationsJobInput {
+function toOperationsJobInput(job: DashboardOperationalJob): OperationsJobInput {
   return {
     assignedEmployeeIds: job.assignedEmployeeIds,
     dueAtMillis: job.dueDate?.toMillis() ?? null,
@@ -307,7 +309,7 @@ function toOperationsJobInput(job: DashboardJobRecord): OperationsJobInput {
 
 function buildRecentActivitySummary(
   activities: DashboardActivityRecord[],
-  jobs: DashboardJobRecord[],
+  jobs: DashboardOperationalJob[],
   employees: DashboardEmployeeRecord[],
 ) {
   const jobMap = new Map(jobs.map((job) => [job.id, job]))
@@ -382,7 +384,7 @@ function createPriorityCounts() {
 function mapDashboardJob(
   id: string,
   data: DocumentData,
-): DashboardJobRecord {
+): DashboardOperationalJob {
   return {
     assignedEmployeeIds: readStringArray(data.assignedEmployeeIds),
     dueDate: readTimestampOrNull(data.dueDate),

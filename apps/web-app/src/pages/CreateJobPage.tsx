@@ -16,6 +16,7 @@ import {
   AiJobUnderstandingError,
   jobUnderstandingService,
   type AiJobDraftSuggestion,
+  type ModelCoordinatorDiagnostics,
 } from '@/services/ai'
 import { JobValidationError, jobService } from '@/services/jobs'
 import type { CreateJobInput } from '@/types'
@@ -53,15 +54,18 @@ export function CreateJobPage() {
   const [draftSuggestion, setDraftSuggestion] =
     useState<AiJobDraftSuggestion | null>(null)
   const [aiErrorMessage, setAiErrorMessage] = useState('')
+  const [aiDiagnostics, setAiDiagnostics] =
+    useState<ModelCoordinatorDiagnostics | null>(null)
   const [hasAppliedDraftSuggestion, setHasAppliedDraftSuggestion] =
     useState(false)
-  const [isDraftPreviewExpanded, setIsDraftPreviewExpanded] = useState(true)
+  const [isDraftPreviewExpanded, setIsDraftPreviewExpanded] = useState(false)
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleGenerateDraft = async () => {
     setAiErrorMessage('')
+    setAiDiagnostics(null)
     setIsGeneratingDraft(true)
 
     if (!profile) {
@@ -78,10 +82,11 @@ export function CreateJobPage() {
 
       setDraftSuggestion(suggestion)
       setHasAppliedDraftSuggestion(false)
-      setIsDraftPreviewExpanded(true)
+      setIsDraftPreviewExpanded(false)
     } catch (error) {
       if (error instanceof AiJobUnderstandingError) {
         setAiErrorMessage(error.message)
+        setAiDiagnostics(error.diagnostics ?? null)
       } else {
         setAiErrorMessage('Unable to generate a job draft. Please try again.')
       }
@@ -153,13 +158,13 @@ export function CreateJobPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         title="Create Job"
         description="Add a manual job for the current organization."
         actions={
           <Link
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
             to="/jobs"
           >
             <ArrowLeft aria-hidden="true" className="size-4" />
@@ -168,16 +173,15 @@ export function CreateJobPage() {
         }
       />
 
-      <section className="rounded-xl border border-border bg-card shadow-sm">
-        <div className="border-b border-border p-4">
+      <section className="rounded-lg border border-border bg-background/40">
+        <div className="border-b border-border px-4 py-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-                <Sparkles aria-hidden="true" className="size-4 text-primary" />
-                Generate Job Draft
+              <h2 className="text-sm font-semibold text-foreground">
+                Draft assistant
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                AI-generated suggestions must be reviewed and edited before creating a job.
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Optional: turn a customer request into editable form fields.
               </p>
             </div>
             {draftSuggestion ? (
@@ -188,16 +192,16 @@ export function CreateJobPage() {
                     Applied to form
                   </span>
                 ) : null}
-                <span className="inline-flex w-fit rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                  AI-generated editable suggestion
+                <span className="inline-flex w-fit rounded-md bg-muted px-2 py-1 text-xs font-medium text-foreground">
+                  Editable draft
                 </span>
               </div>
             ) : null}
           </div>
         </div>
 
-        <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
-          <Field label="Natural-language customer request">
+        <div className="grid gap-3 p-3.5 lg:grid-cols-[minmax(0,1.3fr)_minmax(260px,0.7fr)]">
+          <Field label="Customer request">
             <textarea
               className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
               onChange={(event) => setCustomerRequest(event.target.value)}
@@ -206,7 +210,7 @@ export function CreateJobPage() {
             />
           </Field>
 
-          <div className="rounded-lg border border-border bg-background p-4">
+          <div className="border-t border-border pt-3.5 lg:border-l lg:border-t-0 lg:pl-3.5 lg:pt-0">
             {draftSuggestion ? (
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-3">
@@ -215,9 +219,7 @@ export function CreateJobPage() {
                       Draft suggestion
                     </h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {draftSuggestion.source === 'gemini'
-                        ? 'Gemini-assisted output. Apply it only as editable form text.'
-                        : 'Development stub output. Apply it only as editable form text.'}
+                      Review before using these fields in the form.
                     </p>
                   </div>
                   <button
@@ -300,7 +302,7 @@ export function CreateJobPage() {
               </div>
             ) : (
               <div className="flex min-h-24 items-center text-sm text-muted-foreground">
-                Generated fields will appear here before you apply them to the editable job form.
+                The draft fields will appear here for review.
               </div>
             )}
           </div>
@@ -308,9 +310,32 @@ export function CreateJobPage() {
 
         <div className="flex flex-col gap-3 border-t border-border p-4 sm:flex-row sm:items-center sm:justify-between">
           {aiErrorMessage ? (
-            <p className="text-sm font-medium text-destructive">
-              {aiErrorMessage}
-            </p>
+            <div>
+              <p className="text-sm font-medium text-destructive">
+                {aiErrorMessage}
+              </p>
+              {import.meta.env.DEV && aiDiagnostics ? (
+                <details className="mt-2 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer font-medium text-foreground">
+                    Development diagnostics
+                  </summary>
+                  <dl className="mt-2 grid gap-1 rounded-md border border-border bg-muted/40 p-2.5 sm:grid-cols-3">
+                    <DiagnosticItem
+                      label="Error code"
+                      value={aiDiagnostics.normalizedErrorCode}
+                    />
+                    <DiagnosticItem
+                      label="Callable status"
+                      value={aiDiagnostics.callableStatus}
+                    />
+                    <DiagnosticItem
+                      label="Duration"
+                      value={`${aiDiagnostics.durationMs} ms`}
+                    />
+                  </dl>
+                </details>
+              ) : null}
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">
               This does not save a job or assign employees.
@@ -318,7 +343,7 @@ export function CreateJobPage() {
           )}
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isGeneratingDraft || customerRequest.trim().length === 0}
               onClick={handleGenerateDraft}
               type="button"
@@ -330,23 +355,24 @@ export function CreateJobPage() {
                   ? 'Retry'
                   : 'Generate Draft'}
             </button>
-            <button
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!draftSuggestion}
-              onClick={applyDraftSuggestion}
-              type="button"
-            >
-              Use Suggestion
-            </button>
+            {draftSuggestion ? (
+              <button
+                className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                onClick={applyDraftSuggestion}
+                type="button"
+              >
+                Use Suggestion
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
 
       <form
-        className="rounded-xl border border-border bg-card shadow-sm"
+        className="rounded-lg border border-border bg-card"
         onSubmit={handleSubmit}
       >
-        <div className="space-y-4 p-4 pb-20">
+        <div className="space-y-3.5 p-3.5 pb-16">
           <FormSection
             description="Name the job and capture the customer request."
             title="Customer & Job Details"
@@ -547,7 +573,7 @@ export function CreateJobPage() {
           </FormSection>
         </div>
 
-        <div className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-border bg-card/95 p-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-4">
+        <div className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
           {errorMessage ? (
             <p className="text-sm font-medium text-destructive">{errorMessage}</p>
           ) : (
@@ -556,7 +582,7 @@ export function CreateJobPage() {
             </p>
           )}
           <button
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSubmitting}
             type="submit"
           >
@@ -565,6 +591,15 @@ export function CreateJobPage() {
           </button>
         </div>
       </form>
+    </div>
+  )
+}
+
+function DiagnosticItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd className="mt-0.5 font-mono text-foreground">{value}</dd>
     </div>
   )
 }
@@ -616,8 +651,8 @@ function FormSection({
   title: string
 }) {
   return (
-    <section className="rounded-lg border border-border bg-background p-4">
-      <div className="mb-4">
+    <section className="border-t border-border py-4 first:border-t-0 first:pt-0">
+      <div className="mb-3">
         <h2 className="text-base font-semibold text-foreground">{title}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>

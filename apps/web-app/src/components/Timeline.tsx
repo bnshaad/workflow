@@ -18,7 +18,7 @@ const dotClass = {
 
 export function Timeline({ items }: TimelineProps) {
   return (
-    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+    <section className="border-t border-border pt-4">
       <h2 className="text-base font-semibold text-foreground">Timeline</h2>
       <div className="relative ml-3 mt-4 space-y-4 border-l-2 border-border">
         {items.map((item) => (

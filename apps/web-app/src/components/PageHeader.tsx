@@ -8,12 +8,12 @@ type PageHeaderProps = {
 
 export function PageHeader({ actions, description, title }: PageHeaderProps) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
-        <h1 className="text-[1.75rem] font-semibold leading-9 tracking-[-0.025em] text-foreground sm:text-3xl">
+        <h1 className="text-2xl font-semibold leading-8 tracking-[-0.02em] text-foreground">
           {title}
         </h1>
-        <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">
+        <p className="mt-1 max-w-2xl text-sm leading-5 text-muted-foreground">
           {description}
         </p>
       </div>

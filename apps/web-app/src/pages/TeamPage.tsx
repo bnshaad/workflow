@@ -42,21 +42,21 @@ const teamMembers: TeamMember[] = [
 
 export function TeamPage() {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         title="Team"
-        description="See who's available and what everyone is working on."
+        description="Availability, workload, and skills."
         actions={
           <>
             <button
-              className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
               type="button"
             >
               <Download aria-hidden="true" className="size-4" />
               Export
             </button>
             <button
-              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30"
               type="button"
             >
               <Plus aria-hidden="true" className="size-4" />
@@ -66,7 +66,7 @@ export function TeamPage() {
         }
       />
 
-      <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <section className="rounded-lg border border-border bg-card p-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
             <Search
@@ -101,7 +101,7 @@ export function TeamPage() {
               <option>On Leave</option>
             </select>
             <button
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-3 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-card px-3 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               type="button"
               aria-label="More filters"
             >
@@ -111,10 +111,7 @@ export function TeamPage() {
         </div>
       </section>
 
-      <section
-        aria-label="Team members"
-        className="space-y-2"
-      >
+      <section aria-label="Team members" className="overflow-hidden rounded-lg border border-border bg-card">
         {teamMembers.map((member) => (
           <TeamMemberCard key={member.name} {...member} />
         ))}

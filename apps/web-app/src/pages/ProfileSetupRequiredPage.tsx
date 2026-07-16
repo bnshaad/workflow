@@ -1,7 +1,7 @@
 export function ProfileSetupRequiredPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6">
-      <section className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
+      <section className="w-full max-w-md border-t-2 border-primary bg-card p-6">
         <p className="text-sm font-medium text-muted-foreground">Account</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
           Profile setup required

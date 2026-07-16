@@ -14,14 +14,14 @@ export function SuggestedWorkerCard({
   role,
 }: SuggestedWorkerCardProps) {
   return (
-    <section className="overflow-hidden rounded-xl border-2 border-primary/20 bg-card shadow-md">
+    <section className="overflow-hidden rounded-lg border border-border border-l-2 border-l-primary bg-card">
       <div className="grid gap-0 md:grid-cols-[1fr_160px]">
         <div className="flex items-center gap-4 p-4">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-full border-2 border-primary/30 bg-secondary text-base font-semibold text-secondary-foreground shadow-sm">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-sm font-semibold text-foreground">
             AR
           </div>
           <div>
-            <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
               <Star aria-hidden="true" className="size-3.5" />
               Suggested Worker
             </span>
@@ -33,7 +33,7 @@ export function SuggestedWorkerCard({
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center border-t border-border bg-primary/5 p-4 text-center md:border-l md:border-t-0">
+        <div className="flex flex-col items-center justify-center border-t border-border bg-background p-4 text-center md:border-l md:border-t-0">
           <p className="text-3xl font-semibold tracking-tight text-emerald-500">
             {matchScore}%
           </p>
@@ -54,13 +54,13 @@ export function SuggestedWorkerCard({
 
       <div className="flex flex-col gap-2 border-t border-border bg-card p-4 sm:flex-row sm:justify-end">
         <button
-          className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-card px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           type="button"
         >
           Choose Another Worker
         </button>
         <button
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           type="button"
         >
           <UserPlus aria-hidden="true" className="size-4" />

@@ -8,7 +8,7 @@ export function PagePlaceholder({
   title,
 }: PagePlaceholderProps) {
   return (
-    <section className="rounded-xl border border-dashed border-border bg-card p-8 shadow-sm">
+    <section className="rounded-lg border border-dashed border-border bg-card p-6">
       <p className="text-xs font-medium uppercase tracking-[0.02em] text-muted-foreground">
         {eyebrow}
       </p>

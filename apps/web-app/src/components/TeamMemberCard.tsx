@@ -33,11 +33,11 @@ export function TeamMemberCard({
   const isOnLeave = availability === 'On Leave'
 
   return (
-    <article className="rounded-lg border border-border bg-card p-3 shadow-sm transition hover:shadow-md">
+    <article className="border-b border-border bg-card px-3 py-3 last:border-b-0 hover:bg-background/70">
       <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_auto] lg:items-center">
         <div className="flex min-w-0 items-center gap-3">
           <div className="relative shrink-0">
-            <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-secondary text-sm font-semibold text-secondary-foreground">
+            <div className="flex size-9 items-center justify-center rounded-md border border-border bg-muted text-sm font-semibold text-foreground">
               {initials}
             </div>
             <span

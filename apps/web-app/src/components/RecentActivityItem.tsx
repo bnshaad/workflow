@@ -23,7 +23,7 @@ export function RecentActivityItem({
 }: RecentActivityItemProps) {
   return (
     <div className="relative">
-      <span className="absolute -left-[29px] z-10 flex size-6 items-center justify-center rounded-full border border-border bg-card shadow-sm">
+      <span className="absolute -left-[29px] z-10 flex size-6 items-center justify-center rounded-full border border-border bg-card">
         <Icon aria-hidden="true" className={cn('size-3.5', iconTone[tone])} />
       </span>
       <p className="text-sm leading-5 text-foreground">{text}</p>

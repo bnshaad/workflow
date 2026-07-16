@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   BarChart3,
   BriefcaseBusiness,
+  ClipboardCheck,
   X,
   LayoutDashboard,
   Settings,
@@ -21,15 +22,9 @@ import { cn } from '@/utils'
 
 const navigationItems = [
   {
-    label: 'Dashboard',
+    label: 'Overview',
     to: '/dashboard',
     icon: LayoutDashboard,
-    canView: canViewDashboard,
-  },
-  {
-    label: 'Analytics',
-    to: '/analytics',
-    icon: BarChart3,
     canView: canViewDashboard,
   },
   {
@@ -38,7 +33,19 @@ const navigationItems = [
     icon: BriefcaseBusiness,
     canView: canViewJobs,
   },
+  {
+    label: 'Assignments',
+    to: '/assignments',
+    icon: ClipboardCheck,
+    canView: canViewJobs,
+  },
   { label: 'Team', to: '/team', icon: UsersRound, canView: canViewTeam },
+  {
+    label: 'Reports',
+    to: '/analytics',
+    icon: BarChart3,
+    canView: canViewDashboard,
+  },
   {
     label: 'Settings',
     to: '/settings',
@@ -62,6 +69,7 @@ export function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const { profile } = useAuth()
+  const mobileDialogRef = useRef<HTMLElement>(null)
   const visibleNavigationItems = profile
     ? getVisibleNavigationItems(profile)
     : []
@@ -71,9 +79,34 @@ export function Sidebar({
       return undefined
     }
 
+    const previouslyFocusedElement = document.activeElement as HTMLElement | null
+    const focusableElements = mobileDialogRef.current
+      ? Array.from(
+          mobileDialogRef.current.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        )
+      : []
+
+    focusableElements[0]?.focus()
+
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         onMobileClose?.()
+        return
+      }
+
+      if (event.key === 'Tab' && focusableElements.length > 0) {
+        const firstElement = focusableElements[0]
+        const lastElement = focusableElements[focusableElements.length - 1]
+
+        if (event.shiftKey && document.activeElement === firstElement) {
+          event.preventDefault()
+          lastElement.focus()
+        } else if (!event.shiftKey && document.activeElement === lastElement) {
+          event.preventDefault()
+          firstElement.focus()
+        }
       }
     }
 
@@ -81,12 +114,13 @@ export function Sidebar({
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
+      previouslyFocusedElement?.focus()
     }
   }, [isMobileOpen, onMobileClose])
 
   return (
     <>
-      <aside className="fixed left-0 top-0 z-50 hidden h-screen w-[240px] flex-col border-r border-sidebar-border bg-sidebar px-3 py-5 md:flex">
+      <aside className="fixed left-0 top-0 z-50 hidden h-screen w-[240px] flex-col border-r border-sidebar-border bg-sidebar px-3 py-4 md:flex">
         <SidebarContent navigationItems={visibleNavigationItems} />
       </aside>
 
@@ -102,6 +136,7 @@ export function Sidebar({
             aria-label="Mobile navigation"
             aria-modal="true"
             className="relative flex h-full w-[min(320px,85vw)] flex-col border-r border-sidebar-border bg-sidebar px-3 py-4 shadow-xl"
+            ref={mobileDialogRef}
             role="dialog"
           >
             <div className="mb-4 flex items-center justify-between gap-3 px-4 py-2">
@@ -134,7 +169,7 @@ function SidebarContent({
 }) {
   return (
     <>
-      <div className="mb-7 px-3 py-1">
+      <div className="mb-6 px-3 py-1">
         <BrandMark />
       </div>
 
@@ -146,16 +181,14 @@ function SidebarContent({
 function BrandMark() {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-base font-semibold text-primary-foreground shadow-sm shadow-primary/20">
+      <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-semibold text-primary-foreground">
         W
       </div>
       <div>
-        <p className="text-xl font-semibold leading-6 tracking-[-0.025em] text-primary">
+        <p className="text-lg font-semibold leading-5 tracking-[-0.02em] text-foreground">
           Workflow
         </p>
-        <p className="text-xs leading-4 text-muted-foreground">
-          Operations portal
-        </p>
+        <p className="text-xs leading-4 text-muted-foreground">Management</p>
       </div>
     </div>
   )
@@ -170,17 +203,14 @@ function SidebarNavigation({
 }) {
   return (
     <nav aria-label="Primary navigation" className="flex flex-1 flex-col">
-      <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
-        Workspace
-      </p>
       <div className="space-y-1">
         {navigationItems.map((item) => (
           <NavLink
             className={({ isActive }) =>
               cn(
-                'group relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-primary/30',
+                'group relative flex min-h-9 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30',
                 isActive
-                  ? 'bg-primary/10 text-primary shadow-sm shadow-primary/5'
+                  ? 'bg-muted text-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )
             }
@@ -203,7 +233,7 @@ function SidebarNavigation({
                   className={cn(
                     'size-[18px] shrink-0 transition-colors',
                     isActive
-                      ? 'text-primary'
+                      ? 'text-foreground'
                       : 'text-muted-foreground group-hover:text-foreground',
                   )}
                 />

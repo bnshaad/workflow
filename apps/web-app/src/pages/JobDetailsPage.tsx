@@ -24,7 +24,6 @@ import {
   type AssignmentRecommendation,
   type AssignmentRecommendationCandidate,
   type AssignmentOverrideReason,
-  type AssignmentScoreBreakdown,
   getAllowedJobStatusTransitions,
   JOB_STATUS_LABELS,
   JobStatuses,
@@ -162,6 +161,18 @@ export function JobDetailsPage() {
       isMounted = false
     }
   }, [jobId, profile])
+
+  useEffect(() => {
+    if (!job || window.location.hash !== '#assignment-controls') return
+
+    const frameId = window.requestAnimationFrame(() => {
+      const assignmentControls = document.getElementById('assignment-controls')
+      assignmentControls?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      assignmentControls?.focus({ preventScroll: true })
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [job])
 
   const allowedStatuses = useMemo(() => {
     if (!job) {
@@ -548,7 +559,7 @@ export function JobDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground shadow-sm">
+      <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground">
         Loading job details...
       </div>
     )
@@ -556,9 +567,9 @@ export function JobDetailsPage() {
 
   if (errorMessage || !job) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <BackLink />
-        <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground shadow-sm">
+        <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground">
           {errorMessage || 'Job not found.'}
         </div>
       </div>
@@ -566,7 +577,7 @@ export function JobDetailsPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <nav className="flex items-center gap-2 text-sm text-muted-foreground">
         <Link
           className="rounded-sm transition hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -583,9 +594,13 @@ export function JobDetailsPage() {
         job={job}
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
         <aside className="min-w-0 xl:order-2">
-          <div className="space-y-4 xl:sticky xl:top-4">
+          <div
+            className="scroll-mt-4 space-y-3 focus:outline-none focus:ring-2 focus:ring-primary/30 xl:sticky xl:top-3"
+            id="assignment-controls"
+            tabIndex={-1}
+          >
             <AssignmentDecisionPanel
               allowedStatuses={allowedStatuses}
               assignedEmployeeNames={assignedEmployeeNames}
@@ -649,7 +664,7 @@ export function JobDetailsPage() {
           </div>
         </aside>
 
-        <div className="min-w-0 space-y-4 xl:order-1">
+        <div className="min-w-0 space-y-3 xl:order-1">
           <InfoCard title="Job Information">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
@@ -762,8 +777,8 @@ function JobSummary({
   job: Job
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <section className="rounded-lg border border-border bg-card p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge tone={statusTone[job.status]}>
@@ -927,9 +942,9 @@ function AssignmentDecisionPanel({
   const isAssigned = job.status === JobStatuses.Assigned
 
   return (
-    <InfoCard title="Assignment & Status">
+    <InfoCard contained title="Assignment & Status">
       <div className="space-y-4">
-        <div className="rounded-lg border border-border bg-background p-3">
+        <div className="border-b border-border pb-3">
           <DetailItem label="Current Assignment">
             {assignedEmployeeNames.length === 0 ? (
               <span className="text-muted-foreground">Unassigned</span>
@@ -999,7 +1014,7 @@ function AssignmentDecisionPanel({
         ) : null}
 
         {!isOpen && !isAssigned ? (
-          <p className="rounded-lg border border-border bg-background p-3 text-sm text-muted-foreground">
+          <p className="border-y border-border py-3 text-sm text-muted-foreground">
             Assignment changes are not available for this job status.
           </p>
         ) : null}
@@ -1093,24 +1108,19 @@ function OpenAssignmentControls({
     <div className="space-y-4">
       <section className="space-y-3">
         <SectionHeading
-          description="Generate advisory candidates before assigning manually."
-          title="Recommendations"
+          description="Review a ranked suggestion or assign manually."
+          title="AI Recommendation"
         />
         <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground">
-          <span className="font-medium">
-            AI-assisted recommendation - manager approval required.
-          </span>
+          <span className="font-medium">Manager approval is required.</span>
           <span className="mt-1 block text-muted-foreground">
-            Recommendations are advisory and do not assign employees.
-          </span>
-          <span className="mt-1 block text-muted-foreground">
-            Location contributes 0/10 until employee service-area data exists.
+            Suggestions never assign employees automatically.
           </span>
         </div>
 
         {canGenerateRecommendations ? (
           <button
-            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isGeneratingRecommendation}
             onClick={handleGenerateRecommendations}
             type="button"
@@ -1119,8 +1129,8 @@ function OpenAssignmentControls({
             {isGeneratingRecommendation
               ? 'Generating...'
               : recommendation
-                ? 'Retry Recommendations'
-                : 'Generate Recommendations'}
+                ? 'Refresh Suggestions'
+                : 'Generate Suggestions'}
           </button>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -1143,7 +1153,6 @@ function OpenAssignmentControls({
                   disabled={isDecidingRecommendation}
                   onAcceptRecommendation={handleAcceptRecommendation}
                   onChooseAnotherEmployee={handleChooseAnotherEmployee}
-                  recommendation={recommendation}
                 />
               ) : null}
 
@@ -1184,8 +1193,7 @@ function OpenAssignmentControls({
           )
         ) : (
           <p className="rounded-lg border border-dashed border-border bg-background p-3 text-sm text-muted-foreground">
-            Generate recommendations to see ranked employees, score breakdowns,
-            and explanation reasons.
+            Generate a recommendation to review the best eligible employees.
           </p>
         )}
 
@@ -1204,7 +1212,7 @@ function OpenAssignmentControls({
       <section className="space-y-3">
         <SectionHeading
           description="Select active employees from this organization."
-          title="Manual Assignment"
+          title="Assign Employee"
         />
         {canAssignEmployees ? (
           <>
@@ -1218,12 +1226,12 @@ function OpenAssignmentControls({
             />
 
             <button
-              className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={selectedEmployeeIds.length === 0 || isAssigning}
               onClick={handleAssignEmployees}
               type="button"
             >
-              {isAssigning ? 'Assigning...' : 'Assign Employees'}
+              {isAssigning ? 'Assigning...' : 'Assign Employee'}
             </button>
           </>
         ) : (
@@ -1268,7 +1276,7 @@ function ManageAssignmentControls({
     <section className="space-y-3">
       <SectionHeading
         description="Add or remove active employees assigned to this job."
-        title="Manage Assignment"
+        title="Reassign Employees"
       />
 
       {canManageAssignment ? (
@@ -1283,20 +1291,20 @@ function ManageAssignmentControls({
           />
           <div className="grid gap-2 sm:grid-cols-2">
             <button
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={managedEmployeeIds.length === 0 || isManagingAssignment}
               onClick={handleUpdateAssignedEmployees}
               type="button"
             >
-              {isManagingAssignment ? 'Saving...' : 'Save Changes'}
+              {isManagingAssignment ? 'Saving...' : 'Reassign'}
             </button>
             <button
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-destructive/30 bg-card px-4 text-sm font-medium text-destructive shadow-sm transition hover:bg-destructive/10 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-9 items-center justify-center rounded-md border border-destructive/30 bg-card px-4 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isManagingAssignment}
               onClick={handleUnassignAllEmployees}
               type="button"
             >
-              Unassign All
+              Unassign
             </button>
           </div>
         </>
@@ -1366,7 +1374,7 @@ function StatusControls({
             ))}
           </select>
           <button
-            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!selectedStatus || isUpdatingStatus}
             onClick={handleStatusUpdate}
             type="button"
@@ -1501,7 +1509,7 @@ function ActionMessage({
 function BackLink() {
   return (
     <Link
-      className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+      className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
       to="/jobs"
     >
       <ArrowLeft aria-hidden="true" className="size-4" />
@@ -1512,17 +1520,25 @@ function BackLink() {
 
 function InfoCard({
   children,
+  contained = false,
   title,
 }: {
   children: ReactNode
+  contained?: boolean
   title: string
 }) {
   return (
-    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+    <section
+      className={
+        contained
+          ? 'rounded-lg border border-border bg-card p-4'
+          : 'border-t border-border pt-4 first:border-t-0 first:pt-0'
+      }
+    >
       <h2 className="border-b border-border pb-3 text-base font-semibold text-foreground">
         {title}
       </h2>
-      <div className="pt-4">{children}</div>
+      <div className="pt-3">{children}</div>
     </section>
   )
 }
@@ -1536,7 +1552,7 @@ function DetailItem({
 }) {
   return (
     <div>
-      <p className="mb-1 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+      <p className="mb-1 text-xs font-medium text-muted-foreground">
         {label}
       </p>
       <div className="text-sm leading-6 text-foreground">{children}</div>
@@ -1563,20 +1579,11 @@ function SkillList({ skills }: { skills: string[] }) {
   )
 }
 
-const scoreBreakdownLabels: Record<keyof AssignmentScoreBreakdown, string> = {
-  availability: 'Availability',
-  locationRelevance: 'Location',
-  performance: 'Performance',
-  skillMatch: 'Skills',
-  workload: 'Workload',
-}
-
 function RecommendedEmployeeDecisionCard({
   candidate,
   disabled,
   onAcceptRecommendation,
   onChooseAnotherEmployee,
-  recommendation,
 }: {
   candidate: AssignmentRecommendationCandidate
   disabled: boolean
@@ -1586,32 +1593,26 @@ function RecommendedEmployeeDecisionCard({
   onChooseAnotherEmployee: (
     candidate: AssignmentRecommendationCandidate,
   ) => void
-  recommendation: AssignmentRecommendation
 }) {
   return (
-    <article className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+    <article className="rounded-md border border-border border-l-2 border-l-primary bg-card p-3.5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.08em] text-primary">
             Recommended employee
           </p>
           <p className="mt-1 text-sm font-semibold text-foreground">
-            #{candidate.rank} {candidate.employeeName}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Engine: {recommendation.algorithmVersion}
+            {candidate.employeeName}
           </p>
         </div>
-        <span className="inline-flex w-fit rounded-full border border-primary/30 bg-card px-3 py-1 text-xs font-medium text-primary">
+        <span className="inline-flex w-fit rounded-md bg-muted px-2 py-1 text-xs font-medium text-foreground">
           {candidate.totalScore} pts
         </span>
       </div>
 
-      <ScoreBreakdown breakdown={candidate.scoreBreakdown} />
-
       {candidate.explanationReasons.length > 0 ? (
         <ul className="mt-4 list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">
-          {candidate.explanationReasons.map((reason) => (
+          {candidate.explanationReasons.slice(0, 4).map((reason) => (
             <li key={reason}>{reason}</li>
           ))}
         </ul>
@@ -1619,7 +1620,7 @@ function RecommendedEmployeeDecisionCard({
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <button
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={disabled}
           onClick={() => void onAcceptRecommendation(candidate)}
           type="button"
@@ -1627,7 +1628,7 @@ function RecommendedEmployeeDecisionCard({
           {disabled ? 'Confirming...' : 'Accept Recommendation'}
         </button>
         <button
-          className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={disabled}
           onClick={() => onChooseAnotherEmployee(candidate)}
           type="button"
@@ -1705,7 +1706,7 @@ function RecommendationOverrideControls({
         />
       ) : null}
       <button
-        className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={!selectedEmployeeId || !overrideReason || disabled}
         onClick={() => void onConfirmOverride()}
         type="button"
@@ -1722,57 +1723,27 @@ function RecommendationCandidateCard({
   candidate: AssignmentRecommendationCandidate
 }) {
   return (
-    <article className="rounded-lg border border-border bg-background p-4">
+    <article className="border-t border-border py-3 first:border-t-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-foreground">
             #{candidate.rank} {candidate.employeeName}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Model score: {candidate.totalScore} points
+            Recommendation score: {candidate.totalScore} points
           </p>
         </div>
-        <span className="inline-flex w-fit rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+        <span className="inline-flex w-fit rounded-md bg-muted px-2 py-1 text-xs font-medium text-foreground">
           {candidate.totalScore} pts
         </span>
       </div>
 
-      <ScoreBreakdown breakdown={candidate.scoreBreakdown} />
-
-      <ul className="mt-4 list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">
-        {candidate.explanationReasons.map((reason) => (
+      <ul className="mt-3 list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">
+        {candidate.explanationReasons.slice(0, 2).map((reason) => (
           <li key={reason}>{reason}</li>
         ))}
       </ul>
     </article>
-  )
-}
-
-function ScoreBreakdown({
-  breakdown,
-}: {
-  breakdown: AssignmentScoreBreakdown
-}) {
-  const breakdownEntries = Object.entries(breakdown) as Array<
-    [keyof AssignmentScoreBreakdown, number]
-  >
-
-  return (
-    <div className="mt-4 grid gap-2">
-      {breakdownEntries.map(([scoreKey, scoreValue]) => (
-        <div
-          className="grid grid-cols-[minmax(80px,1fr)_48px] gap-3 text-xs"
-          key={scoreKey}
-        >
-          <span className="text-muted-foreground">
-            {scoreBreakdownLabels[scoreKey]}
-          </span>
-          <span className="text-right font-medium text-foreground">
-            {scoreValue}
-          </span>
-        </div>
-      ))}
-    </div>
   )
 }
 

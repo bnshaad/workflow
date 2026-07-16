@@ -59,7 +59,7 @@ export function LoginPage() {
   if (authLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background px-6">
-        <div className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           Loading...
         </div>
       </main>
@@ -82,9 +82,9 @@ export function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6">
-      <section className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-sm">
+      <section className="w-full max-w-sm border-t-2 border-primary bg-card p-6">
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <LockKeyhole size={18} strokeWidth={2.25} />
           </div>
           <div>
@@ -201,6 +201,10 @@ function getAuthErrorMessage(code: string) {
       return 'Enter a valid email address.'
     case 'auth/too-many-requests':
       return 'Too many attempts. Please try again later.'
+    case 'auth/network-request-failed':
+      return import.meta.env.DEV
+        ? 'Local authentication is unavailable. Start the Firebase emulators and try again.'
+        : 'Unable to sign in. Please try again.'
     default:
       return 'Unable to sign in. Please try again.'
   }

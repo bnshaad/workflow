@@ -15,7 +15,7 @@ export function AppLayout() {
         <Header onOpenNavigation={() => setIsMobileNavigationOpen(true)} />
 
         <main className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
-          <div className="mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-12 lg:pt-8">
+          <div className="mx-auto w-full max-w-[1440px] px-4 pb-8 pt-4 sm:px-5 sm:pt-5 lg:px-8 lg:pb-10 lg:pt-6">
             <Outlet />
           </div>
         </main>

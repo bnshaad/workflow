@@ -3,12 +3,13 @@ import {
   ChevronDown,
   LogOut,
   Menu,
+  Plus,
   Settings,
   UserCircle,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks'
-import { canAccessSettings } from '@/permissions'
+import { canAccessSettings, canCreateJob } from '@/permissions'
 
 type HeaderProps = {
   onOpenNavigation: () => void
@@ -25,6 +26,9 @@ export function Header({ onOpenNavigation }: HeaderProps) {
   const displayName = profile?.displayName ?? 'Workflow user'
   const roleLabel = profile ? formatRole(profile.role) : ''
   const showSettingsLink = profile ? canAccessSettings(profile) : false
+  const showCreateJob = profile
+    ? canCreateJob(profile) && location.pathname !== '/jobs/create'
+    : false
   const pageLabel = getPageLabel(location.pathname)
 
   useEffect(() => {
@@ -71,7 +75,7 @@ export function Header({ onOpenNavigation }: HeaderProps) {
   }
 
   return (
-    <header className="z-40 flex h-[68px] shrink-0 items-center justify-between border-b border-border bg-card/95 px-4 backdrop-blur-sm sm:px-6 lg:px-8">
+    <header className="z-40 flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-5 lg:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <button
           aria-label="Open navigation menu"
@@ -82,33 +86,40 @@ export function Header({ onOpenNavigation }: HeaderProps) {
           <Menu aria-hidden="true" className="size-5" />
         </button>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">
+          <p className="truncate text-sm font-medium text-foreground">
             {pageLabel}
-          </p>
-          <p className="hidden text-xs text-muted-foreground sm:block">
-            Workforce operations
           </p>
         </div>
       </div>
 
       <div className="ml-auto flex items-center gap-3">
+        {showCreateJob ? (
+          <Link
+            aria-label="Create job"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 sm:px-3"
+            to="/jobs/create"
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            <span className="hidden sm:inline">Create Job</span>
+          </Link>
+        ) : null}
         <div className="relative" ref={menuRef}>
           <button
             aria-expanded={isMenuOpen}
             aria-haspopup="menu"
-            className="flex max-w-[260px] items-center gap-2 rounded-lg border border-transparent bg-card p-1.5 pr-2 text-sm font-medium text-foreground transition hover:border-border hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 sm:pr-2.5"
+            className="flex max-w-[260px] items-center gap-2 rounded-md border border-transparent bg-card p-1 pr-2 text-sm font-medium text-foreground transition-colors hover:border-border hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
             onClick={() => setIsMenuOpen((current) => !current)}
             type="button"
           >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <UserCircle aria-hidden="true" className="size-5" />
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+              <UserCircle aria-hidden="true" className="size-[18px]" />
             </span>
             {loading ? (
               <span className="hidden h-4 w-28 rounded-full bg-muted sm:inline" />
             ) : (
               <span className="hidden min-w-0 text-left sm:block">
                 <span className="block truncate leading-4">{displayName}</span>
-                <span className="block text-xs font-normal leading-4 text-muted-foreground">
+                <span className="block text-[11px] font-normal leading-3 text-muted-foreground">
                   {roleLabel}
                 </span>
               </span>
@@ -208,8 +219,9 @@ function getPageLabel(pathname: string) {
   }
 
   const routeLabels: Record<string, string> = {
-    '/analytics': 'Analytics',
-    '/dashboard': 'Dashboard',
+    '/analytics': 'Reports',
+    '/assignments': 'Assignments',
+    '/dashboard': 'Overview',
     '/jobs': 'Jobs',
     '/settings': 'Settings',
     '/team': 'Team',
