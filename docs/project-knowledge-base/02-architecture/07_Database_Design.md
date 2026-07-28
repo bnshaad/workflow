@@ -43,6 +43,7 @@ The approved collection vocabulary is listed below. The current web application 
 - `jobs`
 - `jobActivities`
 - `recommendations`
+- `organizationConfigurations`
 - `incidents`
 - `notifications`
 - `auditLogs`

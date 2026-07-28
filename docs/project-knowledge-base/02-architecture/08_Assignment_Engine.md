@@ -1,6 +1,6 @@
 # Workflow Assignment Engine
 
-Version: 1.0
+Version: 2.0
 Status: Approved
 Document Owner: Project Team
 Last Updated: July 2026
@@ -9,142 +9,136 @@ Last Updated: July 2026
 
 # 1. Purpose
 
-This document defines the MVP assignment engine.
+This document defines the architecture of the Workflow Assignment Engine for decision support in field operations.
 
-The engine recommends suitable workers for jobs while keeping managers responsible for final assignment decisions.
-
----
-
-# 2. Scope
-
-The MVP assignment engine is rule-based and explainable.
-
-It does not use machine-learning training, automatic model updates, or autonomous assignment.
+The engine recommends suitable field workers for jobs while maintaining strict human oversight (managers make the final assignment decision).
 
 ---
 
-# 3. Inputs
+# 2. Architecture & Pipeline
 
-The approved engine may eventually evaluate the inputs below. Section 11 defines the smaller subset currently scored by `rule-based-v1`:
+The Assignment Engine follows a explicit 3-stage pipeline:
 
-- Required skills
-- Worker skills
-- Worker availability
-- Current workload
-- Job priority
-- Location relevance
-- Previous performance
+```text
++-------------------+      +-------------------+      +-------------------+
+|                   |      |  Decision Engine  |      |                   |
+| Eligibility Engine| ---> |    (Ranking)      | ---> | Explanation Engine|
+| (Hard Constraints)|      | Strategy Pattern  |      |  (Grounded Recs)  |
++-------------------+      +-------------------+      +-------------------+
+```
 
-All inputs must come from approved Workflow data in Firestore.
+### Stage 1: Eligibility Engine
+Filters candidate employees based on strict hard constraints before scoring:
+- Active employee profile (`isActive == true`, role `employee`)
+- Leave status (`onLeave == false`)
+- Tenant isolation (`organizationId`)
+- Hard constraints (e.g. required certifications, radius limits, max daily jobs where applicable)
 
----
+### Stage 2: Decision Engine (Ranking)
+Uses a **Strategy Pattern** abstraction behind a common `DecisionEngine` interface:
 
-# 4. Outputs
+```text
+Decision Engine
+├── Weighted Strategy (Refactored rule-based-v1 sum)
+└── AHP-TOPSIS Strategy (Multi-Criteria Decision Making)
+```
 
-The engine returns:
+Both strategies accept the same candidate inputs (skills, availability, workload, history) and return normalized ranking scores, but evaluate them via different mathematical approaches to enable comparative benchmark experiments.
 
-- Ranked worker recommendations
-- Best Match Score
-- Suggested Worker
-- Explanation reasons
-
-Each recommendation must be understandable to a manager.
-
----
-
-# 5. Manager Decision
-
-Managers may:
-
-- Accept the recommendation.
-- Override the recommendation.
-- Select a different worker.
-- Record an override reason.
-
-The system must never automatically finalize assignments without manager approval.
+### Stage 3: Explanation Engine
+Generates transparent, manager-understandable explanation badges and natural-language rationale for top candidates (e.g., "100% Skill Match", "Optimal Workload", "High Historical Completion Rate").
 
 ---
 
-# 6. Stored Recommendation Data
+# 3. Decision Engine Strategies
 
-Recommendation history is stored in the `recommendations` collection.
-
-The MVP stores:
-
-- Recommended worker
-- Score
-- Reason breakdown
-- Decision
-- Accepted recommendation
-- Overridden recommendation
-- Override reason
-- Selected worker when overridden
-
----
-
-# 7. Adaptive Learning Boundary
-
-Adaptive Learning in the MVP means storing feedback for later analysis.
-
-The MVP does not automatically adjust scoring weights.
-
-Future versions may implement adaptive scoring after enough validated data exists.
-
----
-
-# 8. Explainability Requirements
-
-Approved explanation categories may eventually include:
-
-- Skill match
-- Availability
-- Low workload
-- Location relevance
-- Strong previous performance
-
-Explanations must be shown before manager approval.
-
----
-
-# 9. Service Layer
-
-The assignment engine should be implemented as a service-layer module.
-
-UI components must not contain scoring logic.
-
-The service should:
-
-- Retrieve eligible workers through approved services.
-- Calculate scores.
-- Generate explanations.
-- Store recommendation history.
-- Support manager decision recording.
-
----
-
-# 10. Out of Scope
-
-The MVP excludes:
-
-- Automatic assignment
-- Machine-learning training
-- Automatic scoring weight adjustment
-- Route optimization
-- Shift planning
-- External optimization engines
-
-# 11. Verified `rule-based-v1` Implementation
-
-The authoritative scoring function is shared by the existing recommendation service and the trusted read-only Workforce Intelligence callable. It ranks active employee candidates who are not on leave, sorts by total score and then employee name, and returns at most five candidates.
-
-Current score contributions are:
-
+## 3.1 Weighted Strategy (`rule-based-v1`)
+The baseline strategy computes a fixed-weight sum across criteria:
 - Skill match: up to 35 points
 - Availability: up to 25 points
-- Active assigned or in-progress workload: up to 20 points
+- Active assigned/in-progress workload: up to 20 points
 - Historical completion ratio: up to 10 points
-- Location relevance: 0 points until verified employee service-area or location-history data exists
 
-The current employee `performanceScore` field is not used by `rule-based-v1`; historical performance is derived from the latest 100 tenant jobs. Job priority is also not currently scored. These fields must not be described as active criteria until the engine changes through an approved phase.
+## 3.2 AHP-TOPSIS Strategy
+An advanced Multi-Criteria Decision Making (MCDM) strategy:
+1. **Analytic Hierarchy Process (AHP)**: Builds a pairwise comparison matrix between criteria ($C_1, C_2, \dots, C_n$) to mathematically *derive* criteria weights rather than hardcoding them.
+2. **AHP Profiles**: Maps precomputed or configurable matrix profiles based on job sub-types (e.g., "Emergency Repair" prioritizes availability & speed; "Commercial Maintenance" prioritizes skill & history).
+3. **TOPSIS (Technique for Order of Preference by Similarity to Ideal Solution)**:
+   - Constructs a vector-normalized decision matrix of candidates.
+   - Determines the **Ideal Best Candidate** ($A^+$) and **Ideal Worst Candidate** ($A^-$).
+   - Computes Euclidean distances ($S_i^+, S_i^-$) for each candidate.
+   - Calculates relative closeness to the ideal solution ($C_i^* = \frac{S_i^-}{S_i^+ + S_i^-}$).
+   - Ranks candidates by $C_i^*$ (value between 0 and 1).
 
-The `getWorkforceRecommendation` callable is read-only. It authenticates the caller, reloads an active manager or admin profile, derives `organizationId` from that trusted profile, requires an active open job in the same tenant, loads tenant-scoped eligible employees and bounded job history, and invokes the shared engine. It does not persist a recommendation, create a proposal, or assign, reassign, or unassign an employee.
+---
+
+# 4. Confidence Score
+
+Every recommendation generated by the Decision Engine includes a derived **Confidence Score**:
+- Derived directly from TOPSIS closeness score or normalized score range.
+- Bucket labels: **High** ($\ge 0.80$), **Medium** ($0.60 - 0.79$), **Low** ($< 0.60$).
+- When confidence is Low, the UI explicitly displays a **"Manual Review Recommended"** threshold alert to guide managers.
+
+---
+
+# 5. Human-in-the-Loop & Manager Decision
+
+Managers make the final assignment decision on every recommendation:
+- **Accept**: Manager accepts top recommended candidate ("Accept Rahul").
+- **Override**: Manager chooses a different employee or manual assignment.
+- **Structured Override Reasons**: Dropdown with options:
+  - `Customer Request`
+  - `Availability Conflict`
+  - `Manager Preference`
+  - `Other` (with optional detail)
+
+System **never** automatically finalizes assignments without explicit manager authorization.
+
+---
+
+# 6. Unified Permanent Recommendation Record Schema
+
+Every recommendation creates a single, permanent record in Firestore (`recommendations` collection) that powers feedback tracking, operational analytics, evaluation dashboards, auditing, and explainability:
+
+```json
+{
+  "id": "rec_987654321",
+  "organizationId": "org_demo",
+  "jobId": "job_12345",
+  "algorithm": "AHP_TOPSIS",
+  "eligibleCandidates": 8,
+  "recommendedEmployeeId": "emp_rahul",
+  "confidence": 0.91,
+  "confidenceBucket": "High",
+  "criteriaWeights": {
+    "skill": 0.43,
+    "availability": 0.27,
+    "workload": 0.18,
+    "history": 0.12
+  },
+  "ahpProfile": "Emergency Repair",
+  "managerDecision": "Accepted",
+  "chosenEmployeeId": "emp_rahul",
+  "overrideReason": null,
+  "completionTime": 112,
+  "generatedAt": "2026-07-24T00:00:00Z",
+  "decidedAt": "2026-07-24T00:02:00Z"
+}
+```
+
+---
+
+# 7. Service Layer & Tenant Isolation
+
+- Implemented strictly within service modules under `apps/web-app/src/services`.
+- UI components do not contain scoring calculations or direct Firestore queries.
+- Read-only callables (`getWorkforceRecommendation`) re-verify authentication, manager role, and `organizationId` isolation before computing recommendations.
+
+---
+
+# 8. Out of Scope
+
+- Autonomous assignment without manager approval
+- Automatic dynamic ML retraining / model-weight learning in real-time
+- Route optimization or live GPS tracking
+- Fully dynamic UI form generation (forms remain static; configuration is scoped to data/validation layers)

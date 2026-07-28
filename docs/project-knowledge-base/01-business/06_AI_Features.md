@@ -1,6 +1,6 @@
 # Workflow AI Features
 
-Version: 1.1
+Version: 2.0
 Status: Approved
 Document Owner: Project Team
 Last Updated: July 2026
@@ -9,9 +9,9 @@ Last Updated: July 2026
 
 # 1. Purpose
 
-Workflow uses AI to support workforce operations while keeping users in control.
+Workflow uses AI to support workforce operations as an **Explainable AI Decision Support Platform for Field Operations**.
 
-AI features must remain explainable, practical, and compatible with the Firebase Spark MVP architecture.
+AI features remain explainable, practical, human-controlled, and compatible with the Firebase Spark MVP architecture.
 
 ---
 
@@ -30,177 +30,75 @@ AI features must remain explainable, practical, and compatible with the Firebase
 
 # 3. AI Job Understanding
 
-Purpose:
+Purpose: Help managers convert customer requests into structured job drafts.
 
-Help managers convert customer requests into structured job drafts.
+Inputs: Natural-language customer request.
 
-Inputs:
+Outputs: Suggested job title, description, service type, required skills, priority, location context.
 
-- Natural-language customer request
+Rules: Manager reviews and confirms before saving. AI does not create jobs automatically.
+
+---
+
+# 4. Decision Engine & Multi-Criteria Ranking
+
+Purpose: Recommend the most suitable worker for a job through a 3-stage pipeline (Eligibility → Ranking → Explanation).
+
+Ranking Architecture: **Decision Engine** supporting two benchmarked strategies:
+1. **Weighted Strategy**: Baseline sum (skill, availability, workload, history).
+2. **AHP-TOPSIS Strategy**:
+   - Analytic Hierarchy Process (AHP) pairwise comparison matrix deriving criteria weights.
+   - TOPSIS normalization, ideal best/worst calculation, and relative closeness ranking.
+   - AHP Profiles tailored for job sub-types (e.g. "Emergency Repair", "Commercial Maintenance").
 
 Outputs:
-
-- Suggested job title
-- Suggested description
-- Service type
-- Required skills
-- Priority
-- Location or customer context when available
-
-Rules:
-
-- Manager reviews and confirms before saving.
-- AI does not create jobs automatically.
+- Ranked candidates with score breakdown
+- Derived **Confidence Score** (High / Medium / Low) with "Manual Review Recommended" threshold
+- Explanation reasons (skill match, workload, history)
 
 ---
 
-# 4. Intelligent Task Assignment
+# 5. Explainable AI & Manager Oversight
 
-Purpose:
+Purpose: Make recommendation reasoning transparent and enforce human oversight.
 
-Recommend the most suitable worker for a job.
+Manager Actions:
+- Accept top recommendation ("Accept Rahul")
+- Override recommendation ("Choose someone else")
+- Select structured override reason (Customer Request, Availability Conflict, Manager Preference, Other)
 
-Inputs:
-
-- Skills
-- Availability
-- Workload
-- Location relevance
-- Job priority
-- Previous performance
-
-Outputs:
-
-- Ranked workers
-- Best Match Score
-- Suggested Worker
-- Recommendation explanation
-
-Rules:
-
-- Manager approves or overrides.
-- Recommendations are advisory.
+Every decision persists a **Unified Permanent Recommendation Record** in Firestore.
 
 ---
 
-# 5. Explainable AI
+# 6. Evaluation Dashboard & Analytics
 
-Purpose:
+Purpose: Provide evidence-based AI quality, operational impact, and algorithm comparison metrics.
 
-Make recommendation reasoning visible.
-
-Example reasons:
-
-- Required skill matched
-- Worker is available
-- Low current workload
-- Relevant location
-- Strong completion history
-
-Managers must always understand why a worker is recommended.
+Metrics displayed:
+- **AI Quality**: Recommendation acceptance %, override %, top override reasons, confidence distribution.
+- **Operational Impact**: Avg assignment time, avg completion time, SLA compliance, reopened jobs.
+- **Algorithm Benchmark**: Side-by-side comparison between Weighted Strategy and AHP-TOPSIS Strategy.
+- **Explainability Survey**: 5-point Likert scale on clarity, trust, helpfulness.
 
 ---
 
-# 6. Adaptive Learning
+# 7. Configuration Layer
 
-Purpose:
+Purpose: Org-scoped configuration of skills, job types, capability mappings, and AHP profiles in Firestore.
 
-Record manager feedback for future analysis.
-
-The MVP stores:
-
-- Accepted recommendation
-- Overridden recommendation
-- Override reason
-
-The MVP does not automatically adjust recommendation weights.
-
-Future versions may implement adaptive scoring after enough feedback data exists.
+Configurability:
+- Configurable job sub-types within Field Service (AC repair, plumbing, electrical).
+- Configurable AHP weight tables / profiles.
+- Forms remain static in UI; schema validation is dynamic at the data/validation layer.
 
 ---
 
-# 7. Decision Support
+# 8. Out of Scope
 
-Purpose:
-
-Help administrators and managers understand operations.
-
-Decision Support provides:
-
-- Dashboard insights
-- Operational recommendations
-- Natural-language operational queries
-
-Examples:
-
-- Urgent jobs awaiting assignment
-- Ranked worker workload counts, without an overload claim unless an approved threshold is added
-- Available skilled workers
-- Delayed jobs
-- Frequently overridden recommendation patterns
-
-Decision Support does not execute actions automatically.
-
----
-
-# 8. Conversational AI
-
-Purpose:
-
-Guide users through approved Workflow actions using natural language.
-
-Examples:
-
-- Draft a job from a customer request
-- Update job status
-- Report an issue
-- Complete a job
-- Generate or review a job summary
-
-AI Job Summary belongs inside Conversational AI and is not a standalone AI module.
-
-Critical actions require user confirmation.
-
----
-
-# 9. Knowledge Assistant
-
-Purpose:
-
-Retrieve trusted operational information.
-
-Allowed knowledge sources:
-
-- SOP
-- User Guide
-- FAQ
-- Product Documentation
-- Equipment Manuals
-
-The Knowledge Assistant must stay limited to approved knowledge retrieval.
-
----
-
-# 10. Out of Scope
-
-The MVP excludes:
-
-- General-purpose chat
-- Autonomous assignment
-- Automatic machine-learning weight adjustment
-- Predictive workforce planning
-- AI forecasting dashboards
-- Unsupported external knowledge retrieval
-
-# 11. Coordinated Multi-Agent Layer (2026-07-13)
-
-The AI modules are connected through a coordinator that routes each request to the minimum required specialist. The assignment engine remains deterministic and is invoked as a tool by the Workforce Intelligence Agent. Critical business changes are returned as proposed actions and require explicit authorized confirmation before execution.
-
-The approved specialist boundaries are:
-
-- Job Intelligence
-- Workforce Intelligence
-- Operations Insight
-- Knowledge Retrieval
-
-Adaptive learning in the MVP remains feedback collection and pattern analysis only.
+- Fully autonomous assignment without manager approval
+- Automatic machine-learning weight retraining
+- Grounded RAG Knowledge Assistant (parked for future work)
+- Predictive workforce planning / forecasting
+- Fully dynamic UI form generation
+- Live GPS tracking / route optimization

@@ -19,26 +19,20 @@ The approved source-of-truth order is:
 
 Codex should implement approved phases and fixes only. Do not make product decisions, redesign the application into a new visual style, introduce unapproved architecture, or add speculative features.
 
-## 2. Academic Core
+## 2. Academic Core & Capstone Scope
 
-Workflow's academic and evaluation thread is explainable, human-in-the-loop workforce assignment.
+Workflow is framed as an **Explainable AI Decision Support Platform for Field Operations** combining eligibility filtering, configurable multi-criteria decision making, human oversight, and evidence-based evaluation to improve workforce assignment decisions.
 
-The current assignment recommendation baseline is deterministic, rule-based, weighted scoring. It is described as AI-assisted or explainable assignment support in the UI and documentation, but it is not an autonomous model, not external AI, and not machine learning.
+The project is structured into a 5-Phase Roadmap (All 5 Core Phases Implemented):
 
-The current academic/evaluation baseline includes descriptive manual assignment metrics:
+1. **Phase 1 — Operational Loop**: Complete minimal employee flow (`Assigned` → `In Progress` → `Completed` + optional `reopen` flag) to unlock real completion-time operational data across web portal and mobile app (`apps/mobile-app`).
+2. **Phase 2 — Decision Pipeline**: 3-stage pipeline (`Eligibility Engine` → `Ranking` → `Explanation Engine`) and `Decision Engine` abstraction supporting both `Weighted Strategy` (`rule-based-v1`) and `AHP-TOPSIS Strategy` (`ahp-topsis-v1`).
+3. **Phase 3 — Human-in-the-Loop**: Explicit recommendation acceptance/override UI ("Accept Rahul" / "Choose someone else"), structured override reasons dropdown, derived confidence scores (High/Med/Low), and unified permanent recommendation records in Firestore.
+4. **Phase 4 — Evidence-Based Evaluation**: Business-facing evaluation dashboard (`AnalyticsPage`) measuring AI quality (acceptance %, override %, top reasons), operational impact (completion times, SLA compliance), manual assignment baseline metrics, and system performance.
+5. **Phase 5 — Configuration Layer**: Org-scoped configuration documents in Firestore (`organizationConfigurations` collection) for skills, job types, capability mappings, and AHP weight profiles (e.g. "Emergency Repair" vs "Commercial Maintenance").
 
-- Total manual assignments.
-- Jobs started.
-- Jobs completed.
-- Completion rate.
-- Assignment-to-start time.
-- Assignment-to-completion time.
-- Overdue completion rate.
-- Employee assignment distribution.
+Explicitly Parked / Out of Scope: Mobile photo proof upload, issue/incident reporting, push notifications, Grounded RAG Knowledge Assistant, Predictive forecasting models, Automatic model retraining / reinforcement learning, Dynamic UI form rendering, Second vertical, Autonomous dispatch.
 
-Future academic work is reserved for AI-assisted assignment evaluation and the planned Explainable Hybrid MCDM Assignment Model using eligibility filtering, normalized criteria, AHP-derived weight profiles, TOPSIS ranking, explanation generation, and manager approval or override.
-
-Do not claim statistical significance, prediction accuracy, adaptive learning, or automatic optimization unless those capabilities are explicitly implemented and approved.
 
 ## 3. Frozen Architecture Decisions
 
@@ -76,51 +70,74 @@ Approved top-level Firestore collections are:
 - `notifications`
 - `auditLogs`
 - `jobActivities`
+- `actionProposals`
+- `organizationConfigurations`
 
 ## 4. Implemented Features
 
-Current implemented web portal features include:
+Current implemented web portal features in `apps/web-app`:
 
 - Protected app shell with Dashboard, Analytics, Jobs, Team, and Settings navigation.
 - Admin/Manager-only web portal access through route permissions.
 - Login and profile setup required flows.
-- Dashboard with compact operational overview, Action Needed alerts, job status metrics, top workload snapshot, and recent activity.
+- Dashboard with compact operational overview, Action Needed alerts, job status metrics, top workload snapshot, recent activity, and in-place `JobDetailsDrawer` / `CreateJobDrawer` popups.
 - Analytics page split from Dashboard for operational performance and assignment evaluation.
 - Jobs list with search, status, assignment, creator, and priority filtering.
-- Responsive Jobs layout with desktop table behavior and smaller-screen usability improvements.
-- Job Details decision screen with summary, assignment/recommendation/status actions, job information, and activity timeline.
-- Create Job form with manual entry and AI Job Understanding draft suggestions.
+- Modern Overlay-First Architecture: Universal in-place slide-over drawers (`JobDetailsDrawer` and `CreateJobDrawer`) for job creation, AI draft parsing, worker scoring, status changes, and dispatching triggered uniformly across Header, Sidebar, Dashboard, Jobs Page, and Team Page without page shifts.
+
+- Everyday Manager English: UI translated to clear business terms ("Smart Match", "Assign Worker", "Assigned to: Rahul Sharma", "Reassign Technician", "Draft Job with AI").
+- Low Cognitive Load & De-Cluttered Design: Unified single-bar search & quick filter tabs on Jobs page, 2-tab Reports separation (Manager KPIs vs Algorithm Benchmarks), streamlined technician roster cards, and detailed user interaction specification in [`docs/USER_INTERACTION_AND_PAGE_GUIDE.md`](file:///Users/binshad/projects/workflow-mvp/docs/USER_INTERACTION_AND_PAGE_GUIDE.md).
+
+- Assigned Technician State Resolution: Assigned jobs display the resolved technician's name (e.g., `Assigned to: Rahul Sharma`) and a dedicated **Assigned Field Technician Card** with re-assignment controls, hiding raw unassigned scoring cards when work is already dispatched.
+- Field Status Progression: Work status (`Assigned` ➔ `In Progress` ➔ `Completed`) is updated automatically via live Firestore snapshots as the assigned employee executes work on the mobile app, with guidance replacing manual manager status overwrites.
+- Job Details decision screen and drawer with summary, 1-click assignment/re-assignment actions, job information, and activity timeline.
+
+
+- Create Job form and drawer with manual entry and AI Customer Request Importer (paste WhatsApp/Email text to draft).
 - Team page using active employee profile data from `users`.
 - Settings page with role-limited operational/business settings visibility.
 - Firestore-backed job creation, job listing, job details, assignment, reassignment, unassignment, status transitions, job activities, and audit logs.
-- Rule-based assignment recommendation generation for open jobs.
+
+- Decision Engine candidate ranking and recommendation generation supporting Weighted and AHP-TOPSIS strategies.
+- Permanent recommendation records (`recommendations` collection) capturing manager decision feedback (Accept / Override) and structured override reasons.
+- Action proposals (`actionProposals` collection): Persists structured, immutable job-creation proposals drafted by AI/Coordinator for Admin/Manager review and explicit 1-tap confirmation before any job write executes.
+- Org-scoped configuration documents (`organizationConfigurations` collection): Defines skills, job sub-types, capability mappings, and AHP criteria weight matrices.
 - Manual assignment baseline metrics for Analytics.
 - Development demo seed utility for a demo organization, users, jobs, activities, and audit logs.
 
-Recent committed UI phase history shows completed portal improvements for:
+Current implemented mobile field app features in `apps/mobile-app`:
 
-- Jobs page usability.
-- Job Details decision flow.
-- Dashboard action prioritization.
-- Dashboard/Analytics separation.
-- Portal information density.
+- Expo SDK 54, React Native 0.81, Expo Router v6 mobile application for Employee role users.
+- Clean authentication flow (`(auth)/login`) with normalized Auth UIDs and fallback `displayName` support.
+- Instant complete sign-out handling resetting auth state and replacing route to `/(auth)/login`.
+- Today's & Assigned Jobs screen (`(tabs)/index`) with top branding header, safe area insets, segment filter tabs (`All`, `Assigned`, `In Progress`), and Pull-to-Refresh.
+- Minimal-click action bar directly on list cards allowing field technicians to execute 1-tap status transitions (`Assigned` → `In Progress` → `Completed`) without mandatory detail screen navigation.
+- Job Details screen (`job/[id]`) with custom back navigation header, priority/status cards, customer contact rows, service address, and required skills pills.
+- Peer dependency resolution with `react-native-svg` and typed `Icon` component wrapper for `lucide-react-native`.
+
+Deployed Cloud Firestore Security Rules (`firebase/firestore.rules`):
+
+- Deployed and released live to production project (`workflow-p`).
+- Updated `match /jobs/{jobId}` rule for list queries to enable employee assigned-job querying (`request.auth.uid in data.assignedEmployeeIds`) by removing unqueryable `data.assignedEmployeeIds is list` type guards on `resource.data`.
 
 The worktree currently contains an uncommitted change to `apps/web-app/src/pages/CreateJobPage.tsx`; treat it as existing work unless the user asks to inspect or modify it.
 
 ## 5. Current Assignment Engine
 
-The current assignment engine lives in `apps/web-app/src/services/recommendations/assignmentRecommendationService.ts`.
+The current assignment engine is implemented across `shared/assignmentRecommendation.ts` (3-stage Decision Pipeline contracts and scoring logic) and `apps/web-app/src/services/recommendations/assignmentRecommendationService.ts` (recommendation persistence, manager decision feedback, and decision metrics).
 
 Current status:
 
-- Implemented as `rule-based-v1`.
-- Human-in-the-loop only.
-- Generates ranked candidates for open jobs.
-- Stores recommendation records in `recommendations`.
-- Writes an audit log for recommendation generation.
-- Does not assign employees automatically.
-- Does not update weights automatically.
-- Does not train or call an external ML model.
+- Implemented as `DecisionEngine` supporting both `Weighted Strategy` (`rule-based-v1`) and `AHP-TOPSIS Strategy` (`ahp-topsis-v1`).
+- Stage 1 (Eligibility Engine): Hard-constraint filtering (`isEligibleRecommendationEmployee`) checking active employee profile, leave status, and tenant isolation.
+- Stage 2 (Decision Engine): Strategy pattern ranking using either fixed criteria weights (`Weighted Strategy`) or AHP pairwise criteria matrices with TOPSIS vector normalization & ideal closeness calculation (`AHP-TOPSIS Strategy`).
+- Stage 3 (Explanation Engine): Scoring breakdown, explanation badges, and derived TOPSIS Confidence Scores (High / Medium / Low) with a "Manual Review Recommended" threshold alert for low-confidence recommendations.
+- Human-in-the-loop: Manager accepts ("Accept Rahul") or overrides ("Choose someone else") recommendations with structured override reasons (`Customer Request`, `Availability Conflict`, `Manager Preference`, `Other`).
+- Stores unified permanent recommendation decision records in `recommendations` collection.
+- Supports job sub-type AHP profiles (e.g. "Emergency Repair", "Commercial Maintenance", "Standard") with pairwise criteria comparison weight derivation.
+- Writes audit logs for recommendation generation and manager decisions.
+- Does not assign employees automatically (strict human control maintained).
+- Does not update weights or retrain models using ML (deterministic decision support system).
 
 Current scoring factors:
 
@@ -222,53 +239,44 @@ Recent portal UI direction:
 - Jobs is the main list/filter operations workspace.
 - Create Job should remain compact, editable, and manager-controlled.
 
-## 9. Next Planned Phases
+## 9. Core Implementation & Deferred Scope
 
-Use the current roadmap, knowledge base, and latest user request before starting any phase.
+The 5 core roadmap phases are fully implemented:
 
-Planned or deferred work from the approved knowledge base includes:
+- Phase 1: Operational Loop (`Assigned` → `In Progress` → `Completed` flow in `apps/web-app` and `apps/mobile-app`).
+- Phase 2: Decision Pipeline (`Eligibility Engine` + `Weighted Strategy` & `AHP-TOPSIS Strategy`).
+- Phase 3: Human-in-the-Loop (Accept/Override UI, override reasons, derived TOPSIS confidence score, permanent recommendation records).
+- Phase 4: Evidence-Based Evaluation (`AnalyticsPage` metrics, AI quality, operational impact, manual assignment baselines).
+- Phase 5: Configuration Layer (`organizationConfigurations` collection for skills, job sub-types, AHP weight profiles).
 
-- Manager recommendation feedback: accepted recommendation, overridden recommendation, override reason.
-- AI-assisted assignment evaluation after recommendation acceptance/override tracking exists.
-- Explainable Hybrid MCDM Assignment Model.
-- Controlled Conversational Workflow Assistant.
+Deferred future work (parked or deferred until approved):
+
+- Mobile employee field app extended scope: Photo proof upload, issue/incident reporting, push notifications.
 - Grounded RAG Knowledge Assistant.
-- Mobile employee field app scope: Today's Jobs, Assigned Jobs, Job Details, status updates, work proof, issue reporting, notifications, and approved assistant access.
-- Notifications implementation when explicitly started.
-- Work proof and issue management implementation when explicitly started.
+- Controlled Conversational Workflow Assistant.
+- Notifications implementation.
 - Testing and documentation hardening.
 
-Do not skip ahead. Do not begin a new phase while the user has explicitly limited scope to the current phase.
-
-## 10. Deferred Future Integrations
+## 10. Deferred / Out-of-Scope Integrations
 
 Deferred future integrations and capabilities include:
 
 - Production Gemini integration through a secure approved runtime.
 - Controlled Conversational Workflow Assistant.
 - Grounded RAG Knowledge Assistant with trusted sources and citations.
-- Recommendation acceptance/override feedback tracking.
-- AI-assisted assignment evaluation.
-- Explainable Hybrid MCDM Assignment Model.
-- Notifications.
-- Employee mobile field app.
-- Work proof upload and review.
-- Issue reporting and resolution.
+- Mobile work proof upload and review.
+- Issue reporting and resolution (`incidents`).
+- Operational push notifications.
 
-Out of scope unless later approved:
+Explicitly out of scope:
 
-- Automatic assignment.
-- Machine-learning training.
-- Automatic weight adjustment.
-- Automatic model retraining.
-- Predictive workforce forecasting.
-- Advanced reporting dashboards beyond approved Analytics scope.
-- Payroll.
-- Inventory.
-- ERP integrations.
-- Live GPS tracking.
-- Offline sync.
-- Internal chat, voice calls, or video calls.
+- Fully autonomous assignment without manager approval.
+- Automatic machine-learning training or model retraining.
+- Reinforcement learning.
+- Predictive workforce forecasting models.
+- Fully dynamic UI form generation.
+- Payroll, Inventory, or ERP integrations.
+- Live GPS tracking or route optimization.
 
 ## 11. Known Limitations / Important Warnings
 
@@ -378,15 +386,22 @@ Current package scripts in `apps/web-app/package.json`:
 - `npm run preview`
 - `npm run seed:demo`
 
-Current notable service modules:
+Current notable service & domain modules:
 
-- `services/jobs/jobService.ts`
-- `services/recommendations/assignmentRecommendationService.ts`
-- `services/ai/jobUnderstandingService.ts`
-- `services/dashboard/index.ts`
-- `services/evaluation/index.ts`
-- `services/user/index.ts`
-- `services/auth/index.ts`
-- `services/storage/index.ts`
+- `shared/assignmentRecommendation.ts` - Shared 3-stage Decision Pipeline (Eligibility Engine, Weighted Strategy, AHP-TOPSIS Strategy, TOPSIS confidence scoring).
+- `shared/operationsIntelligence.ts` & `shared/workforceIntelligence.ts` - Read-only operations & workforce intelligence contracts.
+- `shared/actionProposal.ts` & `shared/jobCreation.ts` - Action proposal & AI draft schemas.
+- `shared/configuration.ts` - Scoped organization configuration interfaces.
+- `services/recommendations/assignmentRecommendationService.ts` - Recommendation generation, manager acceptance/override decision tracking, permanent recommendation records.
+- `services/actionProposals/actionProposalService.ts` - Action proposal persistence, tenant reads, and callable execution boundaries.
+- `services/coordinator/workflowCoordinator.ts` - Multi-agent coordinator router, tool execution, and telemetry.
+- `services/config/organizationConfigService.ts` - Org-scoped configuration documents in Firestore (`organizationConfigurations`).
+- `services/jobs/jobService.ts` - Job lifecycle, assignment, and activity tracking.
+- `services/ai/jobUnderstandingService.ts` - Natural-language job drafting callable service.
+- `services/dashboard/index.ts` - Dashboard operational overview & attention metrics.
+- `services/evaluation/index.ts` - Baseline manual assignment & operational evaluation metrics.
+- `services/user/index.ts` - User profile service.
+- `services/auth/index.ts` - Firebase Authentication service.
+- `services/storage/index.ts` - Storage service.
 
 Keep this document synchronized after completed phases, but always verify against current code and git history before relying on it for implementation claims.

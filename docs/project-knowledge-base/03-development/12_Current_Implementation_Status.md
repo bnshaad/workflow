@@ -69,24 +69,30 @@ Older documentation references to a primary `tasks` collection are superseded by
 
 | Module | Current maturity |
 |---|---|
-| AI Job Understanding | Server-side `gemini-3.1-flash-lite` structured-draft callable implemented with a flat transport schema and strict normalization; fake-provider automation and the controlled local real-model smoke have passed. Development stub remains opt-in only. |
-| Weighted assignment | Deterministic `rule-based-v1` recommendation service with explainable scoring; advisory only |
-| AHP-TOPSIS ranking | Approved future experimental ranking mode; not assumed implemented |
-| Recommendation acceptance/override | Implemented for generated recommendations; accepted/overridden decisions persist with reason and score snapshots |
-| Evaluation metrics | Manual-assignment and recommendation-decision metrics remain available as bounded reads. Coordinator `coordinator-functional-v1` adds controlled functional pass rates over 35 fixed synthetic cases; it is not a statistical accuracy claim. |
-| Multi-agent coordinator | Deterministic-first typed coordinator; exact routes make zero model calls, ambiguous requests may use one server-side Gemini classification call mapped to a fixed allowlist. Operations requests make at most one trusted tool call. No broad assistant UI. |
-| Workforce Intelligence | First read-only slice implemented for recommendation, grounded explanation, and top-two comparison; deterministic engine remains authoritative and no assignment is executed |
-| Operations Intelligence | Read-only specialist implemented for urgent unassigned, overdue, deterministic attention, workload distribution, open-operations summary, and attention explanations; no overload threshold or prediction |
-| Knowledge/RAG agent | Planned |
-| Employee mobile AI | Planned after web AI core |
+| AI Job Understanding | Server-side `gemini-3.1-flash-lite` structured-draft callable implemented with a flat transport schema and strict normalization; fake-provider automation and local real-model smoke passed. |
+| Decision Engine Abstraction | Implemented in Phase 2; common interface for `Weighted Strategy` (`rule-based-v1`) and `AHP-TOPSIS Strategy` (`ahp-topsis-v1`). |
+| Weighted Assignment | Implemented (`rule-based-v1`); advisory explainable scoring integrated into Decision Engine abstraction. |
+| AHP-TOPSIS Ranking | Implemented in Phase 2; pairwise comparison matrix weight derivation + TOPSIS ideal closeness ranking ($C_i^*$) with AHP profiles (Emergency Repair, Commercial Maintenance, Standard). |
+| Recommendation Acceptance/Override | Implemented; UI action records decision feedback and reasons into permanent recommendation records. |
+| Confidence Scoring | Implemented in Phase 3; derived score buckets (High/Med/Low) with manual review recommendation threshold. |
+| Evaluation Dashboard | Implemented in Phase 4; business-facing metrics for AI quality, operational impact, algorithm comparison, explainability survey, and system performance. |
+| Configuration Layer | Implemented in Phase 5; org-scoped configuration documents in Firestore (`organizationConfigurations` collection) for skills, job types, capability mappings, AHP profiles (Emergency Repair, Commercial Maintenance, Standard), and static UI forms with dynamic validation. |
+| Multi-agent Coordinator | Deterministic-first typed coordinator; exact routes make zero model calls, ambiguous requests use server-side Gemini classification. |
+| Workforce Intelligence | Read-only slice for recommendation, grounded explanation, and top-two candidate comparison. |
+| Operations Intelligence | Read-only specialist for urgent unassigned, overdue, attention, workload distribution, and operations summary. |
+| Knowledge/RAG agent | Explicitly parked for future work. |
+| Full Employee Mobile AI | Deferred; Phase 1 implements minimal status transitions and timestamps (`Assigned` → `In Progress` → `Completed`). |
 
-## 6. Immediate priority
+## 6. Immediate Priority & Phased Capstone Roadmap
 
-The coordinator now has a narrow secure model boundary for classification and editable drafting. The next coherent milestone is still not a broad autonomous multi-agent system:
+Project is framed as an **Explainable AI Decision Support Platform for Field Operations**. Implementation follows the 5-phase roadmap:
 
-1. Keep public deployment and Blaze deferred until public Functions access is required.
-2. Keep the next specialist phase narrow; Knowledge/RAG remains unimplemented until its trusted document and citation design is approved.
-3. Extend trusted proposal execution only after each new action has explicit lifecycle, validation, audit, and reconciliation requirements.
+1. **Phase 1 — Operational Loop**: Complete minimal employee status transitions (`Assigned` → `In Progress` → `Completed` + optional `reopen` flag) to establish real completion-time data.
+2. **Phase 2 — Decision Pipeline**: Formalize Eligibility Engine and Decision Engine abstraction (`Weighted Strategy` vs `AHP-TOPSIS Strategy`).
+3. **Phase 3 — Human-in-the-Loop**: Implement recommendation acceptance/override UI, structured override reasons, confidence score, and permanent recommendation records.
+4. **Phase 4 — Evidence-Based Evaluation**: Implement business-facing evaluation dashboard for AI quality, operational impact, algorithm comparison, and explainability survey.
+5. **Phase 5 — Configuration Layer**: Org-scoped Firestore configuration documents (skills, job types, AHP profiles) with Field Service sub-types (AC repair, plumbing, electrical).
+
 
 ## 7. Critical actions
 
