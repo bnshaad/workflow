@@ -3,8 +3,10 @@ import {
   ArrowLeft,
   ChevronRight,
   ClipboardList,
+  Clock,
   MapPin,
   Paperclip,
+  Pencil,
   Phone,
   Search,
   Sparkles,
@@ -13,6 +15,7 @@ import {
 import { Link, useParams } from 'react-router-dom'
 import { StatusBadge } from '@/components'
 import { useAuth } from '@/hooks'
+import { cn, summarizeCandidateExplanation } from '@/utils'
 import { canAssignWorker, canEditJob } from '@/permissions'
 import {
   AssignmentRecommendationError,
@@ -25,6 +28,7 @@ import {
   type AssignmentRecommendationCandidate,
   type AssignmentOverrideReason,
   getAllowedJobStatusTransitions,
+  JOB_PRIORITY_VALUES,
   JOB_STATUS_LABELS,
   JobStatuses,
   type Job,
@@ -97,6 +101,114 @@ export function JobDetailsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isManagingAssignment, setIsManagingAssignment] = useState(false)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+
+  const [activeJobTab, setActiveJobTab] = useState<'details' | 'assignment' | 'activity'>(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#assignment-controls') {
+      return 'assignment'
+    }
+    return 'details'
+  })
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editForm, setEditForm] = useState<{
+    title: string
+    description: string
+    priority: JobPriority
+    customerName: string
+    customerPhone: string
+    serviceAddress: string
+    location: string
+    requiredSkills: string
+  }>({
+    title: '',
+    description: '',
+    priority: 'Medium',
+    customerName: '',
+    customerPhone: '',
+    serviceAddress: '',
+    location: '',
+    requiredSkills: '',
+  })
+  const [isUpdatingJobDetails, setIsUpdatingJobDetails] = useState(false)
+  const [editErrorMessage, setEditErrorMessage] = useState('')
+  const [editSuccessMessage, setEditSuccessMessage] = useState('')
+
+  const handleOpenEditModal = () => {
+    if (!job) return
+    setEditForm({
+      title: job.title,
+      description: job.description,
+      priority: job.priority,
+      customerName: job.customerName,
+      customerPhone: job.customerPhone,
+      serviceAddress: job.serviceAddress,
+      location: job.location || '',
+      requiredSkills: job.requiredSkills ? job.requiredSkills.join(', ') : '',
+    })
+    setEditErrorMessage('')
+    setEditSuccessMessage('')
+    setIsEditModalOpen(true)
+  }
+
+  const handleEditFormChange = (field: string, value: string) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSaveEditJob = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!profile || !job) return
+
+    if (!editForm.title.trim()) {
+      setEditErrorMessage('Job title is required.')
+      return
+    }
+    if (!editForm.customerName.trim()) {
+      setEditErrorMessage('Customer name is required.')
+      return
+    }
+
+    setIsUpdatingJobDetails(true)
+    setEditErrorMessage('')
+    setEditSuccessMessage('')
+
+    try {
+      const skillsArray = editForm.requiredSkills
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+
+      const updatedJob = await jobService.updateJob(
+        profile,
+        job.id,
+        profile.organizationId,
+        {
+          title: editForm.title.trim(),
+          description: editForm.description.trim(),
+          priority: editForm.priority,
+          customerName: editForm.customerName.trim(),
+          customerPhone: editForm.customerPhone.trim(),
+          serviceAddress: editForm.serviceAddress.trim(),
+          location: editForm.location.trim(),
+          requiredSkills: skillsArray,
+        }
+      )
+
+      setJob(updatedJob)
+      setEditSuccessMessage('Job details updated successfully.')
+      setIsEditModalOpen(false)
+
+      const updatedActivities = await jobService.getJobActivities(
+        profile,
+        job.id,
+        profile.organizationId
+      )
+      setActivities(updatedActivities)
+    } catch (err) {
+      setEditErrorMessage(err instanceof Error ? err.message : 'Failed to update job details.')
+    } finally {
+      setIsUpdatingJobDetails(false)
+    }
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -594,10 +706,135 @@ export function JobDetailsPage() {
         job={job}
       />
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <aside className="min-w-0 xl:order-2">
+      {/* 3-Tab Organization Header */}
+      <div className="flex flex-wrap gap-2 border-b border-border pb-3">
+        {[
+          { id: 'details', label: 'Details', icon: ClipboardList },
+          { id: 'assignment', label: 'Assign Worker', icon: Sparkles },
+          { id: 'activity', label: 'History', icon: Clock },
+        ].map((tab) => {
+          const Icon = tab.icon
+          const isActive = activeJobTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveJobTab(tab.id as 'details' | 'assignment' | 'activity')}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors',
+                isActive
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'bg-card border border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+              type="button"
+            >
+              <Icon className="size-3.5" />
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {editSuccessMessage ? (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-600 dark:text-emerald-400">
+          {editSuccessMessage}
+        </div>
+      ) : null}
+
+      {/* Tab 1: Details & Customer Info */}
+      {activeJobTab === 'details' ? (
+        <div className="space-y-4">
+          <InfoCard
+            title="Job Information"
+            action={
+              profile && canEditJob(profile) ? (
+                <button
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  onClick={handleOpenEditModal}
+                  type="button"
+                >
+                  <Pencil aria-hidden="true" className="size-3.5" />
+                  Edit Job Details
+                </button>
+              ) : null
+            }
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <DetailItem label="Description">{job.description}</DetailItem>
+              </div>
+              <DetailItem label="Priority">
+                <StatusBadge tone={priorityTone[job.priority]}>
+                  {job.priority}
+                </StatusBadge>
+              </DetailItem>
+              <DetailItem label="Status">
+                <StatusBadge tone={statusTone[job.status]}>
+                  {JOB_STATUS_LABELS[job.status]}
+                </StatusBadge>
+              </DetailItem>
+              <DetailItem label="Required Skills">
+                <SkillList skills={job.requiredSkills} />
+              </DetailItem>
+              <DetailItem label="Location">
+                {job.location || 'No location note'}
+              </DetailItem>
+            </div>
+          </InfoCard>
+
+          <InfoCard title="Customer Information">
+            <div className="grid gap-4 md:grid-cols-3">
+              <DetailItem label="Customer Name">{job.customerName}</DetailItem>
+              <DetailItem label="Phone">
+                <span className="inline-flex items-center gap-2">
+                  <Phone aria-hidden="true" className="size-4 text-muted-foreground" />
+                  {job.customerPhone}
+                </span>
+              </DetailItem>
+              <DetailItem label="Service Address">
+                <span className="inline-flex items-start gap-2">
+                  <MapPin
+                    aria-hidden="true"
+                    className="mt-1 size-4 shrink-0 text-muted-foreground"
+                  />
+                  {job.serviceAddress}
+                </span>
+              </DetailItem>
+            </div>
+          </InfoCard>
+
+          <InfoCard title="Job Metadata">
+            <div className="grid gap-4 md:grid-cols-2">
+              <DetailItem label="Created By">
+                <span className="inline-flex items-center gap-2">
+                  <UserRound
+                    aria-hidden="true"
+                    className="size-4 text-muted-foreground"
+                  />
+                  {job.createdBy}
+                </span>
+              </DetailItem>
+              <DetailItem label="Created Date">
+                {formatTimestamp(job.createdAt)}
+              </DetailItem>
+              <DetailItem label="Due Date">
+                {formatNullableTimestamp(job.dueDate)}
+              </DetailItem>
+              <DetailItem label="Status Updated">
+                {formatNullableTimestamp(job.statusUpdatedAt)}
+              </DetailItem>
+              <DetailItem label="Status Updated By">
+                {job.statusUpdatedBy || 'No status update yet'}
+              </DetailItem>
+            </div>
+          </InfoCard>
+        </div>
+      ) : null}
+
+      {/* Tab 2: AI Recommendations & Assignment Controls */}
+      {activeJobTab === 'assignment' ? (
+        <div className="max-w-4xl space-y-4">
           <div
-            className="scroll-mt-4 space-y-3 focus:outline-none focus:ring-2 focus:ring-primary/30 xl:sticky xl:top-3"
+            className="scroll-mt-4 space-y-3"
             id="assignment-controls"
             tabIndex={-1}
           >
@@ -662,86 +899,18 @@ export function JobDetailsPage() {
               }
             />
           </div>
-        </aside>
+        </div>
+      ) : null}
 
-        <div className="min-w-0 space-y-3 xl:order-1">
-          <InfoCard title="Job Information">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <DetailItem label="Description">{job.description}</DetailItem>
-              </div>
-              <DetailItem label="Priority">
-                <StatusBadge tone={priorityTone[job.priority]}>
-                  {job.priority}
-                </StatusBadge>
-              </DetailItem>
-              <DetailItem label="Status">
-                <StatusBadge tone={statusTone[job.status]}>
-                  {JOB_STATUS_LABELS[job.status]}
-                </StatusBadge>
-              </DetailItem>
-              <DetailItem label="Required Skills">
-                <SkillList skills={job.requiredSkills} />
-              </DetailItem>
-              <DetailItem label="Location">
-                {job.location || 'No location note'}
-              </DetailItem>
-            </div>
-          </InfoCard>
-
-          <InfoCard title="Customer Information">
-            <div className="grid gap-4 md:grid-cols-3">
-              <DetailItem label="Customer Name">{job.customerName}</DetailItem>
-              <DetailItem label="Phone">
-                <span className="inline-flex items-center gap-2">
-                  <Phone aria-hidden="true" className="size-4 text-muted-foreground" />
-                  {job.customerPhone}
-                </span>
-              </DetailItem>
-              <DetailItem label="Service Address">
-                <span className="inline-flex items-start gap-2">
-                  <MapPin
-                    aria-hidden="true"
-                    className="mt-1 size-4 shrink-0 text-muted-foreground"
-                  />
-                  {job.serviceAddress}
-                </span>
-              </DetailItem>
-            </div>
-          </InfoCard>
-
+      {/* Tab 3: Status Activity & Attachments */}
+      {activeJobTab === 'activity' ? (
+        <div className="space-y-4">
           <InfoCard title="Attachments">
             <div className="flex min-h-12 items-center gap-3 rounded-lg border border-dashed border-border bg-background p-3 text-sm text-muted-foreground">
               <Paperclip aria-hidden="true" className="size-4" />
               {job.attachments.length === 0
                 ? 'No attachments uploaded yet.'
                 : `${job.attachments.length} attachment metadata records`}
-            </div>
-          </InfoCard>
-
-          <InfoCard title="Job Metadata">
-            <div className="grid gap-4 md:grid-cols-2">
-              <DetailItem label="Created By">
-                <span className="inline-flex items-center gap-2">
-                  <UserRound
-                    aria-hidden="true"
-                    className="size-4 text-muted-foreground"
-                  />
-                  {job.createdBy}
-                </span>
-              </DetailItem>
-              <DetailItem label="Created Date">
-                {formatTimestamp(job.createdAt)}
-              </DetailItem>
-              <DetailItem label="Due Date">
-                {formatNullableTimestamp(job.dueDate)}
-              </DetailItem>
-              <DetailItem label="Status Updated">
-                {formatNullableTimestamp(job.statusUpdatedAt)}
-              </DetailItem>
-              <DetailItem label="Status Updated By">
-                {job.statusUpdatedBy || 'No status update yet'}
-              </DetailItem>
             </div>
           </InfoCard>
 
@@ -764,7 +933,161 @@ export function JobDetailsPage() {
             </div>
           </InfoCard>
         </div>
-      </div>
+      ) : null}
+
+      {isEditModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Edit Job Details</h2>
+                <p className="text-xs text-muted-foreground">
+                  Update title, customer info, location, priority, or required skills.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+
+            {editErrorMessage ? (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
+                {editErrorMessage}
+              </div>
+            ) : null}
+
+            <form onSubmit={handleSaveEditJob} className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                    Job Title *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.title}
+                    onChange={(e) => handleEditFormChange('title', e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                    Priority *
+                  </label>
+                  <select
+                    value={editForm.priority}
+                    onChange={(e) => handleEditFormChange('priority', e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    {JOB_PRIORITY_VALUES.map((p) => (
+                      <option key={p} value={p}>
+                        {p} Priority
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                    Customer Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.customerName}
+                    onChange={(e) => handleEditFormChange('customerName', e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                    Customer Phone
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.customerPhone}
+                    onChange={(e) => handleEditFormChange('customerPhone', e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                    Location Note / Tag
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.location}
+                    onChange={(e) => handleEditFormChange('location', e.target.value)}
+                    placeholder="e.g. Building A, Floor 3"
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                    Service Address
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.serviceAddress}
+                    onChange={(e) => handleEditFormChange('serviceAddress', e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                    Required Skills (Comma Separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.requiredSkills}
+                    onChange={(e) => handleEditFormChange('requiredSkills', e.target.value)}
+                    placeholder="e.g. HVAC, Electrical, Plumbing"
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={editForm.description}
+                    onChange={(e) => handleEditFormChange('description', e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingJobDetails}
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {isUpdatingJobDetails ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -1519,10 +1842,12 @@ function BackLink() {
 }
 
 function InfoCard({
+  action,
   children,
   contained = false,
   title,
 }: {
+  action?: ReactNode
   children: ReactNode
   contained?: boolean
   title: string
@@ -1535,9 +1860,12 @@ function InfoCard({
           : 'border-t border-border pt-4 first:border-t-0 first:pt-0'
       }
     >
-      <h2 className="border-b border-border pb-3 text-base font-semibold text-foreground">
-        {title}
-      </h2>
+      <div className="flex items-center justify-between border-b border-border pb-3">
+        <h2 className="text-base font-semibold text-foreground">
+          {title}
+        </h2>
+        {action}
+      </div>
       <div className="pt-3">{children}</div>
     </section>
   )
@@ -1594,28 +1922,51 @@ function RecommendedEmployeeDecisionCard({
     candidate: AssignmentRecommendationCandidate,
   ) => void
 }) {
+  const summary = summarizeCandidateExplanation(candidate)
+
   return (
     <article className="rounded-md border border-border border-l-2 border-l-primary bg-card p-3.5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.08em] text-primary">
-            Recommended employee
-          </p>
-          <p className="mt-1 text-sm font-semibold text-foreground">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">
+              Recommended employee
+            </span>
+            <span
+              className={cn(
+                'rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                summary.confidenceTone === 'success' && 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+                summary.confidenceTone === 'warning' && 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+                summary.confidenceTone === 'danger' && 'bg-rose-500/10 text-rose-700 dark:text-rose-400',
+              )}
+            >
+              {summary.confidenceBadgeText}
+            </span>
+          </div>
+          <p className="mt-1 text-base font-bold text-foreground">
             {candidate.employeeName}
           </p>
         </div>
-        <span className="inline-flex w-fit rounded-md bg-muted px-2 py-1 text-xs font-medium text-foreground">
-          {candidate.totalScore} pts
+        <span className="inline-flex w-fit items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
+          {summary.displayScoreText}
         </span>
       </div>
 
-      {candidate.explanationReasons.length > 0 ? (
-        <ul className="mt-4 list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">
-          {candidate.explanationReasons.slice(0, 4).map((reason) => (
-            <li key={reason}>{reason}</li>
+      {summary.highlights.length > 0 ? (
+        <ul className="mt-3.5 space-y-1.5 text-xs text-foreground">
+          {summary.highlights.slice(0, 4).map((reason) => (
+            <li className="flex items-center gap-2" key={reason}>
+              <span className="inline-block size-1.5 rounded-full bg-primary" />
+              <span>{reason}</span>
+            </li>
           ))}
         </ul>
+      ) : null}
+
+      {summary.requiresManualReview ? (
+        <div className="mt-3 rounded border border-amber-500/20 bg-amber-500/10 p-2 text-xs font-medium text-amber-800 dark:text-amber-300">
+          Manual review recommended due to lower score confidence.
+        </div>
       ) : null}
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -1722,27 +2073,34 @@ function RecommendationCandidateCard({
 }: {
   candidate: AssignmentRecommendationCandidate
 }) {
+  const summary = summarizeCandidateExplanation(candidate)
+
   return (
     <article className="border-t border-border py-3 first:border-t-0">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-foreground">
             #{candidate.rank} {candidate.employeeName}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Recommendation score: {candidate.totalScore} points
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {summary.displayScoreText} • {summary.confidenceBadgeText}
           </p>
         </div>
-        <span className="inline-flex w-fit rounded-md bg-muted px-2 py-1 text-xs font-medium text-foreground">
-          {candidate.totalScore} pts
+        <span className="inline-flex w-fit rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-foreground">
+          {summary.displayScoreText}
         </span>
       </div>
 
-      <ul className="mt-3 list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">
-        {candidate.explanationReasons.slice(0, 2).map((reason) => (
-          <li key={reason}>{reason}</li>
-        ))}
-      </ul>
+      {summary.highlights.length > 0 ? (
+        <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+          {summary.highlights.slice(0, 2).map((reason) => (
+            <li className="flex items-center gap-1.5" key={reason}>
+              <span className="size-1 rounded-full bg-muted-foreground/60" />
+              <span>{reason}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </article>
   )
 }

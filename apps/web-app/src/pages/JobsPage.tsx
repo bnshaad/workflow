@@ -3,16 +3,20 @@ import {
   Calendar,
   Check,
   ChevronDown,
-  ClipboardList,
   Filter,
+  Plus,
   Search,
   SlidersHorizontal,
   X,
 } from 'lucide-react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { PageHeader, StatusBadge } from '@/components'
-import { JOB_PRIORITY_OPTIONS, JOB_STATUS_OPTIONS } from '@/constants/jobConstants'
+import { useLocation, useSearchParams } from 'react-router-dom'
+
+import { CreateJobDrawer, JobDetailsDrawer, PageHeader, QuickAssignModal, StatusBadge } from '@/components'
+
+import { JOB_PRIORITY_OPTIONS } from '@/constants/jobConstants'
+
 import { useAuth } from '@/hooks'
+import { canCreateJob } from '@/permissions'
 import { jobService } from '@/services/jobs'
 import {
   JOB_STATUS_LABELS,
@@ -76,6 +80,22 @@ export function JobsPage() {
   const [createdByFilter, setCreatedByFilter] = useState('all')
   const [assignedFilter, setAssignedFilter] = useState<AssignedFilter>('all')
   const [showMoreFilters, setShowMoreFilters] = useState(false)
+  const [quickAssignJob, setQuickAssignJob] = useState<Job | null>(null)
+  const [selectedDrawerJobId, setSelectedDrawerJobId] = useState<string | null>(null)
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
+
+
+  const handleJobQuickAssigned = (updatedJob: Job) => {
+    setJobs((prevJobs) =>
+      prevJobs.map((j) => (j.id === updatedJob.id ? updatedJob : j))
+    )
+  }
+
+  const handleJobCreated = (newJob: Job) => {
+    setJobs((prevJobs) => [newJob, ...prevJobs])
+    setSelectedDrawerJobId(newJob.id)
+  }
+
 
   useEffect(() => {
     let isMounted = true
@@ -198,101 +218,84 @@ export function JobsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader
         title={isAssignmentsView ? 'Assignments' : 'Jobs'}
-        description={
-          isAssignmentsView
-            ? 'Review unassigned work and confirm the right employee.'
-            : 'Search, assign, and track service work.'
-        }
-      />
-
-      <section aria-label="Quick job filters" className="space-y-2">
-        <div className="flex gap-2 overflow-x-auto pb-1" role="group">
-          {quickFilters.map((filter) => (
+        actions={
+          profile && canCreateJob(profile) ? (
             <button
-              aria-pressed={quickFilter === filter.value}
-              className={`inline-flex h-8 shrink-0 items-center rounded-md border px-3 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                quickFilter === filter.value
-                  ? 'border-primary/30 bg-primary/10 text-primary'
-                  : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
-              }`}
-              key={filter.value}
-              onClick={() => selectQuickFilter(filter.value)}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-xs transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              onClick={() => setIsCreateDrawerOpen(true)}
               type="button"
             >
-              {filter.label}
+              <Plus aria-hidden="true" className="size-4" />
+              <span>New Job</span>
             </button>
-          ))}
-        </div>
-      </section>
+          ) : null
+        }
 
-      <section aria-label="Job filters" className="rounded-lg border border-border bg-card p-3">
-        <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-          <div className="relative min-w-0 xl:flex-[1.5]">
+      />
+
+      <section aria-label="Job filters" className="rounded-xl border border-border bg-card p-3 space-y-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative min-w-0 flex-1">
             <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               aria-label="Search jobs"
               className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-4 text-sm outline-none transition placeholder:text-muted-foreground/80 focus:border-primary focus:bg-card focus:ring-2 focus:ring-primary/20"
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search title or customer..."
+              placeholder="Search title, customer name, or address..."
               type="search"
               value={searchQuery}
             />
           </div>
 
-          <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(150px,1fr)_minmax(150px,1fr)_auto_auto]">
-            <FilterSelect
-              icon={<ClipboardList aria-hidden="true" className="size-4" />}
-              label="Status"
-              onChange={(value) => setStatusFilter(value as JobStatus | 'all')}
-              value={statusFilter}
-            >
-              <option value="all">All statuses</option>
-              {JOB_STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>{JOB_STATUS_LABELS[status]}</option>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-1" role="group">
+              {quickFilters.map((filter) => (
+                <button
+                  aria-pressed={quickFilter === filter.value}
+                  className={`inline-flex h-8 items-center rounded-md px-3 text-xs font-semibold transition-colors ${
+                    quickFilter === filter.value
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                  key={filter.value}
+                  onClick={() => selectQuickFilter(filter.value)}
+                  type="button"
+                >
+                  {filter.label}
+                </button>
               ))}
-            </FilterSelect>
-
-            <FilterSelect
-              icon={<Filter aria-hidden="true" className="size-4" />}
-              label="Assigned"
-              onChange={(value) => setAssignedFilter(value as AssignedFilter)}
-              value={assignedFilter}
-            >
-              <option value="all">All assignment</option>
-              <option value="assigned">Assigned</option>
-              <option value="unassigned">Unassigned</option>
-            </FilterSelect>
+            </div>
 
             <button
               aria-expanded={showMoreFilters}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 sm:col-span-2 lg:col-span-1"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
               onClick={() => setShowMoreFilters((current) => !current)}
               type="button"
             >
-              <SlidersHorizontal aria-hidden="true" className="size-4" />
-              More filters
+              <SlidersHorizontal aria-hidden="true" className="size-3.5" />
+              <span>Filters</span>
               {advancedFilterCount > 0 ? (
-                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">{advancedFilterCount}</span>
+                <span className="inline-flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">{advancedFilterCount}</span>
               ) : null}
-              <ChevronDown aria-hidden="true" className={`size-4 text-muted-foreground transition ${showMoreFilters ? 'rotate-180' : ''}`} />
+              <ChevronDown aria-hidden="true" className={`size-3.5 text-muted-foreground transition ${showMoreFilters ? 'rotate-180' : ''}`} />
             </button>
 
             {hasActiveFilters ? (
               <button
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 sm:col-span-2 lg:col-span-1"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 onClick={clearFilters}
                 type="button"
               >
-                <X aria-hidden="true" className="size-4" />
+                <X aria-hidden="true" className="size-3.5" />
                 Clear
-                <span className="sr-only">{activeFilterCount} active filters</span>
               </button>
             ) : null}
           </div>
         </div>
+
 
         {showMoreFilters ? (
           <div className="mt-2.5 grid gap-2 border-t border-border pt-2.5 md:grid-cols-2">
@@ -350,7 +353,13 @@ export function JobsPage() {
                 </TableMessage>
               ) : null}
               {!isLoading && !errorMessage ? filteredJobs.map((job) => (
-                <JobTableRow employeeNamesById={employeeNamesById} job={job} key={job.id} />
+                <JobTableRow
+                  employeeNamesById={employeeNamesById}
+                  job={job}
+                  key={job.id}
+                  onQuickAssign={(targetJob) => setQuickAssignJob(targetJob)}
+                  onSelectJob={(targetJobId) => setSelectedDrawerJobId(targetJobId)}
+                />
               )) : null}
             </tbody>
           </table>
@@ -365,25 +374,72 @@ export function JobsPage() {
             </ListMessage>
           ) : null}
           {!isLoading && !errorMessage ? filteredJobs.map((job) => (
-            <JobCard employeeNamesById={employeeNamesById} job={job} key={job.id} />
+            <JobCard
+              employeeNamesById={employeeNamesById}
+              job={job}
+              key={job.id}
+              onQuickAssign={(targetJob) => setQuickAssignJob(targetJob)}
+              onSelectJob={(targetJobId) => setSelectedDrawerJobId(targetJobId)}
+            />
           )) : null}
+
         </div>
 
         <div className="border-t border-border bg-background/60 px-4 py-2.5 text-sm text-muted-foreground">
           Showing {filteredJobs.length} of {jobs.length} loaded jobs
         </div>
       </section>
+
+      <QuickAssignModal
+        isOpen={Boolean(quickAssignJob)}
+        job={quickAssignJob}
+        onAssigned={handleJobQuickAssigned}
+        onClose={() => setQuickAssignJob(null)}
+      />
+
+      <JobDetailsDrawer
+        isOpen={Boolean(selectedDrawerJobId)}
+        jobId={selectedDrawerJobId}
+        onClose={() => setSelectedDrawerJobId(null)}
+        onJobUpdated={handleJobQuickAssigned}
+      />
+
+      <CreateJobDrawer
+        isOpen={isCreateDrawerOpen}
+        onClose={() => setIsCreateDrawerOpen(false)}
+        onJobCreated={handleJobCreated}
+      />
     </div>
   )
 }
 
-function JobTableRow({ employeeNamesById, job }: { employeeNamesById: Map<string, string>; job: Job }) {
+
+function JobTableRow({
+  employeeNamesById,
+  job,
+  onQuickAssign,
+  onSelectJob,
+}: {
+  employeeNamesById: Map<string, string>
+  job: Job
+  onQuickAssign: (job: Job) => void
+  onSelectJob: (jobId: string) => void
+}) {
   const primaryAction = getJobPrimaryAction(job)
   const overdue = isJobOverdue(job)
   return (
-    <tr className="group transition-colors hover:bg-background">
+    <tr className="group cursor-pointer transition-colors hover:bg-background" onClick={() => onSelectJob(job.id)}>
       <td className="px-4 py-2.5">
-        <Link className="font-medium text-foreground hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30" to={`/jobs/${job.id}`}>{job.title}</Link>
+        <button
+          className="text-left font-medium text-foreground hover:text-primary focus:outline-none"
+          onClick={(e) => {
+            e.stopPropagation()
+            onSelectJob(job.id)
+          }}
+          type="button"
+        >
+          {job.title}
+        </button>
         <p className="text-sm text-muted-foreground">{job.customerName}</p>
       </td>
       <td className="px-4 py-2.5"><StatusBadge tone={priorityTone[job.priority]}>{job.priority}</StatusBadge></td>
@@ -401,14 +457,32 @@ function JobTableRow({ employeeNamesById, job }: { employeeNamesById: Map<string
           {formatAssignedEmployees(job.assignedEmployeeIds, employeeNamesById)}
         </span>
       </td>
-      <td className="px-4 py-2.5">
+      <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <Link className="font-medium text-primary hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-primary/30" to={primaryAction.href}>{primaryAction.label}</Link>
-          {job.status === 'open' && job.assignedEmployeeIds.length === 0 ? (
-            <Link className="text-xs font-medium text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" to={`/jobs/${job.id}#assignment-controls`}>Review AI recommendation</Link>
+          <button
+            className="font-medium text-primary hover:text-primary/80 focus:outline-none"
+            onClick={() => onSelectJob(job.id)}
+            type="button"
+          >
+            {primaryAction.label}
+          </button>
+          {job.status === 'open' || job.assignedEmployeeIds.length === 0 ? (
+            <button
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              onClick={() => onQuickAssign(job)}
+              type="button"
+            >
+              ⚡ Quick Assign
+            </button>
           ) : null}
           {job.status === 'assigned' ? (
-            <Link className="text-xs font-medium text-destructive hover:text-destructive/80 focus:outline-none focus:ring-2 focus:ring-primary/30" to={`/jobs/${job.id}#assignment-controls`}>Unassign</Link>
+            <button
+              className="text-xs font-medium text-destructive hover:text-destructive/80 focus:outline-none"
+              onClick={() => onSelectJob(job.id)}
+              type="button"
+            >
+              Unassign
+            </button>
           ) : null}
         </div>
       </td>
@@ -416,18 +490,47 @@ function JobTableRow({ employeeNamesById, job }: { employeeNamesById: Map<string
   )
 }
 
-function JobCard({ employeeNamesById, job }: { employeeNamesById: Map<string, string>; job: Job }) {
+function JobCard({
+  employeeNamesById,
+  job,
+  onQuickAssign,
+  onSelectJob,
+}: {
+  employeeNamesById: Map<string, string>
+  job: Job
+  onQuickAssign: (job: Job) => void
+  onSelectJob: (jobId: string) => void
+}) {
   const primaryAction = getJobPrimaryAction(job)
   const overdue = isJobOverdue(job)
   return (
-    <article className="p-3.5">
+    <article className="cursor-pointer p-3.5 transition hover:bg-muted/30" onClick={() => onSelectJob(job.id)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link className="font-medium text-foreground hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30" to={`/jobs/${job.id}`}>{job.title}</Link>
+          <button
+            className="text-left font-medium text-foreground hover:text-primary focus:outline-none"
+            onClick={(e) => {
+              e.stopPropagation()
+              onSelectJob(job.id)
+            }}
+            type="button"
+          >
+            {job.title}
+          </button>
           <p className="mt-0.5 text-sm text-muted-foreground">{job.customerName}</p>
         </div>
-        <Link className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" to={primaryAction.href}>{primaryAction.label}</Link>
+        <button
+          className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground focus:outline-none"
+          onClick={(e) => {
+            e.stopPropagation()
+            onSelectJob(job.id)
+          }}
+          type="button"
+        >
+          {primaryAction.label}
+        </button>
       </div>
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <StatusBadge tone={priorityTone[job.priority]}>{job.priority}</StatusBadge>
         <StatusBadge tone={statusTone[job.status]}>{JOB_STATUS_LABELS[job.status]}</StatusBadge>
@@ -436,8 +539,28 @@ function JobCard({ employeeNamesById, job }: { employeeNamesById: Map<string, st
       <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
         <p className={job.assignedEmployeeIds.length === 0 ? 'text-sm font-medium text-amber-700' : 'text-sm text-foreground'}>{formatAssignedEmployees(job.assignedEmployeeIds, employeeNamesById)}</p>
         <div className="flex flex-wrap gap-3">
-          {job.status === 'open' && job.assignedEmployeeIds.length === 0 ? <Link className="text-sm font-medium text-muted-foreground hover:text-foreground" to={`/jobs/${job.id}#assignment-controls`}>Review AI recommendation</Link> : null}
-          {job.status === 'assigned' ? <Link className="text-sm font-medium text-destructive" to={`/jobs/${job.id}#assignment-controls`}>Unassign</Link> : null}
+          {job.status === 'open' || job.assignedEmployeeIds.length === 0 ? (
+            <button
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80"
+              onClick={() => onQuickAssign(job)}
+              type="button"
+            >
+              ⚡ Quick Assign
+            </button>
+          ) : null}
+          {job.status === 'assigned' ? (
+            <button
+              className="text-xs font-medium text-destructive hover:text-destructive/80 focus:outline-none"
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelectJob(job.id)
+              }}
+              type="button"
+            >
+              Unassign
+            </button>
+          ) : null}
+
         </div>
       </div>
     </article>

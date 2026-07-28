@@ -153,6 +153,33 @@ export function LoginPage() {
             {isSubmitting ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
+        <div className="mt-6 border-t pt-4">
+          <p className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Demo Accounts (Password: 123456)</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded bg-muted px-2.5 py-1 text-xs font-medium hover:bg-muted/80"
+              onClick={() => { setEmail('manager@workflow.local'); setPassword('123456') }}
+            >
+              Manager
+            </button>
+            <button
+              type="button"
+              className="rounded bg-muted px-2.5 py-1 text-xs font-medium hover:bg-muted/80"
+              onClick={() => { setEmail('admin@workflow.local'); setPassword('123456') }}
+            >
+              Admin
+            </button>
+            <button
+              type="button"
+              className="rounded bg-muted px-2.5 py-1 text-xs font-medium hover:bg-muted/80"
+              onClick={() => { setEmail('employee@workflow.local'); setPassword('123456') }}
+            >
+              Employee
+            </button>
+          </div>
+        </div>
       </section>
     </main>
   )
