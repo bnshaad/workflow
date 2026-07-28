@@ -14,7 +14,7 @@ const DEMO_ORGANIZATION_ID = 'demo-org-001'
 const DEMO_ORGANIZATION_NAME = 'Workflow Demo Services'
 const SEED_CONFIRMATION = 'SEED_WORKFLOW_DEMO_SERVICES'
 const RESET_CONFIRMATION = 'DELETE_WORKFLOW_DEMO_SERVICES'
-const DEMO_AUTH_PASSWORD = 'WorkflowDemo-Only-123!'
+const DEMO_AUTH_PASSWORD = '123456'
 const JOB_STATUSES = [
   'draft',
   'open',
@@ -89,6 +89,11 @@ async function seedDemoAuthUsers(users) {
           `Auth user ${user.id} is already associated with a different email.`,
         )
       }
+
+      await auth.updateUser(user.id, {
+        password: DEMO_AUTH_PASSWORD,
+        displayName: user.displayName,
+      })
     } catch (error) {
       if (getAuthErrorCode(error) !== 'auth/user-not-found') {
         throw error

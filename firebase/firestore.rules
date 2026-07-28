@@ -48,7 +48,6 @@ service cloud.firestore {
     function isAssignedEmployeeJob(data) {
       return isEmployee()
         && data.isActive == true
-        && data.assignedEmployeeIds is list
         && request.auth.uid in data.assignedEmployeeIds
         && sameOrganization(data.organizationId);
     }
@@ -353,7 +352,7 @@ service cloud.firestore {
         && request.resource.data.jobId is string
         && request.resource.data.generatedBy == request.auth.uid
         && request.resource.data.generatedAt is timestamp
-        && request.resource.data.algorithmVersion == 'rule-based-v1'
+        && (request.resource.data.algorithmVersion == 'rule-based-v1' || request.resource.data.algorithmVersion == 'ahp-topsis-v1')
         && request.resource.data.assignmentMode == 'ai_recommendation'
         && request.resource.data.status == 'generated'
         && request.resource.data.candidates is list
@@ -498,7 +497,7 @@ service cloud.firestore {
               request.resource.data.action == 'assignment_recommendations_generated'
               && request.resource.data.metadata.jobId == request.resource.data.entityId
               && request.resource.data.metadata.recommendationId is string
-              && request.resource.data.metadata.algorithmVersion == 'rule-based-v1'
+              && (request.resource.data.metadata.algorithmVersion == 'rule-based-v1' || request.resource.data.metadata.algorithmVersion == 'ahp-topsis-v1')
               && request.resource.data.metadata.assignmentMode == 'ai_recommendation'
               && request.resource.data.metadata.candidateCount is int
               && request.resource.data.metadata.candidateCount >= 0

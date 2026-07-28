@@ -56,7 +56,7 @@ Start the Firebase emulator suite from `functions/`, then run this from
 npm run seed:demo:emulator
 ```
 
-Use `manager@workflow.local` with password `WorkflowDemo-Only-123!`.
+Use `admin@workflow.local`, `manager@workflow.local`, or `employee@workflow.local` with password `123456`.
 
 This command refuses any project other than `workflow-integration` and requires
 the Auth and Firestore emulator hosts. It never targets Firebase production.

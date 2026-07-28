@@ -18,7 +18,9 @@ const useFirebaseEmulators =
   import.meta.env.DEV &&
   import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
 const firebaseEmulatorHost =
-  import.meta.env.VITE_FIREBASE_EMULATOR_HOST || '127.0.0.1'
+  typeof window !== 'undefined' && window.location.hostname
+    ? window.location.hostname
+    : import.meta.env.VITE_FIREBASE_EMULATOR_HOST || '127.0.0.1'
 
 export const firebaseApp = initializeApp(firebaseConfig)
 export const firebaseAuth = getAuth(firebaseApp)

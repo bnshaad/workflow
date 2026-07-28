@@ -98,6 +98,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     let isMounted = true
 
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        setLoading(false)
+      }
+    }, 5000)
+
     const unsubscribe = observeAuthState((currentUser) => {
       const requestId = profileRequestRef.current + 1
       const currentUid = currentUser?.uid ?? null
@@ -110,6 +116,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (!currentUser) {
         clearAuthSessionCache()
+        clearTimeout(safetyTimer)
         setLoading(false)
         return
       }
@@ -137,6 +144,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             clearAuthSessionCache()
             setUser(null)
             setProfile(null)
+            clearTimeout(safetyTimer)
             setLoading(false)
             return
           }
@@ -163,12 +171,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
             return
           }
 
+          clearTimeout(safetyTimer)
           setLoading(false)
         })
     })
 
     return () => {
       isMounted = false
+      clearTimeout(safetyTimer)
       unsubscribe()
     }
   }, [])
