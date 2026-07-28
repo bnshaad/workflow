@@ -335,3 +335,54 @@ function readTimestamp(value: unknown) {
 function readTimestampOrNull(value: unknown) {
   return value instanceof Timestamp ? value : null
 }
+
+export type AuditLogEntry = {
+  id: string
+  action: string
+  actorId: string
+  createdAt: Timestamp
+  entityId: string
+  entityType: string
+  metadata?: Record<string, unknown>
+}
+
+import { cacheService } from '@/services/cache/cacheService'
+
+export async function getRecentAuditLogs(
+  profile: UserProfile,
+  organizationId: string,
+  resultLimit = 15,
+): Promise<AuditLogEntry[]> {
+  requireActiveProfile(profile)
+  requireTenantAccess(profile, organizationId)
+
+  const cacheKey = `auditlogs:${organizationId}:${resultLimit}`
+  const cached = cacheService.get<AuditLogEntry[]>(cacheKey, 30000)
+  if (cached) return cached
+
+  const logsQuery = query(
+    collection(firestore, AUDIT_LOGS_COLLECTION),
+    where('organizationId', '==', organizationId),
+    where('isActive', '==', true),
+    limitResults(resultLimit),
+  )
+
+  const snapshot = await getDocs(logsQuery)
+  const logs = snapshot.docs
+    .map((docSnap) => {
+      const data = docSnap.data()
+      return {
+        id: docSnap.id,
+        action: readString(data, 'action', 'System Event'),
+        actorId: readString(data, 'actorId', 'System'),
+        createdAt: readTimestamp(data.createdAt),
+        entityId: readString(data, 'entityId'),
+        entityType: readString(data, 'entityType'),
+        metadata: typeof data.metadata === 'object' && data.metadata !== null ? data.metadata : {},
+      }
+    })
+    .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+
+  cacheService.set(cacheKey, logs)
+  return logs
+}

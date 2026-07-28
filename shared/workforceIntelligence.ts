@@ -1,4 +1,7 @@
-import type { AssignmentScoreBreakdown } from './assignmentRecommendation.js'
+import type {
+  AssignmentAlgorithmVersion,
+  AssignmentScoreBreakdown,
+} from './assignmentRecommendation.js'
 
 export const WORKFORCE_INTENTS = [
   'recommend_employee_for_job',
@@ -20,7 +23,7 @@ export type WorkforceRecommendationCandidate = {
 
 export type WorkforceRecommendationResult = {
   candidates: WorkforceRecommendationCandidate[]
-  engineVersion: 'rule-based-v1'
+  engineVersion: AssignmentAlgorithmVersion | string
   generatedAt: string
   jobId: string
 }

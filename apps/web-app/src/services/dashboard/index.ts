@@ -96,24 +96,37 @@ export type DashboardSummary = {
   recentActivities: RecentDashboardActivity[]
 }
 
+import { cacheService } from '@/services/cache/cacheService'
+
 export async function getDashboardSummary(
   profile: UserProfile,
   organizationId: string,
+  options?: { bypassCache?: boolean }
 ): Promise<DashboardSummary> {
   const activeProfile = requireDashboardAccess(profile, organizationId)
+  const cacheKey = `dashboard:summary:${activeProfile.organizationId}`
+
+  if (!options?.bypassCache) {
+    const cached = cacheService.get<DashboardSummary>(cacheKey, 30000)
+    if (cached) return cached
+  }
+
   const [jobs, employees, activities] = await Promise.all([
     readDashboardJobs(activeProfile.organizationId),
     readActiveEmployees(activeProfile.organizationId),
     readRecentActivities(activeProfile.organizationId, DEFAULT_ACTIVITY_LIMIT),
   ])
 
-  return {
+  const summary: DashboardSummary = {
     actionNeeded: buildDashboardActionNeededSummary(jobs),
     employeeWorkload: buildEmployeeWorkloadSummary(employees, jobs),
     jobMetrics: buildDashboardJobMetrics(jobs),
     operationalJobs: jobs,
     recentActivities: buildRecentActivitySummary(activities, jobs, employees),
   }
+
+  cacheService.set(cacheKey, summary)
+  return summary
 }
 
 export async function getDashboardJobMetrics(

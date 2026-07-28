@@ -57,6 +57,11 @@ export function canManageUsers(profile: UserProfile) {
   return hasRole(profile, [Roles.Admin])
 }
 
+export function canViewAcademicBenchmarks(profile: UserProfile) {
+  return hasRole(profile, [Roles.Admin])
+}
+
+
 export function canUploadWorkProof(profile: UserProfile) {
   return hasRole(profile, [Roles.Employee])
 }

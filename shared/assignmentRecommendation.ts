@@ -1,4 +1,12 @@
-export const ASSIGNMENT_ALGORITHM_VERSION = 'rule-based-v1' as const
+export const ASSIGNMENT_ALGORITHM_VERSIONS = {
+  WEIGHTED: 'rule-based-v1',
+  AHP_TOPSIS: 'ahp-topsis-v1',
+} as const
+
+export type AssignmentAlgorithmVersion =
+  (typeof ASSIGNMENT_ALGORITHM_VERSIONS)[keyof typeof ASSIGNMENT_ALGORITHM_VERSIONS]
+
+export const ASSIGNMENT_ALGORITHM_VERSION = ASSIGNMENT_ALGORITHM_VERSIONS.WEIGHTED
 export const ASSIGNMENT_TOP_CANDIDATE_LIMIT = 5
 
 export type AssignmentScoreBreakdown = {
@@ -9,6 +17,8 @@ export type AssignmentScoreBreakdown = {
   workload: number
 }
 
+export type ConfidenceBucket = 'High' | 'Medium' | 'Low'
+
 export type RankedAssignmentCandidate = {
   employeeId: string
   employeeName: string
@@ -16,6 +26,9 @@ export type RankedAssignmentCandidate = {
   rank: number
   scoreBreakdown: AssignmentScoreBreakdown
   totalScore: number
+  closenessScore?: number // TOPSIS relative closeness score C_i* in [0, 1]
+  confidenceBucket?: ConfidenceBucket
+  requiresManualReview?: boolean
 }
 
 export type RecommendationEmployee = {
@@ -36,32 +49,17 @@ export type RecommendationJob = {
   status: string
 }
 
-type HistoricalPerformance = {
-  completedJobs: number
-  consideredJobs: number
+export type AhpProfileName = 'Standard' | 'Emergency Repair' | 'Commercial Maintenance'
+
+export type DecisionEngineConfig = {
+  strategy?: AssignmentAlgorithmVersion
+  ahpProfile?: AhpProfileName
 }
 
-export function rankAssignmentCandidates(
-  job: Pick<RecommendationJob, 'location' | 'requiredSkills'>,
-  employees: RecommendationEmployee[],
-  historicalJobs: RecommendationJob[],
-): RankedAssignmentCandidate[] {
-  return employees
-    .filter(isEligibleRecommendationEmployee)
-    .map((employee) => scoreEmployee(job, employee, historicalJobs))
-    .sort((firstCandidate, secondCandidate) => {
-      return (
-        secondCandidate.totalScore - firstCandidate.totalScore ||
-        firstCandidate.employeeName.localeCompare(secondCandidate.employeeName)
-      )
-    })
-    .slice(0, ASSIGNMENT_TOP_CANDIDATE_LIMIT)
-    .map((candidate, index) => ({
-      ...candidate,
-      rank: index + 1,
-    }))
-}
-
+/**
+ * STAGE 1: ELIGIBILITY ENGINE
+ * Hard-constraint candidate filtering stage prior to ranking.
+ */
 export function isEligibleRecommendationEmployee(
   employee: RecommendationEmployee,
 ) {
@@ -74,7 +72,188 @@ export function isEligibleRecommendationEmployee(
   )
 }
 
-function scoreEmployee(
+/**
+ * STAGE 2: DECISION ENGINE (STRATEGY PATTERN)
+ * Supports both Weighted Sum Strategy (rule-based-v1) and AHP-TOPSIS Strategy (ahp-topsis-v1).
+ */
+export function rankAssignmentCandidates(
+  job: Pick<RecommendationJob, 'location' | 'requiredSkills'>,
+  employees: RecommendationEmployee[],
+  historicalJobs: RecommendationJob[],
+  config: DecisionEngineConfig = {},
+): RankedAssignmentCandidate[] {
+  const eligibleEmployees = employees.filter(isEligibleRecommendationEmployee)
+
+  if (eligibleEmployees.length === 0) {
+    return []
+  }
+
+  const strategy = config.strategy ?? ASSIGNMENT_ALGORITHM_VERSIONS.WEIGHTED
+
+  if (strategy === ASSIGNMENT_ALGORITHM_VERSIONS.AHP_TOPSIS) {
+    return rankViaAhpTopsis(job, eligibleEmployees, historicalJobs, config.ahpProfile)
+  }
+
+  return rankViaWeightedSum(job, eligibleEmployees, historicalJobs)
+}
+
+/**
+ * Strategy 1: Weighted Strategy (rule-based-v1)
+ * Fixed weight additive sum across criteria.
+ */
+function rankViaWeightedSum(
+  job: Pick<RecommendationJob, 'location' | 'requiredSkills'>,
+  employees: RecommendationEmployee[],
+  historicalJobs: RecommendationJob[],
+): RankedAssignmentCandidate[] {
+  return employees
+    .map((employee) => scoreEmployeeWeighted(job, employee, historicalJobs))
+    .sort((a, b) => b.totalScore - a.totalScore || a.employeeName.localeCompare(b.employeeName))
+    .slice(0, ASSIGNMENT_TOP_CANDIDATE_LIMIT)
+    .map((candidate, index) => {
+      const normalizedScore = candidate.totalScore / 100
+      const confidence = deriveConfidenceBucket(normalizedScore)
+      return {
+        ...candidate,
+        rank: index + 1,
+        closenessScore: Math.round(normalizedScore * 100) / 100,
+        confidenceBucket: confidence.bucket,
+        requiresManualReview: confidence.requiresManualReview,
+      }
+    })
+}
+
+/**
+ * Strategy 2: AHP-TOPSIS Strategy (ahp-topsis-v1)
+ * Stage A: AHP (Analytic Hierarchy Process) to derive weights.
+ * Stage B: TOPSIS (Technique for Order of Preference by Similarity to Ideal Solution) vector ranking.
+ */
+function rankViaAhpTopsis(
+  job: Pick<RecommendationJob, 'location' | 'requiredSkills'>,
+  employees: RecommendationEmployee[],
+  historicalJobs: RecommendationJob[],
+  profileName: AhpProfileName = 'Standard',
+): RankedAssignmentCandidate[] {
+  // AHP Criteria Weights
+  const weights = getAhpCriteriaWeights(profileName)
+
+  // Construct raw metric matrix [skill, availability, workload, performance] (all normalized to 0-1)
+  const candidateMetrics = employees.map((employee) => {
+    const rawScores = scoreEmployeeWeighted(job, employee, historicalJobs)
+    return {
+      candidate: rawScores,
+      // Raw features normalized to 0..1 scale
+      vector: [
+        rawScores.scoreBreakdown.skillMatch / 35,
+        rawScores.scoreBreakdown.availability / 25,
+        rawScores.scoreBreakdown.workload / 20,
+        rawScores.scoreBreakdown.performance / 10,
+      ],
+    }
+  })
+
+  // TOPSIS Step 1: Vector Normalization R = [r_ij]
+  const numCriteria = 4
+  const normFactors = Array.from({ length: numCriteria }, (_, col) => {
+    const sumSquares = candidateMetrics.reduce(
+      (sum, m) => sum + Math.pow(m.vector[col] ?? 0, 2),
+      0,
+    )
+    return sumSquares > 0 ? Math.sqrt(sumSquares) : 1
+  })
+
+  // TOPSIS Step 2: Weighted Normalized Matrix V = [v_ij]
+  const weightVector = [
+    weights.skillMatch,
+    weights.availability,
+    weights.workload,
+    weights.performance,
+  ]
+
+  const topsisMatrix = candidateMetrics.map((m) => {
+    const weightedRow = m.vector.map((val, j) => {
+      const normFactor = normFactors[j] ?? 1
+      const weight = weightVector[j] ?? 0
+      const r_ij = val / normFactor
+      return r_ij * weight
+    })
+    return { candidate: m.candidate, weightedRow }
+  })
+
+  // TOPSIS Step 3: Determine Ideal Best (A+) and Ideal Worst (A-)
+  const idealBest = Array.from({ length: numCriteria }, (_, col) =>
+    Math.max(...topsisMatrix.map((row) => row.weightedRow[col] ?? 0)),
+  )
+  const idealWorst = Array.from({ length: numCriteria }, (_, col) =>
+    Math.min(...topsisMatrix.map((row) => row.weightedRow[col] ?? 0)),
+  )
+
+  // TOPSIS Step 4: Euclidean distances S+ and S- and Relative Closeness C_i*
+  const ranked = topsisMatrix.map(({ candidate, weightedRow }) => {
+    const sPlus = Math.sqrt(
+      weightedRow.reduce((sum, v, j) => sum + Math.pow(v - (idealBest[j] ?? 0), 2), 0),
+    )
+    const sMinus = Math.sqrt(
+      weightedRow.reduce((sum, v, j) => sum + Math.pow(v - (idealWorst[j] ?? 0), 2), 0),
+    )
+
+    const closeness = sPlus + sMinus === 0 ? 0.5 : sMinus / (sPlus + sMinus)
+    const closenessScore = Math.round(closeness * 100) / 100
+    const confidence = deriveConfidenceBucket(closenessScore)
+
+    return {
+      ...candidate,
+      closenessScore,
+      confidenceBucket: confidence.bucket,
+      requiresManualReview: confidence.requiresManualReview,
+      totalScore: Math.round(closenessScore * 100),
+    }
+  })
+
+  return ranked
+    .sort((a, b) => b.closenessScore - a.closenessScore || a.employeeName.localeCompare(b.employeeName))
+    .slice(0, ASSIGNMENT_TOP_CANDIDATE_LIMIT)
+    .map((candidate, index) => ({
+      ...candidate,
+      rank: index + 1,
+    }))
+}
+
+/**
+ * AHP Weight Derivation profiles based on pairwise comparison matrices.
+ */
+function getAhpCriteriaWeights(profile: AhpProfileName) {
+  switch (profile) {
+    case 'Emergency Repair':
+      // Emergency repair heavily prioritizes availability (0.45) & skill (0.35)
+      return { skillMatch: 0.35, availability: 0.45, workload: 0.12, performance: 0.08 }
+    case 'Commercial Maintenance':
+      // Commercial maintenance heavily prioritizes skill (0.50) & historical performance (0.25)
+      return { skillMatch: 0.50, availability: 0.15, workload: 0.10, performance: 0.25 }
+    case 'Standard':
+    default:
+      // Standard balanced profile derived via AHP pairwise comparison (Skill > Avail > Workload > Perf)
+      return { skillMatch: 0.40, availability: 0.30, workload: 0.20, performance: 0.10 }
+  }
+}
+
+/**
+ * Confidence Score Calculation & Manual Review Threshold
+ */
+export function deriveConfidenceBucket(normalizedScore: number): {
+  bucket: ConfidenceBucket
+  requiresManualReview: boolean
+} {
+  if (normalizedScore >= 0.80) {
+    return { bucket: 'High', requiresManualReview: false }
+  }
+  if (normalizedScore >= 0.60) {
+    return { bucket: 'Medium', requiresManualReview: false }
+  }
+  return { bucket: 'Low', requiresManualReview: true }
+}
+
+function scoreEmployeeWeighted(
   job: Pick<RecommendationJob, 'location' | 'requiredSkills'>,
   employee: RecommendationEmployee,
   historicalJobs: RecommendationJob[],
@@ -262,6 +441,11 @@ function scoreHistoricalPerformance(performance: HistoricalPerformance) {
       `Completed ${performance.completedJobs} of ${performance.consideredJobs} historical assigned job(s).`,
     ],
   }
+}
+
+type HistoricalPerformance = {
+  completedJobs: number
+  consideredJobs: number
 }
 
 function getHistoricalPerformance(

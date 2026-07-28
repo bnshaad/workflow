@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore'
 import { FirebaseError } from 'firebase/app'
 import { firestore } from '@/services/firestore'
+import { cacheService } from '@/services/cache/cacheService'
 import { requireActiveProfile, requireTenantAccess } from '@/services/common'
 import { canAssignWorker, canEditJob, Roles } from '@/permissions'
 import type {
@@ -23,7 +24,7 @@ import type {
   JobActivity,
   UpdateJobInput,
 } from '@/types/job'
-import { JobPriorities, type JobPriority } from '@/types/jobPriority'
+import { JobPriorities, JOB_PRIORITY_VALUES, type JobPriority } from '@/types/jobPriority'
 import {
   canTransitionJobStatus,
   JobStatuses,
@@ -219,11 +220,18 @@ export const jobService: JobService = {
 
     await batch.commit()
 
+    cacheService.invalidate('jobs')
+    cacheService.invalidate('dashboard')
+
     return job
   },
 
   async listAssignableEmployees(profile, organizationId) {
     requireTenantAccess(profile, organizationId)
+
+    const cacheKey = `employees:${organizationId}`
+    const cached = cacheService.get<UserProfile[]>(cacheKey, 60000)
+    if (cached) return cached
 
     const employeesQuery = query(
       collection(firestore, USERS_COLLECTION),
@@ -233,11 +241,14 @@ export const jobService: JobService = {
     )
     const snapshot = await getDocs(employeesQuery)
 
-    return snapshot.docs
+    const employees = snapshot.docs
       .map((employeeDocument) => employeeDocument.data() as UserProfile)
       .sort((firstEmployee, secondEmployee) =>
         firstEmployee.displayName.localeCompare(secondEmployee.displayName),
       )
+
+    cacheService.set(cacheKey, employees)
+    return employees
   },
 
   async getJobActivities(profile, jobId, organizationId, options) {
@@ -263,6 +274,10 @@ export const jobService: JobService = {
     requireTenantAccess(profile, organizationId)
     requireJobId(jobId)
 
+    const cacheKey = `job:${jobId}`
+    const cached = cacheService.get<Job>(cacheKey, 30000)
+    if (cached) return cached
+
     const jobSnapshot = await getDoc(doc(firestore, JOBS_COLLECTION, jobId))
 
     if (!jobSnapshot.exists()) {
@@ -276,6 +291,7 @@ export const jobService: JobService = {
     }
 
     requireTenantAccess(profile, job.organizationId)
+    cacheService.set(cacheKey, job)
 
     return job
   },
@@ -283,27 +299,35 @@ export const jobService: JobService = {
   async listJobs(profile, organizationId, options) {
     requireTenantAccess(profile, organizationId)
 
+    const limitVal = options?.limit ?? DEFAULT_JOBS_LIMIT
+    const cacheKey = `jobs:${organizationId}:${limitVal}`
+    const cached = cacheService.get<Job[]>(cacheKey, 30000)
+    if (cached) return cached
+
     const jobsQuery = query(
       collection(firestore, JOBS_COLLECTION),
       where('organizationId', '==', organizationId),
       where('isActive', '==', true),
       orderBy('createdAt', 'desc'),
-      limitResults(options?.limit ?? DEFAULT_JOBS_LIMIT),
+      limitResults(limitVal),
     )
     const snapshot = await getJobsSnapshotWithMissingIndexFallback(
       jobsQuery,
       organizationId,
-      options?.limit ?? DEFAULT_JOBS_LIMIT,
+      limitVal,
     )
 
-    return snapshot.docs
+    const jobs = snapshot.docs
       .map((jobDocument) => {
         return mapJob(jobDocument.id, jobDocument.data())
       })
       .sort((firstJob, secondJob) => {
         return secondJob.createdAt.toMillis() - firstJob.createdAt.toMillis()
       })
-      .slice(0, options?.limit ?? DEFAULT_JOBS_LIMIT)
+      .slice(0, limitVal)
+
+    cacheService.set(cacheKey, jobs)
+    return jobs
   },
 
   async listAssignedJobs(profile, organizationId, options) {
@@ -368,11 +392,7 @@ export const jobService: JobService = {
   },
 
   async updateJob(profile, jobId, organizationId, updates) {
-    requireTenantAccess(profile, organizationId)
-    requireJobId(jobId)
-    requireUpdates(updates)
-
-    return throwNotImplemented()
+    return updateJob(profile, jobId, organizationId, updates)
   },
 
   async updateJobStatus(profile, jobId, organizationId, status) {
@@ -427,6 +447,145 @@ export const jobService: JobService = {
       JobStatuses.Completed,
     )
   },
+}
+
+async function updateJob(
+  profile: UserProfile,
+  jobId: string,
+  organizationId: string,
+  updates: UpdateJobInput,
+): Promise<Job> {
+  const activeProfile = requireActiveProfile(profile)
+  requireTenantAccess(activeProfile, organizationId)
+  requireJobId(jobId)
+  requireUpdates(updates)
+
+  if (!canEditJob(activeProfile)) {
+    throw new Error('You do not have permission to edit job details.')
+  }
+
+  const jobReference = doc(firestore, JOBS_COLLECTION, jobId)
+  const jobSnapshot = await getDoc(jobReference)
+
+  if (!jobSnapshot.exists()) {
+    throw new Error('Job not found.')
+  }
+
+  const currentJob = jobSnapshot.data() as Job
+
+  if (!currentJob.isActive || currentJob.organizationId !== organizationId) {
+    throw new Error('Job not found.')
+  }
+
+  requireTenantAccess(activeProfile, currentJob.organizationId)
+
+  const updatePayload: Record<string, unknown> = {}
+  const changedFieldNames: string[] = []
+
+  if (updates.title !== undefined && updates.title.trim().length > 0) {
+    updatePayload.title = updates.title.trim()
+    changedFieldNames.push('title')
+  }
+
+  if (updates.description !== undefined) {
+    updatePayload.description = updates.description.trim()
+    changedFieldNames.push('description')
+  }
+
+  if (updates.priority !== undefined) {
+    if (!JOB_PRIORITY_VALUES.includes(updates.priority as JobPriority)) {
+      throw new Error('Invalid job priority.')
+    }
+    updatePayload.priority = updates.priority
+    changedFieldNames.push('priority')
+  }
+
+  if (updates.customerName !== undefined && updates.customerName.trim().length > 0) {
+    updatePayload.customerName = updates.customerName.trim()
+    changedFieldNames.push('customerName')
+  }
+
+  if (updates.customerPhone !== undefined) {
+    updatePayload.customerPhone = updates.customerPhone.trim()
+    changedFieldNames.push('customerPhone')
+  }
+
+  if (updates.serviceAddress !== undefined) {
+    updatePayload.serviceAddress = updates.serviceAddress.trim()
+    changedFieldNames.push('serviceAddress')
+  }
+
+  if (updates.location !== undefined) {
+    updatePayload.location = updates.location.trim()
+    changedFieldNames.push('location')
+  }
+
+  if (updates.requiredSkills !== undefined) {
+    updatePayload.requiredSkills = updates.requiredSkills
+    changedFieldNames.push('requiredSkills')
+  }
+
+  if (updates.dueDate !== undefined) {
+    updatePayload.dueDate = updates.dueDate ? Timestamp.fromDate(new Date(updates.dueDate as unknown as Date)) : null
+    changedFieldNames.push('dueDate')
+  }
+
+  if (Object.keys(updatePayload).length === 0) {
+    throw new Error('No valid job updates provided.')
+  }
+
+  const timestamp = Timestamp.now()
+  updatePayload.updatedAt = timestamp
+
+  const updatedJob: Job = {
+    ...currentJob,
+    ...updatePayload,
+  }
+
+  const activityReference = doc(collection(firestore, JOB_ACTIVITIES_COLLECTION))
+  const auditLogReference = doc(collection(firestore, AUDIT_LOGS_COLLECTION))
+
+  const activity: JobActivity = {
+    id: activityReference.id,
+    organizationId,
+    isActive: true,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    jobId,
+    type: 'status_changed',
+    fromStatus: currentJob.status,
+    toStatus: currentJob.status,
+    createdBy: activeProfile.id,
+    description: `Updated job details (${changedFieldNames.join(', ')}).`,
+  }
+
+  const auditLog = {
+    id: auditLogReference.id,
+    organizationId,
+    isActive: true,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    actorId: activeProfile.id,
+    action: 'job.updated',
+    entityId: jobId,
+    entityType: 'job',
+    metadata: {
+      changedFields: changedFieldNames,
+    },
+  }
+
+  const batch = writeBatch(firestore)
+  batch.update(jobReference, updatePayload)
+  batch.set(activityReference, activity)
+  batch.set(auditLogReference, auditLog)
+
+  await batch.commit()
+
+  cacheService.invalidate('jobs')
+  cacheService.invalidate('dashboard')
+  cacheService.invalidate(`job:${jobId}`)
+
+  return updatedJob
 }
 
 async function updateJobStatus(
@@ -524,6 +683,10 @@ async function updateJobStatus(
   batch.set(auditLogReference, auditLog)
 
   await batch.commit()
+
+  cacheService.invalidate('jobs')
+  cacheService.invalidate('dashboard')
+  cacheService.invalidate(`job:${jobId}`)
 
   return {
     activity,
@@ -773,6 +936,10 @@ async function assignEmployeesToJob(
 
   await batch.commit()
 
+  cacheService.invalidate('jobs')
+  cacheService.invalidate('dashboard')
+  cacheService.invalidate(`job:${jobId}`)
+
   return {
     activity,
     assignedEmployees,
@@ -902,6 +1069,10 @@ async function updateAssignedEmployees(
   batch.set(auditLogReference, auditLog)
 
   await batch.commit()
+
+  cacheService.invalidate('jobs')
+  cacheService.invalidate('dashboard')
+  cacheService.invalidate(`job:${jobId}`)
 
   return {
     activity,
@@ -1179,8 +1350,4 @@ function readJobPriority(value: unknown): JobPriority {
 
 function readJobStatus(value: unknown): JobStatus {
   return validateJobStatus(value) ? value : JobStatuses.Draft
-}
-
-function throwNotImplemented(): never {
-  throw new Error('Not implemented')
 }

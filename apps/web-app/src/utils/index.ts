@@ -11,3 +11,9 @@ export {
   type JobPrimaryAction,
   type JobQuickFilter,
 } from './jobOperations'
+export {
+  filterHumanExplanationReasons,
+  formatExplanationReason,
+  summarizeCandidateExplanation,
+  type RecommendationExplanationSummary,
+} from './explanationFormatter'

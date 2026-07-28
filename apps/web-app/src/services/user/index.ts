@@ -1,5 +1,6 @@
 import { doc, getDoc, type DocumentData } from 'firebase/firestore'
 import { firestore } from '@/config/firebase'
+import { cacheService } from '@/services/cache/cacheService'
 import type { UserAvailability, UserProfile, UserRole } from '@/types'
 
 const USERS_COLLECTION = 'users'
@@ -9,13 +10,36 @@ export async function getCurrentUserProfile(uid: string) {
 }
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-  const userSnapshot = await getDoc(doc(firestore, USERS_COLLECTION, uid))
+  const cacheKey = `user:profile:${uid}`
+  const cached = cacheService.get<UserProfile>(cacheKey, 60000)
+  if (cached) return cached
 
-  if (!userSnapshot.exists()) {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('Profile fetch timed out')), 6000)
+  })
+
+  try {
+    const userSnapshot = (await Promise.race([
+      getDoc(doc(firestore, USERS_COLLECTION, uid)),
+      timeoutPromise,
+    ])) as Awaited<ReturnType<typeof getDoc>>
+
+    if (!userSnapshot.exists()) {
+      return null
+    }
+
+    const data = userSnapshot.data()
+    if (!data) {
+      return null
+    }
+
+    const profile = mapUserProfile(userSnapshot.id, data as DocumentData)
+    cacheService.set(cacheKey, profile)
+    return profile
+  } catch (error) {
+    console.error('Error fetching user profile:', error)
     return null
   }
-
-  return mapUserProfile(userSnapshot.id, userSnapshot.data())
 }
 
 function mapUserProfile(id: string, data: DocumentData): UserProfile {
