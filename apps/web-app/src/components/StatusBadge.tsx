@@ -6,18 +6,18 @@ type StatusBadgeProps = {
 }
 
 const toneClass = {
-  danger: 'border-destructive/20 bg-destructive/10 text-destructive',
-  default: 'border-border bg-muted text-foreground',
-  primary: 'border-primary/20 bg-primary/10 text-primary',
-  success: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600',
-  warning: 'border-amber-500/20 bg-amber-500/10 text-amber-600',
+  danger: 'border-rose-500/20 bg-rose-50 text-rose-700',
+  default: 'border-border bg-muted/60 text-muted-foreground',
+  primary: 'border-blue-500/20 bg-blue-50 text-blue-700',
+  success: 'border-emerald-500/20 bg-emerald-50 text-emerald-700',
+  warning: 'border-amber-500/25 bg-amber-50 text-amber-800',
 }
 
 export function StatusBadge({ children, tone = 'default' }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex min-h-6 items-center rounded-md border px-2.5 py-0.5 text-xs font-medium leading-4',
+        'inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-semibold leading-4 tracking-tight',
         toneClass[tone],
       )}
     >

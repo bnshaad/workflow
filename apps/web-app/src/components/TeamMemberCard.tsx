@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { MoreVertical } from 'lucide-react'
 import {
   AvailabilityBadge,
@@ -5,7 +6,9 @@ import {
 } from '@/components/AvailabilityBadge'
 import { cn } from '@/utils'
 
+
 export type TeamMember = {
+  id?: string
   availability: Availability
   completedJobs: string
   currentJobs: string
@@ -13,6 +16,7 @@ export type TeamMember = {
   name: string
   role: string
   skills: string[]
+  onSchedule?: () => void
 }
 
 const statusDotClass = {
@@ -29,8 +33,11 @@ export function TeamMemberCard({
   name,
   role,
   skills,
+  onSchedule,
 }: TeamMember) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
   const isOnLeave = availability === 'On Leave'
+
 
   return (
     <article className="border-b border-border bg-card px-3 py-3 last:border-b-0 hover:bg-background/70">
@@ -75,8 +82,8 @@ export function TeamMemberCard({
         </div>
 
         <div className="flex items-center justify-between gap-3 lg:justify-end">
-          <div className="hidden flex-wrap gap-1.5 xl:flex">
-            {skills.map((skill) => (
+          <div className="hidden flex-wrap items-center gap-1.5 xl:flex">
+            {skills.slice(0, 2).map((skill) => (
               <span
                 className="rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
                 key={skill}
@@ -84,25 +91,62 @@ export function TeamMemberCard({
                 {skill}
               </span>
             ))}
+            {skills.length > 2 && (
+              <span className="rounded-md bg-muted/60 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                +{skills.length - 2} more
+              </span>
+            )}
           </div>
+
           <AvailabilityBadge availability={availability} />
           <button
             className={cn(
-              'text-sm font-medium',
+              'text-sm font-semibold',
               isOnLeave ? 'text-muted-foreground' : 'text-primary transition hover:text-primary/80',
             )}
             disabled={isOnLeave}
+            onClick={onSchedule}
             type="button"
           >
             {isOnLeave ? 'On Leave' : 'Schedule'}
           </button>
-          <button
-            aria-label={`More actions for ${name}`}
-            className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-            type="button"
-          >
-            <MoreVertical aria-hidden="true" className="size-4" />
-          </button>
+
+          <div className="relative">
+            <button
+              aria-label={`More actions for ${name}`}
+              className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              onClick={() => setIsMenuOpen((prev) => !prev)}
+              type="button"
+            >
+              <MoreVertical aria-hidden="true" className="size-4" />
+            </button>
+
+            {isMenuOpen && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-border bg-card p-1 shadow-lg space-y-0.5 text-xs font-medium">
+                <button
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-foreground hover:bg-muted"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    onSchedule?.()
+                  }}
+                  type="button"
+                >
+                  ⚡ Assign / Schedule Job
+                </button>
+                <button
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    void navigator.clipboard.writeText(`${name} - ${role}`)
+                  }}
+                  type="button"
+                >
+                  📋 Copy Profile Info
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     </article>

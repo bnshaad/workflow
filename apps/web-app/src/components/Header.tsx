@@ -13,9 +13,11 @@ import { canAccessSettings, canCreateJob } from '@/permissions'
 
 type HeaderProps = {
   onOpenNavigation: () => void
+  onOpenCreateJob?: () => void
 }
 
-export function Header({ onOpenNavigation }: HeaderProps) {
+export function Header({ onOpenNavigation, onOpenCreateJob }: HeaderProps) {
+
   const location = useLocation()
   const navigate = useNavigate()
   const { loading, profile, signOut } = useAuth()
@@ -94,15 +96,17 @@ export function Header({ onOpenNavigation }: HeaderProps) {
 
       <div className="ml-auto flex items-center gap-3">
         {showCreateJob ? (
-          <Link
+          <button
             aria-label="Create job"
             className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 sm:px-3"
-            to="/jobs/create"
+            onClick={onOpenCreateJob}
+            type="button"
           >
             <Plus aria-hidden="true" className="size-4" />
             <span className="hidden sm:inline">Create Job</span>
-          </Link>
+          </button>
         ) : null}
+
         <div className="relative" ref={menuRef}>
           <button
             aria-expanded={isMenuOpen}
@@ -160,15 +164,16 @@ export function Header({ onOpenNavigation }: HeaderProps) {
                 </div>
               </div>
               <div className="my-1 border-t border-border" />
-              <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground"
-                disabled
+              <Link
+                className="flex items-center gap-2 px-3 py-2 text-sm text-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+                onClick={() => setIsMenuOpen(false)}
                 role="menuitem"
-                type="button"
+                to="/settings"
               >
                 <UserCircle aria-hidden="true" className="size-4" />
-                Profile
-              </button>
+                <span>Profile & Settings</span>
+              </Link>
+
               {showSettingsLink ? (
                 <Link
                   className="flex items-center gap-2 px-3 py-2 text-sm text-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"

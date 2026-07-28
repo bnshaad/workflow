@@ -13,4 +13,8 @@ export { StatusBadge } from './StatusBadge'
 export { SuggestedWorkerCard } from './SuggestedWorkerCard'
 export { TeamMemberCard } from './TeamMemberCard'
 export type { TeamMember } from './TeamMemberCard'
+export { QuickAssignModal } from './QuickAssignModal'
+export { JobDetailsDrawer } from './JobDetailsDrawer'
+export { CreateJobDrawer } from './CreateJobDrawer'
 export { Timeline } from './Timeline'
+
