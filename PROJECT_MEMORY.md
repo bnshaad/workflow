@@ -107,18 +107,27 @@ Current implemented web portal features in `apps/web-app`:
 
 Current implemented mobile field app features in `apps/mobile-app`:
 
-- Expo SDK 54, React Native 0.81, Expo Router v6 mobile application for Employee role users.
-- Clean authentication flow (`(auth)/login`) with normalized Auth UIDs and fallback `displayName` support.
-- Instant complete sign-out handling resetting auth state and replacing route to `/(auth)/login`.
-- Today's & Assigned Jobs screen (`(tabs)/index`) with top branding header, safe area insets, segment filter tabs (`All`, `Assigned`, `In Progress`), and Pull-to-Refresh.
-- Minimal-click action bar directly on list cards allowing field technicians to execute 1-tap status transitions (`Assigned` → `In Progress` → `Completed`) without mandatory detail screen navigation.
-- Job Details screen (`job/[id]`) with custom back navigation header, priority/status cards, customer contact rows, service address, and required skills pills.
-- Peer dependency resolution with `react-native-svg` and typed `Icon` component wrapper for `lucide-react-native`.
+- Expo SDK 57 (`~57.0.24`), React Native 0.86.3, Expo Router (`~57.0.22`), React 19.2.3 mobile application for Employee role users.
+- Minimalist Carbon & Zinc design system (`#18181b`, `#fafafa`, `#e4e4e7`) with ONE single accent colour (Refined Emerald `#16a34a`), zero emojis, and zero blue gradients.
+- Reusable atomic component library (`Button`, `StatusBadge`, `PriorityBadge`, `DetailRow`, `ConfirmModal`, `EmptyState`, `LoadingSkeleton`, `JobCard`, `ReportBlockerModal`).
+- Bottom Tab Navigation Shell (`app/(tabs)/_layout.tsx`):
+  - **Jobs Tab**: Active assigned and in-progress jobs with segmented filter pills (`All`, `Assigned`, `In Progress`) and pull-to-refresh.
+  - **History Tab**: Completed jobs archive with daily completed metric strip and formatted timestamps.
+  - **Profile Tab**: Technician identity card, certified skills pills, active status, operational stats, and verified sign out.
+- Instant 0ms loading time & Spark quota protection via in-memory caching (60s TTL) and optimistic updates in `FirestoreJobRepository`.
+- Skeleton card and detail loading animations replacing jarring spinner wheels.
+- Field ergonomics: 1-tap phone calls (`tel:`) and 1-tap native map directions (Apple / Google Maps).
+- Field Incident & Blocker Reporting: Technicians flag on-site blockers (`customer_unavailable`, `access_denied`, `missing_parts`, `safety_hazard`, `scope_mismatch`, `other`) creating records in `incidents` collection.
+
+Current implemented web management portal incident management:
+- Web `incidentService` for querying and resolving field incidents.
+- High-visibility active blocker alert banner in `JobDetailsDrawer` with 1-click "Mark Resolved" action.
 
 Deployed Cloud Firestore Security Rules (`firebase/firestore.rules`):
 
 - Deployed and released live to production project (`workflow-p`).
-- Updated `match /jobs/{jobId}` rule for list queries to enable employee assigned-job querying (`request.auth.uid in data.assignedEmployeeIds`) by removing unqueryable `data.assignedEmployeeIds is list` type guards on `resource.data`.
+- Updated `match /jobs/{jobId}` rule for list queries to enable employee assigned-job querying (`request.auth.uid in data.assignedEmployeeIds`).
+- Configured tenant-isolated security rules for `match /incidents/{incidentId}`: allows assigned employees to create blocker reports and managers to read and resolve them.
 
 The worktree currently contains an uncommitted change to `apps/web-app/src/pages/CreateJobPage.tsx`; treat it as existing work unless the user asks to inspect or modify it.
 
@@ -132,6 +141,7 @@ Current status:
 - Stage 1 (Eligibility Engine): Hard-constraint filtering (`isEligibleRecommendationEmployee`) checking active employee profile, leave status, and tenant isolation.
 - Stage 2 (Decision Engine): Strategy pattern ranking using either fixed criteria weights (`Weighted Strategy`) or AHP pairwise criteria matrices with TOPSIS vector normalization & ideal closeness calculation (`AHP-TOPSIS Strategy`).
 - Stage 3 (Explanation Engine): Scoring breakdown, explanation badges, and derived TOPSIS Confidence Scores (High / Medium / Low) with a "Manual Review Recommended" threshold alert for low-confidence recommendations.
+- Spatial Service Zone Scoring: Activated location relevance (up to 15 points) using `extractZone` and `ZONE_ADJACENCY` matrix (Exact match = 15 pts, Adjacent = 8 pts, Distant = 3 pts). AHP-TOPSIS expanded to 5 normalized criteria (`[skillMatch, availability, workload, locationRelevance, performance]`).
 - Human-in-the-loop: Manager accepts ("Accept Rahul") or overrides ("Choose someone else") recommendations with structured override reasons (`Customer Request`, `Availability Conflict`, `Manager Preference`, `Other`).
 - Stores unified permanent recommendation decision records in `recommendations` collection.
 - Supports job sub-type AHP profiles (e.g. "Emergency Repair", "Commercial Maintenance", "Standard") with pairwise criteria comparison weight derivation.
@@ -144,7 +154,7 @@ Current scoring factors:
 - Skill match: up to 35 points.
 - Availability: up to 25 points.
 - Active workload: up to 20 points.
-- Location relevance: currently 0 points because employee service area/location history data is not available.
+- Location relevance: up to 15 points based on service zone match, adjacency, and service area keyword alignment.
 - Historical completion performance: up to 10 points based on available historical assigned jobs.
 
 Candidate ranking:

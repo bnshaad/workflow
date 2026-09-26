@@ -13,7 +13,12 @@ import {
 } from 'firebase/firestore'
 import { JOB_PRIORITY_OPTIONS, JOB_STATUS_OPTIONS } from '@/constants/jobConstants'
 import { canViewDashboard } from '@/permissions'
-import { requireActiveProfile, requireTenantAccess } from '@/services/common'
+import {
+  readTimestamp,
+  readTimestampOrNull,
+  requireActiveProfile,
+  requireTenantAccess,
+} from '@/services/common'
 import { firestore } from '@/services/firestore'
 import type { JobActivityType, UserProfile } from '@/types'
 import type { JobPriority } from '@/types/jobPriority'
@@ -479,12 +484,4 @@ function readBoolean(data: DocumentData, key: string) {
   const value = data[key]
 
   return typeof value === 'boolean' ? value : false
-}
-
-function readTimestamp(value: unknown) {
-  return value instanceof Timestamp ? value : Timestamp.fromMillis(0)
-}
-
-function readTimestampOrNull(value: unknown) {
-  return value instanceof Timestamp ? value : null
 }

@@ -39,12 +39,16 @@ export type RecommendationEmployee = {
   isUnavailable: boolean
   role: string
   skills: string[]
+  serviceZone?: string
+  location?: string
 }
 
 export type RecommendationJob = {
   assignedEmployeeIds: string[]
   completedAt: unknown | null
   location: string
+  serviceZone?: string
+  serviceAddress?: string
   requiredSkills: string[]
   status: string
 }
@@ -77,7 +81,7 @@ export function isEligibleRecommendationEmployee(
  * Supports both Weighted Sum Strategy (rule-based-v1) and AHP-TOPSIS Strategy (ahp-topsis-v1).
  */
 export function rankAssignmentCandidates(
-  job: Pick<RecommendationJob, 'location' | 'requiredSkills'>,
+  job: Pick<RecommendationJob, 'location' | 'requiredSkills' | 'serviceZone' | 'serviceAddress'>,
   employees: RecommendationEmployee[],
   historicalJobs: RecommendationJob[],
   config: DecisionEngineConfig = {},
@@ -102,7 +106,7 @@ export function rankAssignmentCandidates(
  * Fixed weight additive sum across criteria.
  */
 function rankViaWeightedSum(
-  job: Pick<RecommendationJob, 'location' | 'requiredSkills'>,
+  job: Pick<RecommendationJob, 'location' | 'requiredSkills' | 'serviceZone' | 'serviceAddress'>,
   employees: RecommendationEmployee[],
   historicalJobs: RecommendationJob[],
 ): RankedAssignmentCandidate[] {
@@ -129,7 +133,7 @@ function rankViaWeightedSum(
  * Stage B: TOPSIS (Technique for Order of Preference by Similarity to Ideal Solution) vector ranking.
  */
 function rankViaAhpTopsis(
-  job: Pick<RecommendationJob, 'location' | 'requiredSkills'>,
+  job: Pick<RecommendationJob, 'location' | 'requiredSkills' | 'serviceZone' | 'serviceAddress'>,
   employees: RecommendationEmployee[],
   historicalJobs: RecommendationJob[],
   profileName: AhpProfileName = 'Standard',
@@ -137,7 +141,7 @@ function rankViaAhpTopsis(
   // AHP Criteria Weights
   const weights = getAhpCriteriaWeights(profileName)
 
-  // Construct raw metric matrix [skill, availability, workload, performance] (all normalized to 0-1)
+  // Construct raw metric matrix [skill, availability, workload, location, performance] (all normalized to 0-1)
   const candidateMetrics = employees.map((employee) => {
     const rawScores = scoreEmployeeWeighted(job, employee, historicalJobs)
     return {
@@ -147,13 +151,14 @@ function rankViaAhpTopsis(
         rawScores.scoreBreakdown.skillMatch / 35,
         rawScores.scoreBreakdown.availability / 25,
         rawScores.scoreBreakdown.workload / 20,
+        rawScores.scoreBreakdown.locationRelevance / 15,
         rawScores.scoreBreakdown.performance / 10,
       ],
     }
   })
 
   // TOPSIS Step 1: Vector Normalization R = [r_ij]
-  const numCriteria = 4
+  const numCriteria = 5
   const normFactors = Array.from({ length: numCriteria }, (_, col) => {
     const sumSquares = candidateMetrics.reduce(
       (sum, m) => sum + Math.pow(m.vector[col] ?? 0, 2),
@@ -167,6 +172,7 @@ function rankViaAhpTopsis(
     weights.skillMatch,
     weights.availability,
     weights.workload,
+    weights.locationRelevance,
     weights.performance,
   ]
 
@@ -225,15 +231,15 @@ function rankViaAhpTopsis(
 function getAhpCriteriaWeights(profile: AhpProfileName) {
   switch (profile) {
     case 'Emergency Repair':
-      // Emergency repair heavily prioritizes availability (0.45) & skill (0.35)
-      return { skillMatch: 0.35, availability: 0.45, workload: 0.12, performance: 0.08 }
+      // Emergency repair heavily prioritizes availability (0.35) & location (0.25) & skill (0.25)
+      return { skillMatch: 0.25, availability: 0.35, workload: 0.10, locationRelevance: 0.25, performance: 0.05 }
     case 'Commercial Maintenance':
-      // Commercial maintenance heavily prioritizes skill (0.50) & historical performance (0.25)
-      return { skillMatch: 0.50, availability: 0.15, workload: 0.10, performance: 0.25 }
+      // Commercial maintenance heavily prioritizes skill (0.40) & performance (0.20) & location (0.15)
+      return { skillMatch: 0.40, availability: 0.15, workload: 0.10, locationRelevance: 0.15, performance: 0.20 }
     case 'Standard':
     default:
-      // Standard balanced profile derived via AHP pairwise comparison (Skill > Avail > Workload > Perf)
-      return { skillMatch: 0.40, availability: 0.30, workload: 0.20, performance: 0.10 }
+      // Standard balanced profile derived via AHP pairwise comparison (Skill > Avail > Workload/Location > Perf)
+      return { skillMatch: 0.35, availability: 0.25, workload: 0.15, locationRelevance: 0.15, performance: 0.10 }
   }
 }
 
@@ -254,7 +260,7 @@ export function deriveConfidenceBucket(normalizedScore: number): {
 }
 
 function scoreEmployeeWeighted(
-  job: Pick<RecommendationJob, 'location' | 'requiredSkills'>,
+  job: Pick<RecommendationJob, 'location' | 'requiredSkills' | 'serviceZone' | 'serviceAddress'>,
   employee: RecommendationEmployee,
   historicalJobs: RecommendationJob[],
 ): RankedAssignmentCandidate {
@@ -263,7 +269,10 @@ function scoreEmployeeWeighted(
   const workloadScore = scoreWorkload(
     getActiveWorkload(employee.id, historicalJobs),
   )
-  const locationScore = scoreLocationRelevance(job.location)
+  const locationScore = scoreLocationRelevance(
+    job.serviceZone || job.serviceAddress || job.location,
+    employee.serviceZone || employee.location,
+  )
   const performanceScore = scoreHistoricalPerformance(
     getHistoricalPerformance(employee.id, historicalJobs),
   )
@@ -405,11 +414,92 @@ function scoreWorkload(activeTaskCount: number) {
   }
 }
 
-function scoreLocationRelevance(jobLocation: string) {
-  if (jobLocation.trim().length === 0) {
+export const ZONE_ADJACENCY: Record<string, string[]> = {
+  Downtown: ['North Zone', 'South Zone', 'East Zone', 'West Zone'],
+  'North Zone': ['Downtown', 'East Zone', 'West Zone'],
+  'South Zone': ['Downtown', 'East Zone', 'West Zone'],
+  'East Zone': ['Downtown', 'North Zone', 'South Zone'],
+  'West Zone': ['Downtown', 'North Zone', 'South Zone'],
+}
+
+export function extractZone(text?: string | null): string | null {
+  if (!text) return null
+  const normalized = text.toLowerCase()
+  if (normalized.includes('north')) return 'North Zone'
+  if (normalized.includes('south')) return 'South Zone'
+  if (normalized.includes('east')) return 'East Zone'
+  if (normalized.includes('west')) return 'West Zone'
+  if (
+    normalized.includes('downtown') ||
+    normalized.includes('central') ||
+    normalized.includes('cbd')
+  ) {
+    return 'Downtown'
+  }
+  return null
+}
+
+function scoreLocationRelevance(
+  jobLocationOrZone: string,
+  employeeLocationOrZone?: string,
+): { score: number; reasons: string[] } {
+  if (!jobLocationOrZone || jobLocationOrZone.trim().length === 0) {
     return {
       score: 0,
       reasons: ['Insufficient data: job has no location note.'],
+    }
+  }
+
+  const jobZone = extractZone(jobLocationOrZone)
+  const employeeZone = extractZone(employeeLocationOrZone)
+
+  // Case 1: Recognized service zones
+  if (jobZone && employeeZone) {
+    if (jobZone === employeeZone) {
+      return {
+        score: 15,
+        reasons: [`Technician primary zone matches job location (${jobZone}).`],
+      }
+    }
+
+    const adjacentZones = ZONE_ADJACENCY[jobZone] || []
+    if (adjacentZones.includes(employeeZone)) {
+      return {
+        score: 8,
+        reasons: [`Technician is in adjacent zone (${employeeZone} to ${jobZone}).`],
+      }
+    }
+
+    return {
+      score: 3,
+      reasons: [`Technician is in distant zone (${employeeZone} vs ${jobZone}).`],
+    }
+  }
+
+  // Case 2: Keyword / district match
+  if (jobLocationOrZone.trim() && employeeLocationOrZone?.trim()) {
+    const jobTokens = jobLocationOrZone
+      .toLowerCase()
+      .split(/[\s,.-]+/)
+      .filter((t) => t.length > 2)
+    const empTokens = employeeLocationOrZone
+      .toLowerCase()
+      .split(/[\s,.-]+/)
+      .filter((t) => t.length > 2)
+    const matches = jobTokens.filter((t) => empTokens.includes(t))
+
+    if (matches.length > 0) {
+      return {
+        score: 12,
+        reasons: [
+          `Technician service area matches job address keywords (${matches.join(', ')}).`,
+        ],
+      }
+    }
+
+    return {
+      score: 4,
+      reasons: ['Technician is registered in a different service area.'],
     }
   }
 

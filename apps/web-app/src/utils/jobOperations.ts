@@ -1,4 +1,5 @@
 import type { Job } from '../types/index.ts'
+import { toJsDate } from '../services/common/documentReaders.ts'
 
 type OperationalJob = Pick<
   Job,
@@ -23,8 +24,33 @@ export type JobPrimaryAction = {
 
 export type JobAttentionReason =
   | 'In progress and overdue'
-  | 'Overdue'
   | 'Urgent and unassigned'
+  | 'Overdue'
+
+export function filterOperationalJobs<T extends OperationalJob>(
+  jobs: T[],
+  filter: JobQuickFilter,
+  now = new Date(),
+) {
+  switch (filter) {
+    case 'all':
+      return jobs
+    case 'needs-assignment':
+      return jobs.filter(
+        (job) => job.status === 'open' && job.assignedEmployeeIds.length === 0,
+      )
+    case 'urgent':
+      return jobs.filter((job) => job.priority === 'Urgent')
+    case 'overdue':
+      return jobs.filter((job) => isJobOverdue(job, now))
+    case 'assigned':
+      return jobs.filter((job) => job.status === 'assigned')
+    case 'in-progress':
+      return jobs.filter((job) => job.status === 'in_progress')
+    default:
+      return jobs
+  }
+}
 
 export function parseJobQuickFilter(value: string | null): JobQuickFilter {
   return JOB_QUICK_FILTERS.includes(value as JobQuickFilter)
@@ -38,6 +64,8 @@ export function matchesJobQuickFilter(
   now = new Date(),
 ) {
   switch (filter) {
+    case 'all':
+      return true
     case 'needs-assignment':
       return job.status === 'open' && job.assignedEmployeeIds.length === 0
     case 'urgent':
@@ -66,7 +94,9 @@ export function isJobOverdue(job: OperationalJob, now = new Date()) {
     return false
   }
 
-  return job.dueDate.toDate().getTime() < now.getTime()
+  const due = toJsDate(job.dueDate)
+  if (!due) return false
+  return due.getTime() < now.getTime()
 }
 
 export function getJobPrimaryAction(job: OperationalJob): JobPrimaryAction {
@@ -123,8 +153,8 @@ export function sortOperationalJobs<T extends OperationalJob>(jobs: T[]) {
       return priorityDifference
     }
 
-    const firstDue = first.dueDate?.toDate().getTime() ?? Number.MAX_SAFE_INTEGER
-    const secondDue = second.dueDate?.toDate().getTime() ?? Number.MAX_SAFE_INTEGER
+    const firstDue = toJsDate(first.dueDate)?.getTime() ?? Number.MAX_SAFE_INTEGER
+    const secondDue = toJsDate(second.dueDate)?.getTime() ?? Number.MAX_SAFE_INTEGER
     return firstDue - secondDue
   })
 }

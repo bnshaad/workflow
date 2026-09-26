@@ -64,9 +64,26 @@ functions/lib/
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variables file
+# Environment variables & secrets
 .env
+.env.*
+!.env.example
+*.env
+*.key
+*.pem
+*.p12
+*.pfx
+*service-account*.json
+*credentials*.json
+*secret*
+!.secret.local.example
 functions/.secret.local
+.secret.local
 
 # dataconnect generated files
 .dataconnect
+
+# Build output & Vercel
+dist/
+.vercel
+

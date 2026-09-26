@@ -1,18 +1,17 @@
 import React, { useState } from 'react'
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Wrench, ShieldCheck, AlertCircle } from 'lucide-react-native'
-import { Icon } from '../../src/components/Icon'
+import { AlertCircle, Briefcase } from 'lucide-react-native'
+import { Button, Icon } from '../../src/components'
 import { useAuth } from '../../src/hooks/useAuth'
+import { color, radius, space, type } from '../../src/theme/theme'
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('employee@workflow.local')
@@ -48,26 +47,26 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.contentBox}>
+        {/* Minimalist Logo Box */}
         <View style={styles.logoBadge}>
-          <Icon icon={Wrench} size={28} color="#0284c7" />
+          <Icon icon={Briefcase} size={24} color={color.accent} />
         </View>
 
         <Text style={styles.brandTitle}>Workflow Field</Text>
-        <Text style={styles.brandSubtitle}>Service Technician Operations Portal</Text>
 
         <View style={styles.card}>
           {localError ? (
             <View style={styles.errorBanner}>
-              <Icon icon={AlertCircle} size={16} color="#dc2626" style={styles.errorIcon} />
+              <Icon icon={AlertCircle} size={15} color={color.danger} style={styles.errorIcon} />
               <Text style={styles.errorText}>{localError}</Text>
             </View>
           ) : null}
 
-          <Text style={styles.label}>Email Address</Text>
+          <Text style={styles.label}>Email address</Text>
           <TextInput
             style={styles.input}
             placeholder="employee@workflow.local"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={color.ink3}
             autoCapitalize="none"
             keyboardType="email-address"
             value={email}
@@ -78,33 +77,21 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="••••••••"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={color.ink3}
             secureTextEntry
             value={password}
             onChangeText={setPassword}
           />
 
-          <TouchableOpacity
-            style={[styles.button, submitting && styles.buttonDisabled]}
+          <Button
+            title="Sign in"
+            variant="accent"
+            size="lg"
+            fullWidth
+            loading={submitting}
             onPress={handleLogin}
-            disabled={submitting}
-            activeOpacity={0.85}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <View style={styles.btnRow}>
-                <Icon icon={ShieldCheck} size={18} color="#ffffff" />
-                <Text style={styles.buttonText}>Sign In to Mobile App</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.footerNote}>
-          <Text style={styles.footerNoteText}>
-            Authorized field employee access only. Tenant data is isolated by organization.
-          </Text>
+            style={styles.signInButton}
+          />
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -114,118 +101,77 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: color.surfaceSunken,
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: space.xl,
   },
   contentBox: {
     alignItems: 'center',
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
   },
   logoBadge: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
-    backgroundColor: 'rgba(2, 132, 199, 0.15)',
+    width: 52,
+    height: 52,
+    borderRadius: radius.card,
+    backgroundColor: color.accentWash,
     borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.3)',
+    borderColor: color.border,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: space.md,
   },
   brandTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#ffffff',
-    letterSpacing: -0.5,
-  },
-  brandSubtitle: {
-    fontSize: 14,
-    color: '#94a3b8',
-    marginTop: 4,
-    marginBottom: 28,
-    fontWeight: '500',
+    ...type.screenTitle,
+    color: color.ink,
+    letterSpacing: -0.4,
+    marginBottom: space.xl,
   },
   card: {
     width: '100%',
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
+    backgroundColor: color.surface,
+    borderRadius: radius.card,
+    padding: space.xl,
+    borderWidth: 1,
+    borderColor: color.border,
   },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fef2f2',
-    borderColor: '#fca5a5',
+    backgroundColor: color.dangerWash,
+    borderColor: color.danger,
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 18,
+    borderRadius: radius.control,
+    padding: space.md,
+    marginBottom: space.lg,
   },
   errorIcon: {
-    marginRight: 8,
+    marginRight: space.sm,
   },
   errorText: {
-    color: '#dc2626',
+    color: color.danger,
     fontSize: 13,
     flex: 1,
     fontWeight: '500',
   },
   label: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 6,
-    letterSpacing: 0.2,
+    ...type.label,
+    color: color.ink2,
+    marginBottom: space.xs,
   },
   input: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: color.surfaceSunken,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderColor: color.border,
+    borderRadius: radius.control,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
     fontSize: 15,
-    color: '#0f172a',
-    marginBottom: 16,
+    color: color.ink,
+    marginBottom: space.lg,
   },
-  button: {
-    backgroundColor: '#0284c7',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
-    shadowColor: '#0284c7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  btnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  footerNote: {
-    marginTop: 24,
-    paddingHorizontal: 16,
-  },
-  footerNoteText: {
-    fontSize: 12,
-    color: '#64748b',
-    textAlign: 'center',
-    lineHeight: 18,
+  signInButton: {
+    marginTop: space.xs,
   },
 })

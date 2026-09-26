@@ -19,7 +19,7 @@ import {
   UserPlus,
   UsersRound,
 } from 'lucide-react'
-import { PageHeader, StatusBadge } from '@/components'
+import { LoadingSkeleton, PageHeader, StatusBadge } from '@/components'
 import { JOB_PRIORITY_OPTIONS } from '@/constants/jobConstants'
 import { useAuth } from '@/hooks'
 import { canViewAcademicBenchmarks } from '@/permissions'
@@ -569,15 +569,7 @@ function BaselineMetric({
 function AnalyticsLoadingState() {
   return (
     <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {Array.from({ length: 8 }, (_, index) => (
-        <div
-          className="min-h-[100px] animate-pulse rounded-xl border border-border bg-card p-4"
-          key={index}
-        >
-          <div className="h-3.5 w-28 rounded-full bg-muted" />
-          <div className="mt-4 h-8 w-16 rounded-lg bg-muted" />
-        </div>
-      ))}
+      <LoadingSkeleton count={8} variant="card" />
     </section>
   )
 }

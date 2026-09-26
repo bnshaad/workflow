@@ -9,7 +9,7 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import { canCreateJob } from '@/permissions'
 import { firebaseFunctions, firestore } from '@/config'
-import { requireActiveProfile, requireTenantAccess } from '@/services/common'
+import { requireActiveProfile, requireTenantAccess, toJsDate } from '@/services/common'
 import { messageForActionProposalCallableError } from './actionProposalMessages'
 import type {
   ActionProposalExecutionResult,
@@ -268,9 +268,11 @@ function readStringArray(value: unknown) {
 }
 
 function readTimestamp(value: unknown) {
-  return value instanceof Timestamp ? value.toDate().toISOString() : new Date(0).toISOString()
+  const d = toJsDate(value)
+  return d ? d.toISOString() : new Date(0).toISOString()
 }
 
 function readTimestampOrNull(value: unknown) {
-  return value instanceof Timestamp ? value.toDate().toISOString() : null
+  const d = toJsDate(value)
+  return d ? d.toISOString() : null
 }

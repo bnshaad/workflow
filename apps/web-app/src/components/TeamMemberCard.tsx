@@ -1,17 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MoreVertical } from 'lucide-react'
-import {
-  AvailabilityBadge,
-  type Availability,
-} from '@/components/AvailabilityBadge'
+import type { Availability } from '@/components/AvailabilityBadge'
 import { cn } from '@/utils'
-
 
 export type TeamMember = {
   id?: string
   availability: Availability
-  completedJobs: string
-  currentJobs: string
+  activeJobCount?: number
+  completedJobCount?: number
+  completedJobs?: string
+  currentJobs?: string
   initials: string
   name: string
   role: string
@@ -19,14 +17,16 @@ export type TeamMember = {
   onSchedule?: () => void
 }
 
-const statusDotClass = {
-  Available: 'bg-emerald-500',
-  Busy: 'bg-primary',
-  'On Leave': 'bg-amber-500',
+const dotClass: Record<Availability, string> = {
+  Available: 'bg-wf-done',
+  Busy: 'bg-wf-ink-3',
+  'On Leave': 'bg-wf-warn',
 }
 
 export function TeamMemberCard({
   availability,
+  activeJobCount,
+  completedJobCount,
   completedJobs,
   currentJobs,
   initials,
@@ -36,119 +36,140 @@ export function TeamMemberCard({
   onSchedule,
 }: TeamMember) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const isOnLeave = availability === 'On Leave'
 
+  useEffect(() => {
+    if (!isMenuOpen) return undefined
+    function handlePointerDown(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setIsMenuOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [isMenuOpen])
+
+  // Derive counts from numeric props or legacy string props
+  const activeCount =
+    typeof activeJobCount === 'number'
+      ? activeJobCount
+      : parseInt(currentJobs ?? '0', 10) || 0
+  const completedCount =
+    typeof completedJobCount === 'number'
+      ? completedJobCount
+      : parseInt(completedJobs ?? '0', 10) || 0
 
   return (
-    <article className="border-b border-border bg-card px-3 py-3 last:border-b-0 hover:bg-background/70">
-      <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_auto] lg:items-center">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="relative shrink-0">
-            <div className="flex size-9 items-center justify-center rounded-md border border-border bg-muted text-sm font-semibold text-foreground">
-              {initials}
-            </div>
+    <article className="h-14 min-h-[56px] border-b border-wf-separator px-4 py-2.5 last:border-b-0 hover:bg-wf-surface-sunken transition-colors flex items-center justify-between gap-4">
+      {/* Name, 8px dot & Role */}
+      <div className="flex min-w-0 items-center gap-3 flex-1">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-control bg-wf-surface-sunken text-xs font-semibold text-wf-ink">
+          {initials}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
             <span
-              className={cn(
-                'absolute -bottom-1 -right-1 size-3.5 rounded-full border-2 border-card',
-                statusDotClass[availability],
-              )}
+              aria-hidden="true"
+              className={cn('size-2 rounded-full shrink-0', dotClass[availability])}
             />
-          </div>
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold tracking-tight text-foreground">
+            <h2 className="truncate text-[15px] font-semibold leading-[20px] text-wf-ink">
               {name}
             </h2>
-            <p className="mt-0.5 truncate text-sm text-muted-foreground">
-              {role}
-            </p>
+            <span className="text-[13px] font-normal leading-[18px] text-wf-ink-3">
+              ({availability === 'On Leave' ? 'On leave' : availability})
+            </span>
           </div>
+          <p className="truncate text-[12px] font-normal leading-[16px] text-wf-ink-3">
+            {role}
+          </p>
         </div>
+      </div>
 
-        <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-[140px_140px]">
-          <div>
-            <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
-              Current
-            </p>
-            <p className={cn('font-medium', availability === 'Busy' ? 'text-primary' : 'text-foreground')}>
-              {currentJobs}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
-              Completed
-            </p>
-            <p className="font-medium text-foreground">{completedJobs}</p>
-          </div>
-        </div>
+      {/* Workload line: 2 active, 1 completed */}
+      <div className="hidden sm:block shrink-0 min-w-[160px]">
+        <p className="text-[13px] font-normal leading-[18px] text-wf-ink-2 tabular-nums">
+          {activeCount} active, {completedCount} completed
+        </p>
+      </div>
 
-        <div className="flex items-center justify-between gap-3 lg:justify-end">
-          <div className="hidden flex-wrap items-center gap-1.5 xl:flex">
-            {skills.slice(0, 2).map((skill) => (
-              <span
-                className="rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
-                key={skill}
-              >
-                {skill}
-              </span>
-            ))}
-            {skills.length > 2 && (
-              <span className="rounded-md bg-muted/60 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                +{skills.length - 2} more
-              </span>
-            )}
-          </div>
+      {/* Skills chips */}
+      <div className="hidden lg:flex items-center gap-1.5 shrink-0">
+        {skills.slice(0, 2).map((skill) => (
+          <span
+            className="rounded-control border border-wf-border bg-wf-surface-sunken px-2 py-0.5 text-[12px] font-normal text-wf-ink-2"
+            key={skill}
+          >
+            {skill}
+          </span>
+        ))}
+        {skills.length > 2 && (
+          <span className="rounded-control bg-wf-surface-sunken px-1.5 py-0.5 text-[11px] font-normal text-wf-ink-3">
+            +{skills.length - 2} more
+          </span>
+        )}
+      </div>
 
-          <AvailabilityBadge availability={availability} />
+      {/* Actions: Schedule button + Overflow menu */}
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          className={cn(
+            'inline-flex h-8 items-center justify-center rounded-control border border-wf-border bg-wf-surface px-3 text-[13px] font-medium text-wf-ink-2 shadow-card transition-colors focus:outline-none focus:ring-2 focus:ring-wf-accent/30',
+            isOnLeave
+              ? 'opacity-40 cursor-not-allowed'
+              : 'hover:bg-wf-surface-sunken hover:text-wf-accent',
+          )}
+          disabled={isOnLeave}
+          onClick={onSchedule}
+          type="button"
+        >
+          Schedule
+        </button>
+
+        <div className="relative" ref={menuRef}>
           <button
-            className={cn(
-              'text-sm font-semibold',
-              isOnLeave ? 'text-muted-foreground' : 'text-primary transition hover:text-primary/80',
-            )}
-            disabled={isOnLeave}
-            onClick={onSchedule}
+            aria-label={`More options for ${name}`}
+            className="inline-flex size-8 items-center justify-center rounded-control text-wf-ink-3 transition-colors hover:bg-wf-surface-sunken hover:text-wf-ink focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
+            onClick={() => setIsMenuOpen((prev) => !prev)}
             type="button"
           >
-            {isOnLeave ? 'On Leave' : 'Schedule'}
+            <MoreVertical aria-hidden="true" className="size-4" />
           </button>
 
-          <div className="relative">
-            <button
-              aria-label={`More actions for ${name}`}
-              className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              onClick={() => setIsMenuOpen((prev) => !prev)}
-              type="button"
+          {isMenuOpen ? (
+            <div
+              className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-sheet border border-wf-border bg-wf-surface p-1 shadow-card space-y-0.5 text-[13px] font-medium text-wf-ink-2"
+              role="menu"
             >
-              <MoreVertical aria-hidden="true" className="size-4" />
-            </button>
-
-            {isMenuOpen && (
-              <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-border bg-card p-1 shadow-lg space-y-0.5 text-xs font-medium">
-                <button
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-foreground hover:bg-muted"
-                  onClick={() => {
-                    setIsMenuOpen(false)
-                    onSchedule?.()
-                  }}
-                  type="button"
-                >
-                  ⚡ Assign / Schedule Job
-                </button>
-                <button
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground hover:bg-muted hover:text-foreground"
-                  onClick={() => {
-                    setIsMenuOpen(false)
-                    void navigator.clipboard.writeText(`${name} - ${role}`)
-                  }}
-                  type="button"
-                >
-                  📋 Copy Profile Info
-                </button>
-              </div>
-            )}
-          </div>
-
+              <button
+                className="flex w-full items-center rounded-control px-2.5 py-1.5 text-left hover:bg-wf-surface-sunken hover:text-wf-ink transition-colors"
+                onClick={() => {
+                  setIsMenuOpen(false)
+                  onSchedule?.()
+                }}
+                role="menuitem"
+                type="button"
+              >
+                Assign job
+              </button>
+              <button
+                className="flex w-full items-center rounded-control px-2.5 py-1.5 text-left hover:bg-wf-surface-sunken hover:text-wf-ink transition-colors"
+                onClick={() => {
+                  setIsMenuOpen(false)
+                  void navigator.clipboard.writeText(`${name} - ${role}`)
+                }}
+                role="menuitem"
+                type="button"
+              >
+                Copy profile info
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </article>
   )
 }
+

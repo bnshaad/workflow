@@ -293,26 +293,47 @@ function createUser({
 
 const employeeLoadPattern = [0, 0, 0, 1, 1, 2, 0, 3, 1, 4, 5, 2, 6, 0, 7, 8, 1, 9]
 
-const serviceTitles = [
-  'Split AC cooling issue',
-  'Smart TV power board repair',
-  'Compressor noise inspection',
-  'Ductless AC installation',
-  'Refrigerator control panel fault',
-  'Thermostat calibration',
-  'Commercial AC preventive service',
-  'Washing machine inverter fault',
-]
-
-const serviceDescriptions = [
-  'Customer reports weak cooling and uneven airflow across the living room.',
-  'Unit fails to power on and requires electronics diagnostics.',
-  'Outdoor unit is vibrating loudly during startup.',
-  'Install new ductless system and complete basic handover checks.',
-  'Display panel flickers and appliance resets during operation.',
-  'Thermostat readings drift from room temperature and need calibration.',
-  'Scheduled preventive service for filters, coils, and electrical contacts.',
-  'Motor controller fault suspected after intermittent spin failure.',
+const serviceCatalog = [
+  {
+    title: 'Split AC cooling issue',
+    description: 'Customer reports weak cooling and uneven airflow across the living room.',
+    requiredSkills: ['AC Repair', 'Diagnostics'],
+  },
+  {
+    title: 'Smart TV power board repair',
+    description: 'Unit fails to power on and requires electronics diagnostics.',
+    requiredSkills: ['Circuit Boards', 'Electronics Repair'],
+  },
+  {
+    title: 'Compressor noise inspection',
+    description: 'Outdoor unit is vibrating loudly during startup.',
+    requiredSkills: ['Compressor Repair', 'Safety Inspection'],
+  },
+  {
+    title: 'Ductless AC installation',
+    description: 'Install new ductless system and complete basic handover checks.',
+    requiredSkills: ['Installation', 'Ductless Systems'],
+  },
+  {
+    title: 'Refrigerator control panel fault',
+    description: 'Display panel flickers and appliance resets during operation.',
+    requiredSkills: ['Appliance Electronics', 'Control Panels'],
+  },
+  {
+    title: 'Thermostat calibration',
+    description: 'Thermostat readings drift from room temperature and need calibration.',
+    requiredSkills: ['Smart Thermostats', 'Diagnostics'],
+  },
+  {
+    title: 'Commercial AC preventive service',
+    description: 'Scheduled preventive service for filters, coils, and electrical contacts.',
+    requiredSkills: ['AC Repair', 'Safety Inspection'],
+  },
+  {
+    title: 'Washing machine inverter fault',
+    description: 'Motor controller fault suspected after intermittent spin failure.',
+    requiredSkills: ['Appliance Electronics', 'Inverter Systems'],
+  },
 ]
 
 const customerNames = [
@@ -354,15 +375,6 @@ const serviceLocations = [
   'Hilltop',
 ]
 
-const skillSets = [
-  ['AC Repair', 'Diagnostics'],
-  ['Circuit Boards', 'Electronics Repair'],
-  ['Compressor Repair', 'Safety Inspection'],
-  ['Installation', 'Ductless Systems'],
-  ['Appliance Electronics', 'Control Panels'],
-  ['Smart Thermostats', 'Diagnostics'],
-]
-
 function buildJobs(employees) {
   const statusPlan = [
     ...Array.from({ length: 4 }, () => 'draft'),
@@ -375,6 +387,7 @@ function buildJobs(employees) {
 
   return statusPlan.map((status, index) => {
     const jobNumber = index + 1
+    const service = serviceCatalog[index % serviceCatalog.length]
     const employeeIds = getAssignedEmployeeIds(status, jobNumber, employees)
     const createdAt = toTimestamp(-31 + index, 8 + (index % 7))
     const openedAt = addHours(createdAt, 2)
@@ -396,8 +409,8 @@ function buildJobs(employees) {
     return {
       id: formatJobId(jobNumber),
       organizationId: DEMO_ORGANIZATION_ID,
-      title: serviceTitles[index % serviceTitles.length],
-      description: serviceDescriptions[index % serviceDescriptions.length],
+      title: service.title,
+      description: service.description,
       customerName: customerNames[index % customerNames.length],
       customerPhone: `555-01${String(jobNumber).padStart(2, '0')}`,
       serviceAddress: serviceAddresses[index % serviceAddresses.length],
@@ -406,7 +419,7 @@ function buildJobs(employees) {
       status,
       statusUpdatedAt: status === 'draft' ? null : statusUpdatedAt,
       statusUpdatedBy: status === 'draft' ? null : statusUpdatedBy,
-      requiredSkills: skillSets[index % skillSets.length],
+      requiredSkills: service.requiredSkills,
       assignedEmployeeIds: employeeIds,
       assignedAt,
       assignedBy: assignedAt ? 'QwqyXsRidjONYocpCPMw7BBtDsp2' : null,

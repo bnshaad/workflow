@@ -1,18 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AlertTriangle,
-  Calendar,
   CheckCircle2,
   ClipboardList,
   ListFilter,
-  Plus,
   RefreshCcw,
   UserPlus,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { CreateJobDrawer, JobDetailsDrawer, MetricCard, QuickAssignModal, StatusBadge } from '@/components'
+import { CreateJobDrawer, JobDetailsDrawer, LoadingSkeleton, MetricCard, QuickAssignModal } from '@/components'
 
 import { useAuth } from '@/hooks'
+import { toJsDate } from '@/services/common'
 import { workflowCoordinator } from '@/services/coordinator'
 import {
   getDashboardSummary,
@@ -22,7 +20,7 @@ import {
 } from '@/services/dashboard'
 import { jobService } from '@/services/jobs'
 import { assignmentRecommendationService } from '@/services/recommendations'
-import { type Job, type JobPriority } from '@/types'
+import { type Job } from '@/types'
 import { cn, getJobAttentionReason, sortOperationalJobs } from '@/utils'
 import type {
   OperationsAttentionItem,
@@ -30,22 +28,16 @@ import type {
   OperationsIntent,
 } from '../../../../shared/operationsIntelligence.ts'
 
-const priorityTone: Record<JobPriority, 'danger' | 'default' | 'warning'> = {
-  High: 'danger',
-  Low: 'default',
-  Medium: 'warning',
-  Urgent: 'danger',
-}
 
 const operationsCommands: Array<{
   intent: Exclude<OperationsIntent, 'explain_job_attention_flag'>
   label: string
   message: string
 }> = [
-  { intent: 'show_jobs_requiring_attention', label: 'Flagged Jobs', message: 'Show jobs requiring attention' },
-  { intent: 'show_overdue_jobs', label: 'Past Due', message: 'Show overdue jobs' },
-  { intent: 'show_workload_distribution', label: 'Who\'s Busy', message: 'Show workload distribution' },
-  { intent: 'summarize_open_operations', label: 'Today\'s Snapshot', message: 'Summarize open operations' },
+  { intent: 'show_jobs_requiring_attention', label: 'Flagged jobs', message: 'Show jobs requiring attention' },
+  { intent: 'show_overdue_jobs', label: 'Past due', message: 'Show overdue jobs' },
+  { intent: 'show_workload_distribution', label: 'Who\'s busy', message: 'Show workload distribution' },
+  { intent: 'summarize_open_operations', label: 'Today\'s snapshot', message: 'Summarize open operations' },
 ]
 
 export function DashboardPage() {
@@ -76,15 +68,42 @@ export function DashboardPage() {
     }
   }
 
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const isFetchingRef = useRef(false)
+
   const handleDashboardJobAssigned = async () => {
     if (!profile) return
     try {
-      const updatedSummary = await getDashboardSummary(profile, profile.organizationId)
+      const updatedSummary = await getDashboardSummary(profile, profile.organizationId, { bypassCache: true })
       setSummary(updatedSummary)
     } catch {
       // ignore
     }
   }
+
+  const handleRefresh = useCallback(
+    async (bypassCache = true, silent = false) => {
+      if (!profile || isFetchingRef.current) return
+      isFetchingRef.current = true
+      if (!silent) setIsRefreshing(true)
+      try {
+        const [dashboardSummary, recommendationJobIds] = await Promise.all([
+          getDashboardSummary(profile, profile.organizationId, { bypassCache }),
+          assignmentRecommendationService
+            .getGeneratedRecommendationJobIds(profile, profile.organizationId)
+            .catch(() => null),
+        ])
+        setSummary(dashboardSummary)
+        setGeneratedRecommendationJobIds(recommendationJobIds)
+      } catch {
+        // ignore
+      } finally {
+        isFetchingRef.current = false
+        if (!silent) setIsRefreshing(false)
+      }
+    },
+    [profile],
+  )
 
   useEffect(() => {
     let isMounted = true
@@ -129,6 +148,29 @@ export function DashboardPage() {
       isMounted = false
     }
   }, [profile])
+
+  // Background sync: silent auto-refresh when tab gains focus or every 20s
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && profile) {
+        void handleRefresh(true, true)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleVisibilityChange)
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && profile) {
+        void handleRefresh(true, true)
+      }
+    }, 20000)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
+      clearInterval(interval)
+    }
+  }, [profile, handleRefresh])
 
   const attentionJobs = useMemo(
     () =>
@@ -178,37 +220,36 @@ export function DashboardPage() {
     }
   }
 
-  const userFirstName = profile?.displayName ? profile.displayName.split(' ')[0] : ''
-  const greeting = userFirstName ? `Welcome back, ${userFirstName}` : 'Dashboard'
-
   return (
-    <div className="space-y-3.5">
+    <div className="space-y-4">
       {/* Page Header Fold */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-            {greeting}
+          <h1 className="text-[24px] font-semibold leading-[30px] tracking-tight text-wf-ink">
+            Dashboard
           </h1>
-          <p className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Calendar aria-hidden="true" className="size-3.5 text-primary" />
+          <p className="mt-0.5 text-[13px] font-normal leading-[18px] text-wf-ink-3">
             {formatDashboardContext(new Date())}
           </p>
         </div>
-        <button
-          className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-xs transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30"
-          onClick={() => setIsCreateDrawerOpen(true)}
-          type="button"
-        >
-          <Plus aria-hidden="true" className="size-4" />
-          <span>New Job</span>
-        </button>
-
+        <div className="flex items-center gap-2">
+          <button
+            aria-label="Refresh dashboard data"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-control border border-wf-border bg-wf-surface px-3 text-[13px] font-medium text-wf-ink-2 shadow-card transition-colors hover:bg-wf-surface-sunken focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
+            disabled={isRefreshing}
+            onClick={() => void handleRefresh(true)}
+            type="button"
+          >
+            <RefreshCcw aria-hidden="true" className={cn('size-3.5', isRefreshing && 'animate-spin')} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
         <DashboardLoadingState />
       ) : errorMessage ? (
-        <section className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-xs font-medium text-destructive" role="alert">
+        <section className="rounded-card border border-wf-danger/30 bg-wf-danger-wash px-4 py-3 text-xs font-medium text-wf-danger" role="alert">
           {errorMessage}
         </section>
       ) : summary ? (
@@ -216,27 +257,20 @@ export function DashboardPage() {
           {/* Top Fold 4 KPI Metrics Grid */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MetricCard
-              icon={ClipboardList}
-              label="Open Jobs"
-              tone="primary"
+              label="Open jobs"
               value={String(summary.jobMetrics.statusCounts.open)}
             />
             <MetricCard
-              icon={UserPlus}
-              label="Assigned & Active"
-              tone="primary"
+              label="Assigned & active"
               value={String(summary.jobMetrics.statusCounts.assigned + summary.jobMetrics.statusCounts.in_progress)}
             />
             <MetricCard
-              icon={AlertTriangle}
-              label="Needs Attention"
+              label="Needs attention"
               tone={attentionJobs.length > 0 ? 'danger' : 'default'}
               value={String(attentionJobs.length)}
             />
             <MetricCard
-              icon={CheckCircle2}
               label="Completed"
-              tone="success"
               value={String(summary.jobMetrics.statusCounts.completed)}
             />
           </div>
@@ -300,6 +334,28 @@ export function DashboardPage() {
   )
 }
 
+function formatSeverity(job: DashboardOperationalJob): { text: string; tone: 'danger' | 'warn' | 'neutral' } {
+  const date = toJsDate(job.dueDate)
+  if (!date) {
+    return { text: 'No due date', tone: 'neutral' }
+  }
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffDays > 0) {
+    if (diffDays >= 7) {
+      return { text: `${diffDays} days overdue`, tone: 'danger' }
+    }
+    return { text: `${diffDays} day${diffDays === 1 ? '' : 's'} overdue`, tone: 'warn' }
+  } else {
+    const remainingDays = Math.abs(diffDays)
+    if (remainingDays === 0) {
+      return { text: 'Due today', tone: 'warn' }
+    }
+    return { text: `Due in ${remainingDays} day${remainingDays === 1 ? '' : 's'}`, tone: 'neutral' }
+  }
+}
 
 function NeedsAttention({
   jobs,
@@ -311,10 +367,10 @@ function NeedsAttention({
   onSelectJob: (jobId: string) => void
 }) {
   return (
-    <section aria-labelledby="needs-attention-heading" className="overflow-hidden rounded-xl border border-border bg-card shadow-2xs">
+    <section aria-labelledby="needs-attention-heading" className="overflow-hidden rounded-card border border-wf-border bg-wf-surface shadow-card">
       <SectionHeader
         action={
-          <Link className="text-xs font-semibold text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary/30" to="/jobs?view=overdue">
+          <Link className="text-[13px] font-medium text-wf-accent hover:underline focus:outline-none focus:ring-2 focus:ring-wf-accent/30" to="/jobs?view=overdue">
             View queue
           </Link>
         }
@@ -322,57 +378,78 @@ function NeedsAttention({
         titleId="needs-attention-heading"
       />
       {jobs.length > 0 ? (
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-wf-border">
           {jobs.map((job) => {
-            const reason = getJobAttentionReason(job)
+            const severity = formatSeverity(job)
             const needsAssignment = job.status === 'open' && job.assignedEmployeeIds.length === 0
+            const isUrgent = job.priority === 'Urgent'
+            const isHigh = job.priority === 'High'
+
             return (
               <div
-                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between transition-colors hover:bg-muted/30 cursor-pointer"
+                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between transition-colors hover:bg-wf-surface-sunken cursor-pointer"
                 key={job.id}
                 onClick={() => onSelectJob(job.id)}
               >
                 <div className="min-w-0 flex-1">
-                  <button
-                    className="text-left text-sm font-semibold text-foreground hover:text-primary focus:outline-none"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onSelectJob(job.id)
-                    }}
-                    type="button"
-                  >
-                    {job.title}
-                  </button>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <StatusBadge tone={priorityTone[job.priority]}>{job.priority}</StatusBadge>
-                    <span className="font-semibold text-rose-600">{reason}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>Due {formatDueDate(job)}</span>
+                  <div className="flex items-center gap-2">
+                    {isUrgent ? (
+                      <span
+                        aria-label="Urgent priority"
+                        className="size-2 rounded-full bg-wf-danger shrink-0"
+                      />
+                    ) : null}
+                    <button
+                      className="text-left text-[15px] font-medium leading-[22px] text-wf-ink hover:text-wf-accent focus:outline-none"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onSelectJob(job.id)
+                      }}
+                      type="button"
+                    >
+                      {job.title}
+                    </button>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[13px] font-normal leading-[18px]">
+                    <span
+                      className={cn(
+                        severity.tone === 'danger' && 'text-wf-danger font-medium',
+                        severity.tone === 'warn' && 'text-wf-warn font-medium',
+                        severity.tone === 'neutral' && 'text-wf-ink-3',
+                      )}
+                    >
+                      {severity.text}
+                    </span>
+                    {isHigh ? (
+                      <>
+                        <span className="text-wf-ink-3">,</span>
+                        <span className="text-wf-warn">high priority</span>
+                      </>
+                    ) : null}
+                    <span className="text-wf-ink-3">,</span>
+                    <span className="text-wf-ink-3">{formatDueDate(job)}</span>
                   </div>
                 </div>
-                {needsAssignment ? (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onQuickAssign(job)
-                    }}
-                    className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  >
-                    ⚡ Quick Assign
-                  </button>
-                ) : (
-                  <button
-                    className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border px-3 text-xs font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onSelectJob(job.id)
-                    }}
-                    type="button"
-                  >
-                    Open Job
-                  </button>
-                )}
+
+                <div onClick={(e) => e.stopPropagation()}>
+                  {needsAssignment ? (
+                    <button
+                      type="button"
+                      onClick={() => onQuickAssign(job)}
+                      className="inline-flex h-8 shrink-0 items-center justify-center rounded-control border border-wf-border bg-wf-surface px-3 text-[13px] font-medium text-wf-ink-2 shadow-card transition-colors hover:bg-wf-surface-sunken hover:text-wf-accent focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
+                    >
+                      Assign
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onSelectJob(job.id)}
+                      className="inline-flex h-8 shrink-0 items-center justify-center rounded-control border border-wf-border bg-wf-surface px-3 text-[13px] font-medium text-wf-ink-2 shadow-card transition-colors hover:bg-wf-surface-sunken hover:text-wf-accent focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
+                    >
+                      Open
+                    </button>
+                  )}
+                </div>
               </div>
             )
           })}
@@ -396,10 +473,10 @@ function PendingAssignments({
   onSelectJob: (jobId: string) => void
 }) {
   return (
-    <section aria-labelledby="pending-assignments-heading" className="overflow-hidden rounded-xl border border-border bg-card shadow-2xs">
+    <section aria-labelledby="pending-assignments-heading" className="overflow-hidden rounded-card border border-wf-border bg-wf-surface shadow-card">
       <SectionHeader
         action={
-          <Link className="text-xs font-semibold text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary/30" to="/assignments">
+          <Link className="text-[13px] font-medium text-wf-accent hover:underline focus:outline-none focus:ring-2 focus:ring-wf-accent/30" to="/jobs?view=needs-assignment">
             View all
           </Link>
         }
@@ -407,46 +484,53 @@ function PendingAssignments({
         titleId="pending-assignments-heading"
       />
       {jobs.length > 0 ? (
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-wf-border">
           {jobs.map((job) => {
+            const isUrgent = job.priority === 'Urgent'
             const recommendationIsReady = generatedRecommendationJobIds?.has(job.id)
             const recommendationStatus =
               generatedRecommendationJobIds === null
                 ? 'Recommendation status unavailable'
                 : recommendationIsReady
-                  ? 'AI Recommendation Ready'
+                  ? 'Recommendation ready'
                   : 'Not reviewed'
 
             return (
               <div
-                className="grid gap-2.5 p-4 md:grid-cols-[minmax(0,1.5fr)_auto_auto_minmax(140px,auto)] md:items-center transition-colors hover:bg-muted/30 cursor-pointer"
+                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between transition-colors hover:bg-wf-surface-sunken cursor-pointer"
                 key={job.id}
                 onClick={() => onSelectJob(job.id)}
               >
-                <div className="min-w-0">
-                  <button
-                    className="text-left text-sm font-semibold text-foreground hover:text-primary focus:outline-none"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onSelectJob(job.id)
-                    }}
-                    type="button"
-                  >
-                    {job.title}
-                  </button>
-                  <p className="text-xs text-muted-foreground">Due {formatDueDate(job)}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    {isUrgent ? (
+                      <span
+                        aria-label="Urgent priority"
+                        className="size-2 rounded-full bg-wf-danger shrink-0"
+                      />
+                    ) : null}
+                    <button
+                      className="text-left text-[15px] font-medium leading-[22px] text-wf-ink hover:text-wf-accent focus:outline-none"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onSelectJob(job.id)
+                      }}
+                      type="button"
+                    >
+                      {job.title}
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[13px] font-normal leading-[18px] text-wf-ink-3">
+                    Due {formatDueDate(job)}, {recommendationStatus}
+                  </p>
                 </div>
-                <StatusBadge tone={priorityTone[job.priority]}>{job.priority}</StatusBadge>
-                <span className={recommendationIsReady ? 'text-xs font-semibold text-primary' : 'text-xs text-muted-foreground'}>
-                  {recommendationStatus}
-                </span>
-                <div className="flex flex-wrap gap-2 md:justify-end" onClick={(e) => e.stopPropagation()}>
+                <div onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
                     onClick={() => onQuickAssign(job)}
-                    className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="inline-flex h-8 shrink-0 items-center justify-center rounded-control border border-wf-border bg-wf-surface px-3 text-[13px] font-medium text-wf-ink-2 shadow-card transition-colors hover:bg-wf-surface-sunken hover:text-wf-accent focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
                   >
-                    ⚡ {recommendationIsReady ? 'Review Match' : 'Assign Employee'}
+                    Assign
                   </button>
                 </div>
               </div>
@@ -460,14 +544,13 @@ function PendingAssignments({
   )
 }
 
-
 function EmployeeWorkload({ summary }: { summary: DashboardSummary }) {
   const workload = summary.employeeWorkload.slice(0, 5)
   return (
-    <section aria-labelledby="workload-heading" className="overflow-hidden rounded-xl border border-border bg-card shadow-2xs">
+    <section aria-labelledby="workload-heading" className="overflow-hidden rounded-card border border-wf-border bg-wf-surface shadow-card">
       <SectionHeader
         action={
-          <Link className="text-xs font-semibold text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary/30" to="/team">
+          <Link className="text-[13px] font-medium text-wf-accent hover:underline focus:outline-none focus:ring-2 focus:ring-wf-accent/30" to="/team">
             View team
           </Link>
         }
@@ -476,14 +559,14 @@ function EmployeeWorkload({ summary }: { summary: DashboardSummary }) {
         titleId="workload-heading"
       />
       {workload.length > 0 ? (
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-wf-border">
           {workload.map((employee) => (
-            <div className="flex items-center justify-between gap-3 p-3.5 transition-colors hover:bg-muted/30" key={employee.employeeId}>
+            <div className="flex items-center justify-between gap-3 p-3.5 transition-colors hover:bg-wf-surface-sunken" key={employee.employeeId}>
               <div className="min-w-0">
-                <p className="truncate text-xs font-semibold text-foreground">{employee.displayName}</p>
-                <p className="text-[11px] text-muted-foreground">Field Operations</p>
+                <p className="truncate text-[13px] font-medium text-wf-ink">{employee.displayName}</p>
+                <p className="text-[11px] font-normal text-wf-ink-3">Field operations</p>
               </div>
-              <span className="shrink-0 rounded-md bg-muted px-2.5 py-1 text-xs font-semibold tabular-nums text-foreground">
+              <span className="shrink-0 rounded-control bg-wf-surface-sunken px-2.5 py-1 text-[12px] font-normal tabular-nums text-wf-ink-2">
                 {employee.assignedJobCount} assigned / {employee.inProgressJobCount} active
               </span>
             </div>
@@ -508,23 +591,23 @@ function OperationsInsightPanel({
   onSelect: (intent: Exclude<OperationsIntent, 'explain_job_attention_flag'>, message: string) => void
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-card shadow-2xs">
-      <div className="border-b border-border px-3.5 py-2.5">
-        <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-          <ListFilter aria-hidden="true" className="size-4 text-primary" />
-          Quick Views
+    <section className="overflow-hidden rounded-card border border-wf-border bg-wf-surface shadow-card">
+      <div className="border-b border-wf-border px-4 py-3">
+        <h2 className="flex items-center gap-2 text-[17px] font-semibold leading-[24px] text-wf-ink">
+          <ListFilter aria-hidden="true" className="size-4 text-wf-accent" />
+          Quick views
         </h2>
       </div>
 
-      <div className="p-3 space-y-3">
+      <div className="p-3.5 space-y-3">
         <div className="grid grid-cols-2 gap-2" role="group" aria-label="Operations views">
           {operationsCommands.map((command) => (
             <button
               className={cn(
-                'inline-flex h-8 items-center justify-center rounded-lg border px-2.5 text-xs font-medium transition-all focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-wait disabled:opacity-60',
+                'inline-flex h-8 items-center justify-center rounded-control border px-2.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-wf-accent/30 disabled:cursor-wait disabled:opacity-60',
                 insight?.intent === command.intent
-                  ? 'border-primary/40 bg-primary/10 text-primary font-semibold'
-                  : 'border-border bg-background text-foreground hover:bg-muted'
+                  ? 'border-wf-accent/40 bg-wf-accent-wash text-wf-accent font-semibold'
+                  : 'border-wf-border bg-wf-surface text-wf-ink-2 hover:bg-wf-surface-sunken'
               )}
               disabled={loadingIntent !== null}
               key={command.intent}
@@ -537,47 +620,47 @@ function OperationsInsightPanel({
         </div>
 
         {errorMessage ? (
-          <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-2.5 text-xs text-destructive" role="alert">
+          <p className="rounded-control border border-wf-danger/30 bg-wf-danger-wash p-2.5 text-xs text-wf-danger" role="alert">
             {errorMessage}
           </p>
         ) : null}
 
         {insight ? (
-          <div className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="overflow-hidden rounded-control border border-wf-border bg-wf-surface">
             {insight.data.intent === 'show_workload_distribution' ? (
               insight.data.employees.length > 0 ? (
-                <div className="divide-y divide-border">
+                <div className="divide-y divide-wf-border">
                   {insight.data.employees.map((emp) => (
-                    <div key={emp.employeeId} className="flex items-center justify-between gap-3 p-2.5 text-xs hover:bg-muted/30">
+                    <div key={emp.employeeId} className="flex items-center justify-between gap-3 p-2.5 text-xs hover:bg-wf-surface-sunken">
                       <div className="min-w-0">
-                        <p className="truncate font-semibold text-foreground">{emp.displayName}</p>
-                        <p className="text-[11px] text-muted-foreground">Field Operations</p>
+                        <p className="truncate font-medium text-wf-ink">{emp.displayName}</p>
+                        <p className="text-[11px] text-wf-ink-3">Field operations</p>
                       </div>
-                      <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[11px] font-semibold tabular-nums text-foreground">
+                      <span className="shrink-0 rounded-control bg-wf-surface-sunken px-2 py-0.5 text-[11px] font-normal tabular-nums text-wf-ink-2">
                         {emp.assignedJobCount} assigned / {emp.inProgressJobCount} active
                       </span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="p-3 text-center text-xs text-muted-foreground">
+                <p className="p-3 text-center text-xs text-wf-ink-3">
                   No active team workload items.
                 </p>
               )
             ) : insight.data.intent === 'summarize_open_operations' ? (
-              <div className="divide-y divide-border">
-                <div className="grid grid-cols-3 gap-2 p-2 text-center bg-muted/30">
-                  <div className="rounded-md bg-card p-1.5 border border-border">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Open</p>
-                    <p className="text-xs font-bold text-foreground">{insight.data.counts.open}</p>
+              <div className="divide-y divide-wf-border">
+                <div className="grid grid-cols-3 gap-2 p-2 text-center bg-wf-surface-sunken">
+                  <div className="rounded-control bg-wf-surface p-1.5 border border-wf-border">
+                    <p className="text-[10px] font-medium text-wf-ink-3">Open</p>
+                    <p className="text-xs font-semibold text-wf-ink tabular-nums">{insight.data.counts.open}</p>
                   </div>
-                  <div className="rounded-md bg-rose-500/10 p-1.5 border border-rose-500/20">
-                    <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase">Overdue</p>
-                    <p className="text-xs font-bold text-rose-600 dark:text-rose-400">{insight.data.counts.overdue}</p>
+                  <div className="rounded-control bg-wf-danger-wash p-1.5 border border-wf-danger/20">
+                    <p className="text-[10px] font-medium text-wf-danger">Overdue</p>
+                    <p className="text-xs font-semibold text-wf-danger tabular-nums">{insight.data.counts.overdue}</p>
                   </div>
-                  <div className="rounded-md bg-amber-500/10 p-1.5 border border-amber-500/20">
-                    <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase">Urgent</p>
-                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400">{insight.data.counts.urgentUnassigned}</p>
+                  <div className="rounded-control bg-wf-surface p-1.5 border border-wf-warn/30">
+                    <p className="text-[10px] font-medium text-wf-warn">Urgent</p>
+                    <p className="text-xs font-semibold text-wf-warn tabular-nums">{insight.data.counts.urgentUnassigned}</p>
                   </div>
                 </div>
                 {insight.data.attentionItems.length > 0 ? (
@@ -585,19 +668,19 @@ function OperationsInsightPanel({
                     <OperationsAttentionRow item={item} key={item.jobId} />
                   ))
                 ) : (
-                  <p className="p-3 text-center text-xs text-muted-foreground">
+                  <p className="p-3 text-center text-xs text-wf-ink-3">
                     No open jobs requiring immediate attention.
                   </p>
                 )}
               </div>
             ) : 'items' in insight.data && insight.data.items.length > 0 ? (
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-wf-border">
                 {insight.data.items.map((item) => (
                   <OperationsAttentionRow item={item} key={item.jobId} />
                 ))}
               </div>
             ) : (
-              <p className="p-3 text-center text-xs text-muted-foreground">
+              <p className="p-3 text-center text-xs text-wf-ink-3">
                 No active jobs match this query view.
               </p>
             )}
@@ -610,14 +693,14 @@ function OperationsInsightPanel({
 
 function OperationsAttentionRow({ item }: { item: OperationsAttentionItem }) {
   return (
-    <div className="flex items-center justify-between gap-3 p-3 transition-colors hover:bg-muted/30">
+    <div className="flex items-center justify-between gap-3 p-3 transition-colors hover:bg-wf-surface-sunken">
       <div className="min-w-0">
-        <Link className="truncate text-xs font-semibold text-foreground hover:text-primary" to={`/jobs/${item.jobId}`}>
+        <Link className="truncate text-xs font-medium text-wf-ink hover:text-wf-accent" to={`/jobs/${item.jobId}`}>
           {item.title}
         </Link>
-        <p className="text-[11px] text-muted-foreground">{item.attentionReasons.map(formatAttentionReason).join(' · ')}</p>
+        <p className="text-[11px] text-wf-ink-3">{item.attentionReasons.map(formatAttentionReason).join(', ')}</p>
       </div>
-      <Link className="shrink-0 text-xs font-semibold text-primary hover:underline" to={`/jobs/${item.jobId}`}>
+      <Link className="shrink-0 text-xs font-medium text-wf-accent hover:underline" to={`/jobs/${item.jobId}`}>
         Open
       </Link>
     </div>
@@ -627,10 +710,10 @@ function OperationsAttentionRow({ item }: { item: OperationsAttentionItem }) {
 function RecentActivity({ summary }: { summary: DashboardSummary }) {
   const activities = summary.recentActivities.slice(0, 5)
   return (
-    <section aria-labelledby="recent-activity-heading" className="overflow-hidden rounded-xl border border-border bg-card shadow-2xs">
+    <section aria-labelledby="recent-activity-heading" className="overflow-hidden rounded-card border border-wf-border bg-wf-surface shadow-card">
       <SectionHeader
         action={
-          <Link className="text-xs font-semibold text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary/30" to="/jobs">
+          <Link className="text-[13px] font-medium text-wf-accent hover:underline focus:outline-none focus:ring-2 focus:ring-wf-accent/30" to="/jobs">
             View jobs
           </Link>
         }
@@ -639,7 +722,7 @@ function RecentActivity({ summary }: { summary: DashboardSummary }) {
         titleId="recent-activity-heading"
       />
       {activities.length > 0 ? (
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-wf-border">
           {activities.map((activity) => (
             <CompactActivityItem activity={activity} key={activity.id} />
           ))}
@@ -653,16 +736,16 @@ function RecentActivity({ summary }: { summary: DashboardSummary }) {
 
 function CompactActivityItem({ activity }: { activity: RecentDashboardActivity }) {
   return (
-    <div className="flex items-center gap-3.5 p-3.5 transition-colors hover:bg-muted/30">
-      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-primary">
+    <div className="flex items-center gap-3.5 p-3.5 transition-colors hover:bg-wf-surface-sunken">
+      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-control bg-wf-surface-sunken text-wf-ink-3">
         <ActivityIcon type={activity.activityType} />
       </span>
       <div className="min-w-0 flex-1">
-        <Link className="block truncate text-xs font-semibold text-foreground hover:text-primary" to={`/jobs/${activity.jobId}`}>
+        <Link className="block truncate text-[13px] font-medium text-wf-ink hover:text-wf-accent" to={`/jobs/${activity.jobId}`}>
           {formatActivityType(activity.activityType)}: {activity.jobTitle}
         </Link>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">
-          {formatActivityTime(activity.performedAt)} · {activity.performerName}
+        <p className="mt-0.5 text-[11px] text-wf-ink-3">
+          {formatActivityTime(activity.performedAt)}, {activity.performerName}
         </p>
       </div>
     </div>
@@ -670,18 +753,18 @@ function CompactActivityItem({ activity }: { activity: RecentDashboardActivity }
 }
 
 function ActivityIcon({ type }: { type: RecentDashboardActivity['activityType'] }) {
-  if (type === 'employee_completed_job') return <CheckCircle2 aria-hidden="true" className="size-4 text-emerald-600" />
-  if (type === 'employee_started_job') return <RefreshCcw aria-hidden="true" className="size-4 text-primary" />
-  if (type.startsWith('employees_')) return <UserPlus aria-hidden="true" className="size-4 text-primary" />
-  return <ClipboardList aria-hidden="true" className="size-4 text-muted-foreground" />
+  if (type === 'employee_completed_job') return <CheckCircle2 aria-hidden="true" className="size-4 text-wf-done" />
+  if (type === 'employee_started_job') return <RefreshCcw aria-hidden="true" className="size-4 text-wf-accent" />
+  if (type.startsWith('employees_')) return <UserPlus aria-hidden="true" className="size-4 text-wf-accent" />
+  return <ClipboardList aria-hidden="true" className="size-4 text-wf-ink-3" />
 }
 
 function SectionHeader({ action, description, title, titleId }: { action?: React.ReactNode; description?: string; title: string; titleId?: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-border px-3.5 py-2.5">
+    <div className="flex items-center justify-between gap-3 border-b border-wf-border px-4 py-3">
       <div>
-        <h2 className="text-sm font-bold text-foreground" id={titleId}>{title}</h2>
-        {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
+        <h2 className="text-[17px] font-semibold leading-[24px] text-wf-ink" id={titleId}>{title}</h2>
+        {description ? <p className="mt-0.5 text-[13px] font-normal leading-[18px] text-wf-ink-3">{description}</p> : null}
       </div>
       {action}
     </div>
@@ -689,25 +772,23 @@ function SectionHeader({ action, description, title, titleId }: { action?: React
 }
 
 function EmptyRow({ children }: { children: React.ReactNode }) {
-  return <p className="p-6 text-center text-xs text-muted-foreground">{children}</p>
+  return <p className="p-6 text-center text-[13px] font-normal text-wf-ink-3">{children}</p>
 }
 
 function DashboardLoadingState() {
   return (
     <section aria-label="Loading operations" className="space-y-6">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <div className="h-24 animate-pulse rounded-xl border border-border bg-card" key={index} />
-        ))}
+        <LoadingSkeleton count={4} variant="card" />
       </div>
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-8">
-          <div className="h-48 animate-pulse rounded-xl border border-border bg-card" />
-          <div className="h-48 animate-pulse rounded-xl border border-border bg-card" />
+          <LoadingSkeleton className="h-48" variant="card" />
+          <LoadingSkeleton className="h-48" variant="card" />
         </div>
         <div className="space-y-6 lg:col-span-4">
-          <div className="h-40 animate-pulse rounded-xl border border-border bg-card" />
-          <div className="h-56 animate-pulse rounded-xl border border-border bg-card" />
+          <LoadingSkeleton className="h-40" variant="card" />
+          <LoadingSkeleton className="h-56" variant="card" />
         </div>
       </div>
     </section>
@@ -715,8 +796,9 @@ function DashboardLoadingState() {
 }
 
 function formatDueDate(job: Pick<DashboardOperationalJob, 'dueDate'>) {
-  if (!job.dueDate) return 'No due date'
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(job.dueDate.toDate())
+  const date = toJsDate(job.dueDate)
+  if (!date) return 'No due date'
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date)
 }
 
 function formatActivityType(type: RecentDashboardActivity['activityType']) {
@@ -730,8 +812,10 @@ function formatActivityType(type: RecentDashboardActivity['activityType']) {
   }
 }
 
-function formatActivityTime(timestamp: { toDate: () => Date }) {
-  return new Intl.DateTimeFormat(undefined, { day: 'numeric', hour: 'numeric', minute: '2-digit', month: 'short' }).format(timestamp.toDate())
+function formatActivityTime(timestamp: unknown) {
+  const date = toJsDate(timestamp)
+  if (!date) return 'Recent'
+  return new Intl.DateTimeFormat(undefined, { day: 'numeric', hour: 'numeric', minute: '2-digit', month: 'short' }).format(date)
 }
 
 function formatDashboardContext(date: Date) {
@@ -740,9 +824,9 @@ function formatDashboardContext(date: Date) {
 
 function formatAttentionReason(reason: OperationsAttentionItem['attentionReasons'][number]) {
   switch (reason) {
-    case 'urgent_unassigned': return 'Priority · unassigned'
-    case 'assigned_not_started_after_due': return 'Assigned · past due'
-    case 'in_progress_overdue': return 'In progress · past due'
+    case 'urgent_unassigned': return 'Priority, unassigned'
+    case 'assigned_not_started_after_due': return 'Assigned, past due'
+    case 'in_progress_overdue': return 'In progress, past due'
     case 'overdue': return 'Overdue'
   }
 }

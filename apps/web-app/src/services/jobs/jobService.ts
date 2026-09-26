@@ -16,7 +16,19 @@ import {
 import { FirebaseError } from 'firebase/app'
 import { firestore } from '@/services/firestore'
 import { cacheService } from '@/services/cache/cacheService'
-import { requireActiveProfile, requireTenantAccess } from '@/services/common'
+import {
+  readBoolean,
+  readNumber,
+  readString,
+  readStringArray,
+  readStringOrNull,
+  readStringOrUndefined,
+  readTimestamp,
+  readTimestampOrNull,
+  readTimestampOrUndefined,
+  requireActiveProfile,
+  requireTenantAccess,
+} from '@/services/common'
 import { canAssignWorker, canEditJob, Roles } from '@/permissions'
 import type {
   CreateJobInput,
@@ -50,6 +62,7 @@ export interface JobService {
     profile: UserProfile,
     jobId: string,
     organizationId: string,
+    options?: { bypassCache?: boolean },
   ): Promise<Job | null>
   listAssignableEmployees(
     profile: UserProfile,
@@ -140,6 +153,7 @@ const DEFAULT_JOB_ACTIVITIES_LIMIT = 25
 
 export type ListJobsOptions = {
   limit?: number
+  bypassCache?: boolean
 }
 
 export type ListJobActivitiesOptions = {
@@ -223,6 +237,16 @@ export const jobService: JobService = {
     cacheService.invalidate('jobs')
     cacheService.invalidate('dashboard')
 
+    if (input.status === 'open' || !input.status) {
+      const updateResult = await updateJobStatus(
+        profile,
+        job.id,
+        organizationId,
+        'open',
+      )
+      return updateResult.job
+    }
+
     return job
   },
 
@@ -242,7 +266,10 @@ export const jobService: JobService = {
     const snapshot = await getDocs(employeesQuery)
 
     const employees = snapshot.docs
-      .map((employeeDocument) => employeeDocument.data() as UserProfile)
+      .map((employeeDocument) => ({
+        ...(employeeDocument.data() as UserProfile),
+        id: employeeDocument.id,
+      }))
       .sort((firstEmployee, secondEmployee) =>
         firstEmployee.displayName.localeCompare(secondEmployee.displayName),
       )
@@ -270,13 +297,15 @@ export const jobService: JobService = {
     )
   },
 
-  async getJob(profile, jobId, organizationId) {
+  async getJob(profile, jobId, organizationId, options) {
     requireTenantAccess(profile, organizationId)
     requireJobId(jobId)
 
     const cacheKey = `job:${jobId}`
-    const cached = cacheService.get<Job>(cacheKey, 30000)
-    if (cached) return cached
+    if (!options?.bypassCache) {
+      const cached = cacheService.get<Job>(cacheKey, 30000)
+      if (cached) return cached
+    }
 
     const jobSnapshot = await getDoc(doc(firestore, JOBS_COLLECTION, jobId))
 
@@ -301,8 +330,10 @@ export const jobService: JobService = {
 
     const limitVal = options?.limit ?? DEFAULT_JOBS_LIMIT
     const cacheKey = `jobs:${organizationId}:${limitVal}`
-    const cached = cacheService.get<Job[]>(cacheKey, 30000)
-    if (cached) return cached
+    if (!options?.bypassCache) {
+      const cached = cacheService.get<Job[]>(cacheKey, 30000)
+      if (cached) return cached
+    }
 
     const jobsQuery = query(
       collection(firestore, JOBS_COLLECTION),
@@ -537,10 +568,7 @@ async function updateJob(
   const timestamp = Timestamp.now()
   updatePayload.updatedAt = timestamp
 
-  const updatedJob: Job = {
-    ...currentJob,
-    ...updatePayload,
-  }
+  const updatedJob = mapJob(jobId, { ...currentJob, ...updatePayload })
 
   const activityReference = doc(collection(firestore, JOB_ACTIVITIES_COLLECTION))
   const auditLogReference = doc(collection(firestore, AUDIT_LOGS_COLLECTION))
@@ -1291,49 +1319,6 @@ function mapJobActivity(data: DocumentData): JobActivity {
   }
 }
 
-function readString(data: DocumentData, key: string, fallback = '') {
-  const value = data[key]
-
-  return typeof value === 'string' ? value : fallback
-}
-
-function readStringOrNull(value: unknown) {
-  return typeof value === 'string' ? value : null
-}
-
-function readStringOrUndefined(value: unknown) {
-  return typeof value === 'string' ? value : undefined
-}
-
-function readStringArray(value: unknown) {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : []
-}
-
-function readNumber(data: DocumentData, key: string) {
-  const value = data[key]
-
-  return typeof value === 'number' ? value : 0
-}
-
-function readBoolean(data: DocumentData, key: string) {
-  const value = data[key]
-
-  return typeof value === 'boolean' ? value : false
-}
-
-function readTimestamp(value: unknown) {
-  return value instanceof Timestamp ? value : Timestamp.fromMillis(0)
-}
-
-function readTimestampOrNull(value: unknown) {
-  return value instanceof Timestamp ? value : null
-}
-
-function readTimestampOrUndefined(value: unknown) {
-  return value instanceof Timestamp ? value : undefined
-}
 
 function readJobPriority(value: unknown): JobPriority {
   if (

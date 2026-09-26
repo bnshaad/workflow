@@ -1,4 +1,5 @@
 import React, { type ComponentType } from 'react'
+import { color as themeColor } from '../theme/theme'
 
 export interface IconProps {
   icon: ComponentType<any>
@@ -8,6 +9,6 @@ export interface IconProps {
   fill?: string
 }
 
-export function Icon({ icon: Component, size = 20, color = '#64748b', style, fill }: IconProps) {
+export function Icon({ icon: Component, size = 20, color = themeColor.ink3, style, fill }: IconProps) {
   return <Component size={size} color={color} stroke={color} style={style} fill={fill} />
 }

@@ -16,7 +16,7 @@ export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   cancelled: 'Cancelled',
   completed: 'Completed',
   draft: 'Draft',
-  in_progress: 'In Progress',
+  in_progress: 'In progress',
   open: 'Open',
 }
 

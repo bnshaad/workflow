@@ -1,10 +1,11 @@
 // app.config.js — CommonJS, executed by Expo CLI at bundle time
 const path = require('path')
 
-// Load .env from the mobile-app directory (safe regardless of CWD)
-const dotenvResult = require('dotenv').config({ path: path.resolve(__dirname, '.env') })
-if (dotenvResult.error) {
-  console.warn('[app.config] Could not load .env:', dotenvResult.error.message)
+try {
+  require('dotenv').config({ path: path.resolve(__dirname, '.env.development'), override: true })
+  require('dotenv').config({ path: path.resolve(__dirname, '.env'), override: false })
+} catch {
+  // Expo CLI natively handles .env loading
 }
 
 module.exports = {
@@ -24,7 +25,7 @@ module.exports = {
       },
     },
     web: {
-      favicon: './assets/favicon.png',
+      bundler: 'metro',
     },
     scheme: 'workflow-field',
     extra: {

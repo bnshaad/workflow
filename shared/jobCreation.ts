@@ -1,6 +1,7 @@
-export const JOB_PRIORITY_VALUES = ['Low', 'Medium', 'High', 'Urgent'] as const
+import type { JobPriority, JobStatus } from './domain/models/job.js'
 
-export type JobPriority = (typeof JOB_PRIORITY_VALUES)[number]
+export const JOB_PRIORITY_VALUES = ['Low', 'Medium', 'High', 'Urgent'] as const
+export type { JobPriority, JobStatus }
 
 export type JobCreationValidationInput = {
   attachments?: unknown
@@ -28,6 +29,7 @@ export type NewJobDocumentInput<TTimestamp> = {
   id: string
   organizationId: string
   payload: CreateJobPayload
+  status?: JobStatus
   toTimestamp: (date: Date) => TTimestamp
 }
 

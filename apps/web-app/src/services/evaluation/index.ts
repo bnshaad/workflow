@@ -10,7 +10,14 @@ import {
   type DocumentData,
 } from 'firebase/firestore'
 import { canViewDashboard } from '@/permissions'
-import { requireActiveProfile, requireTenantAccess } from '@/services/common'
+import {
+  readString,
+  readStringArray,
+  readTimestamp,
+  readTimestampOrNull,
+  requireActiveProfile,
+  requireTenantAccess,
+} from '@/services/common'
 import { firestore } from '@/services/firestore'
 import type { UserProfile } from '@/types'
 import { JobStatuses, type JobStatus } from '@/types/jobStatus'
@@ -316,25 +323,7 @@ function rate(value: number, total: number) {
   return total > 0 ? value / total : 0
 }
 
-function readString(data: DocumentData, key: string, fallback = '') {
-  const value = data[key]
 
-  return typeof value === 'string' ? value : fallback
-}
-
-function readStringArray(value: unknown) {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : []
-}
-
-function readTimestamp(value: unknown) {
-  return value instanceof Timestamp ? value : Timestamp.fromMillis(0)
-}
-
-function readTimestampOrNull(value: unknown) {
-  return value instanceof Timestamp ? value : null
-}
 
 export type AuditLogEntry = {
   id: string

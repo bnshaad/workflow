@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
+  AlertTriangle,
   ArrowLeft,
   ChevronRight,
   ClipboardList,
@@ -8,6 +9,7 @@ import {
   Paperclip,
   Pencil,
   Phone,
+  RefreshCw,
   Search,
   Sparkles,
   UserRound,
@@ -17,6 +19,7 @@ import { StatusBadge } from '@/components'
 import { useAuth } from '@/hooks'
 import { cn, summarizeCandidateExplanation } from '@/utils'
 import { canAssignWorker, canEditJob } from '@/permissions'
+import { toJsDate } from '@/services/common'
 import {
   AssignmentRecommendationError,
   ASSIGNMENT_OVERRIDE_REASONS,
@@ -274,6 +277,52 @@ export function JobDetailsPage() {
     }
   }, [jobId, profile])
 
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const isFetchingRef = useRef(false)
+
+  const handleRefresh = useCallback(
+    async (bypassCache = true, silent = false) => {
+      if (!jobId || !profile || isFetchingRef.current) return
+      isFetchingRef.current = true
+      if (!silent) setIsRefreshing(true)
+      try {
+        const [loadedJob, loadedActivities, loadedEmployees] = await Promise.all([
+          jobService.getJob(profile, jobId, profile.organizationId, { bypassCache }),
+          jobService.getJobActivities(profile, jobId, profile.organizationId),
+          jobService.listAssignableEmployees(profile, profile.organizationId).catch(() => []),
+        ])
+
+        if (loadedJob) {
+          setJob(loadedJob)
+          setManagedEmployeeIds(loadedJob.assignedEmployeeIds)
+          setActivities(loadedActivities)
+          setAssignableEmployees(loadedEmployees)
+        }
+      } catch {
+        // silent revalidation failure
+      } finally {
+        isFetchingRef.current = false
+        if (!silent) setIsRefreshing(false)
+      }
+    },
+    [jobId, profile],
+  )
+
+  // Real-time synchronization: Auto-refresh when tab gains focus
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && profile) {
+        void handleRefresh(true, true)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
+    }
+  }, [handleRefresh, profile])
+
   useEffect(() => {
     if (!job || window.location.hash !== '#assignment-controls') return
 
@@ -508,8 +557,9 @@ export function JobDetailsPage() {
     }
   }
 
-  async function handleStatusUpdate() {
-    if (!profile || !job || !selectedStatus) {
+  async function handleStatusUpdate(nextStatus?: JobStatus) {
+    const statusToApply = nextStatus ?? selectedStatus
+    if (!profile || !job || !statusToApply) {
       return
     }
 
@@ -521,7 +571,7 @@ export function JobDetailsPage() {
         profile,
         job.id,
         job.organizationId,
-        selectedStatus,
+        statusToApply,
       )
 
       setJob(result.job)
@@ -704,6 +754,8 @@ export function JobDetailsPage() {
       <JobSummary
         assignedEmployeeNames={assignedEmployeeNames}
         job={job}
+        onRefresh={() => void handleRefresh(true)}
+        isRefreshing={isRefreshing}
       />
 
       {/* 3-Tab Organization Header */}
@@ -1095,9 +1147,13 @@ export function JobDetailsPage() {
 function JobSummary({
   assignedEmployeeNames,
   job,
+  onRefresh,
+  isRefreshing,
 }: {
   assignedEmployeeNames: string[]
   job: Job
+  onRefresh?: () => void
+  isRefreshing?: boolean
 }) {
   return (
     <section className="rounded-lg border border-border bg-card p-4">
@@ -1135,7 +1191,21 @@ function JobSummary({
           </div>
         </div>
 
-        <BackLink />
+        <div className="flex items-center gap-2">
+          {onRefresh ? (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+              title="Refresh job details"
+            >
+              <RefreshCw aria-hidden="true" className={cn('size-4', isRefreshing && 'animate-spin')} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          ) : null}
+          <BackLink />
+        </div>
       </div>
     </section>
   )
@@ -1228,7 +1298,7 @@ function AssignmentDecisionPanel({
   ) => void
   handleConfirmRecommendationOverride: () => Promise<void>
   handleGenerateRecommendations: () => Promise<void>
-  handleStatusUpdate: () => Promise<void>
+  handleStatusUpdate: (nextStatus?: JobStatus) => Promise<void>
   handleUnassignAllEmployees: () => Promise<void>
   handleUpdateAssignedEmployees: () => Promise<void>
   isAssigning: boolean
@@ -1336,7 +1406,27 @@ function AssignmentDecisionPanel({
           />
         ) : null}
 
-        {!isOpen && !isAssigned ? (
+        {job.status === JobStatuses.Draft ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 space-y-2.5 text-xs">
+            <div className="flex items-center gap-2 font-semibold text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="size-4 shrink-0" />
+              <span>Job is in Draft Status</span>
+            </div>
+            <p className="text-muted-foreground leading-relaxed">
+              Open this job to enable AI worker recommendations and technician assignment.
+            </p>
+            {canUpdateStatus && (
+              <button
+                className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+                disabled={isUpdatingStatus}
+                onClick={() => void handleStatusUpdate(JobStatuses.Open)}
+                type="button"
+              >
+                {isUpdatingStatus ? 'Opening job...' : 'Open job for assignment'}
+              </button>
+            )}
+          </div>
+        ) : !isOpen && !isAssigned ? (
           <p className="border-y border-border py-3 text-sm text-muted-foreground">
             Assignment changes are not available for this job status.
           </p>
@@ -1655,7 +1745,7 @@ function StatusControls({
 }: {
   allowedStatuses: JobStatus[]
   canUpdateStatus: boolean
-  handleStatusUpdate: () => Promise<void>
+  handleStatusUpdate: (nextStatus?: JobStatus) => Promise<void>
   isUpdatingStatus: boolean
   job: Job
   selectedStatus: JobStatus | ''
@@ -1699,7 +1789,7 @@ function StatusControls({
           <button
             className="inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!selectedStatus || isUpdatingStatus}
-            onClick={handleStatusUpdate}
+            onClick={() => void handleStatusUpdate()}
             type="button"
           >
             {isUpdatingStatus ? 'Updating...' : 'Update Status'}
@@ -2083,7 +2173,7 @@ function RecommendationCandidateCard({
             #{candidate.rank} {candidate.employeeName}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {summary.displayScoreText} • {summary.confidenceBadgeText}
+            {summary.displayScoreText}, {summary.confidenceBadgeText}
           </p>
         </div>
         <span className="inline-flex w-fit rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-foreground">
@@ -2190,9 +2280,11 @@ function getDecisionSummary(job: Job) {
   return 'Review status'
 }
 
-function formatTimestamp(timestamp: Job['createdAt']) {
+function formatTimestamp(timestamp: unknown) {
+  const date = toJsDate(timestamp)
+  if (!date) return 'Not recorded'
   return new Intl.DateTimeFormat('en-US', {
     dateStyle: 'medium',
     timeStyle: 'short',
-  }).format(timestamp.toDate())
+  }).format(date)
 }

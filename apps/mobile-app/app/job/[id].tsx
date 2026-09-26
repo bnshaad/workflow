@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import {
-  ActivityIndicator,
+  Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,20 +11,33 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
-  ArrowLeft,
-  User,
-  MapPin,
+  ChevronLeft,
   Phone,
-  Play,
+  Navigation,
   CheckCircle2,
   AlertCircle,
-  Wrench,
-  Check,
 } from 'lucide-react-native'
-import { Icon } from '../../src/components/Icon'
-import type { Job } from '../../src/domain'
+import {
+  ConfirmModal,
+  EmptyState,
+  Icon,
+  JobDetailSkeleton,
+  ReportBlockerModal,
+} from '../../src/components'
+import type { IncidentCategory, Job } from '../../src/domain'
 import { useAssignedJobs } from '../../src/hooks/useAssignedJobs'
 import { useAuth } from '../../src/hooks/useAuth'
+import { reportJobIncident } from '../../src/services/incidentService'
+import { color, radius, space, type } from '../../src/theme/theme'
+
+const statusLabels: Record<string, string> = {
+  in_progress: 'In progress',
+  completed: 'Completed',
+  assigned: 'Assigned',
+  cancelled: 'Cancelled',
+  draft: 'Draft',
+  open: 'Open',
+}
 
 export default function JobDetailScreen() {
   const insets = useSafeAreaInsets()
@@ -36,16 +50,107 @@ export default function JobDetailScreen() {
   const router = useRouter()
 
   const [actionError, setActionError] = useState<string | null>(null)
+  const [successBanner, setSuccessBanner] = useState<string | null>(null)
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false)
+  const [showBlockerModal, setShowBlockerModal] = useState(false)
+  const [submittingBlocker, setSubmittingBlocker] = useState(false)
 
   const job = jobs.find((j: Job) => j.id === id)
+
+  const handleBack = () => {
+    if (router.back) {
+      router.back()
+    } else {
+      router.replace('/(tabs)')
+    }
+  }
+
+  const handleCallCustomer = async () => {
+    if (!job?.customerPhone) return
+    const cleanedPhone = job.customerPhone.replace(/[^\d+]/g, '')
+    const url = `tel:${cleanedPhone}`
+    try {
+      const supported = await Linking.canOpenURL(url)
+      if (supported) {
+        await Linking.openURL(url)
+      } else {
+        setActionError('Phone calling is not supported on this device.')
+      }
+    } catch {
+      setActionError('Unable to initiate phone call.')
+    }
+  }
+
+  const handleOpenNavigation = async () => {
+    const address = job?.serviceAddress || job?.location
+    if (!address) return
+    const encodedAddress = encodeURIComponent(address)
+    const url = Platform.select({
+      ios: `maps:0,0?q=${encodedAddress}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`,
+    })
+    try {
+      await Linking.openURL(url)
+    } catch {
+      setActionError('Unable to open map navigation.')
+    }
+  }
+
+  const handleStartJob = async () => {
+    if (!job || isSubmitting) return
+    setActionError(null)
+    try {
+      await startJob(job.id)
+    } catch (err: any) {
+      setActionError(err.message || 'Unable to start job. Please try again.')
+    }
+  }
+
+  const handleReportBlocker = async (category: IncidentCategory, description: string) => {
+    if (!job || !user || !profile) return
+    setSubmittingBlocker(true)
+    setActionError(null)
+    try {
+      await reportJobIncident({
+        jobId: job.id,
+        organizationId: job.organizationId,
+        reportedByUserId: user.uid,
+        reportedByUserName: profile.displayName || profile.name || 'Technician',
+        category,
+        description,
+      })
+      setSuccessBanner('Blocker reported. Dispatcher has been notified.')
+      setShowBlockerModal(false)
+    } catch (err: any) {
+      setActionError(err.message || 'Unable to submit blocker report.')
+    } finally {
+      setSubmittingBlocker(false)
+    }
+  }
+
+  const handleConfirmComplete = async () => {
+    if (!job || isSubmitting) return
+    setActionError(null)
+    try {
+      await completeJob(job.id)
+      setShowCompleteConfirm(false)
+      router.replace('/(tabs)')
+    } catch (err: any) {
+      setActionError(err.message || 'Unable to complete job. Please try again.')
+    }
+  }
 
   if (loading && !job) {
     return (
       <View style={[styles.rootView, { paddingTop: Math.max(insets.top, 12) }]}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#0284c7" />
-          <Text style={styles.loadingText}>Loading job details...</Text>
+        <View style={styles.headerBar}>
+          <TouchableOpacity style={styles.backBtn} onPress={handleBack} activeOpacity={0.7}>
+            <ChevronLeft size={22} color={color.ink} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Job details</Text>
+          <View style={styles.headerRightPlaceholder} />
         </View>
+        <JobDetailSkeleton />
       </View>
     )
   }
@@ -54,150 +159,113 @@ export default function JobDetailScreen() {
     return (
       <View style={[styles.rootView, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.headerBar}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Icon icon={ArrowLeft} size={20} color="#0f172a" />
+          <TouchableOpacity style={styles.backBtn} onPress={handleBack} activeOpacity={0.7}>
+            <ChevronLeft size={22} color={color.ink} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Job Details</Text>
-          <View style={{ width: 36 }} />
+          <Text style={styles.headerTitle}>Job details</Text>
+          <View style={styles.headerRightPlaceholder} />
         </View>
 
-        <View style={styles.centerContainer}>
-          <Text style={styles.notFoundTitle}>Job Not Found</Text>
-          <Text style={styles.notFoundSub}>
-            This job may have been reassigned, unassigned, or completed.
-          </Text>
-          <TouchableOpacity style={styles.returnBtn} onPress={() => router.back()}>
-            <Text style={styles.returnBtnText}>Return to Assigned Jobs</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          icon={AlertCircle}
+          title="Job not found"
+          description="This job may have been reassigned, unassigned, or completed."
+          actionLabel="Return to jobs"
+          onAction={handleBack}
+          style={styles.emptyState}
+        />
       </View>
     )
-  }
-
-  const handleStartJob = async () => {
-    setActionError(null)
-    try {
-      await startJob(job.id)
-    } catch (err: any) {
-      setActionError(err.message || 'Failed to start job. Please try again.')
-    }
-  }
-
-  const handleCompleteJob = async () => {
-    setActionError(null)
-    try {
-      await completeJob(job.id)
-      router.replace('/(tabs)')
-    } catch (err: any) {
-      setActionError(err.message || 'Failed to complete job. Please try again.')
-    }
   }
 
   const isAssigned = job.status === 'assigned'
   const isInProgress = job.status === 'in_progress'
   const isCompleted = job.status === 'completed'
 
-  const getPriorityStyle = (priority: string) => {
-    switch (priority) {
-      case 'urgent':
-        return { bg: '#fef2f2', text: '#dc2626', border: '#fca5a5' }
-      case 'high':
-        return { bg: '#fff7ed', text: '#ea580c', border: '#fed7aa' }
-      case 'medium':
-        return { bg: '#f0f9ff', text: '#0284c7', border: '#bae6fd' }
-      default:
-        return { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' }
-    }
-  }
-
-  const getStatusStyle = (status: string) => {
-    switch (status) {
-      case 'in_progress':
-        return { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd', label: 'IN PROGRESS' }
-      case 'assigned':
-        return { bg: '#fef3c7', text: '#b45309', border: '#fde68a', label: 'ASSIGNED' }
-      case 'completed':
-        return { bg: '#dcfce7', text: '#15803d', border: '#86efac', label: 'COMPLETED' }
-      default:
-        return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', label: status.toUpperCase() }
-    }
-  }
-
-  const priorityStyle = getPriorityStyle(job.priority)
-  const statusStyle = getStatusStyle(job.status)
-
   return (
     <View style={[styles.rootView, { paddingTop: Math.max(insets.top, 12) }]}>
+      {/* Top Header Bar */}
       <View style={styles.headerBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Icon icon={ArrowLeft} size={20} color="#0f172a" />
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack} activeOpacity={0.7}>
+          <ChevronLeft size={22} color={color.ink} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Job Details</Text>
+        <Text style={styles.headerTitle}>Job details</Text>
         <View style={styles.headerRightPlaceholder} />
       </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {actionError ? (
-          <View style={styles.errorToast}>
-            <Icon icon={AlertCircle} size={16} color="#dc2626" style={styles.errorIcon} />
-            <Text style={styles.errorToastText}>{actionError}</Text>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Success Alert */}
+        {successBanner ? (
+          <View style={styles.successBanner}>
+            <Icon icon={CheckCircle2} size={16} color={color.done} style={styles.alertIcon} />
+            <Text style={styles.successBannerText}>{successBanner}</Text>
           </View>
         ) : null}
 
-        {/* Main Overview Card */}
-        <View style={styles.card}>
-          <View style={styles.badgeRow}>
-            <View style={[styles.priorityBadge, { backgroundColor: priorityStyle.bg, borderColor: priorityStyle.border }]}>
-              <Text style={[styles.priorityBadgeText, { color: priorityStyle.text }]}>
-                {job.priority.toUpperCase()} PRIORITY
-              </Text>
-            </View>
-
-            <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, borderColor: statusStyle.border }]}>
-              <Text style={[styles.statusBadgeText, { color: statusStyle.text }]}>
-                {statusStyle.label}
-              </Text>
-            </View>
+        {/* Error Alert */}
+        {actionError ? (
+          <View style={styles.errorBanner}>
+            <Icon icon={AlertCircle} size={16} color={color.danger} style={styles.alertIcon} />
+            <Text style={styles.errorBannerText}>{actionError}</Text>
           </View>
+        ) : null}
 
+        {/* Job Overview Card */}
+        <View style={styles.card}>
           <Text style={styles.title}>{job.title}</Text>
-          <Text style={styles.description}>{job.description}</Text>
+          <Text style={styles.statusSub}>{statusLabels[job.status] || job.status}</Text>
+          {job.description ? (
+            <Text style={styles.description}>{job.description}</Text>
+          ) : null}
         </View>
 
-        {/* Customer Information Card */}
+        {/* Customer & Location Card with Inline Actions */}
         <View style={styles.card}>
-          <Text style={styles.sectionHeader}>Customer Details</Text>
+          <Text style={styles.sectionHeader}>Customer</Text>
+          <Text style={styles.customerName}>{job.customerName || 'Customer not specified'}</Text>
 
-          <View style={styles.detailRow}>
-            <Icon icon={User} size={16} color="#64748b" style={styles.detailIcon} />
-            <Text style={styles.detailLabel}>Customer:</Text>
-            <Text style={styles.detailValue}>{job.customerName}</Text>
-          </View>
+          {job.customerPhone ? (
+            <View style={styles.actionRow}>
+              <Text style={styles.actionValue}>{job.customerPhone}</Text>
+              <TouchableOpacity
+                style={styles.iconActionBtn}
+                onPress={handleCallCustomer}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Call customer"
+              >
+                <Phone size={16} color={color.accent} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
-          <View style={styles.detailRow}>
-            <Icon icon={Phone} size={16} color="#64748b" style={styles.detailIcon} />
-            <Text style={styles.detailLabel}>Phone:</Text>
-            <Text style={styles.detailValue}>{job.customerPhone || 'N/A'}</Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Icon icon={MapPin} size={16} color="#64748b" style={styles.detailIcon} />
-            <Text style={styles.detailLabel}>Address:</Text>
-            <Text style={styles.detailValue}>{job.serviceAddress || job.location || 'N/A'}</Text>
-          </View>
+          {job.serviceAddress || job.location ? (
+            <View style={[styles.actionRow, styles.actionRowLast]}>
+              <Text style={styles.actionValue}>{job.serviceAddress || job.location}</Text>
+              <TouchableOpacity
+                style={styles.iconActionBtn}
+                onPress={handleOpenNavigation}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Navigate to address"
+              >
+                <Navigation size={16} color={color.accent} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
         {/* Required Skills Card */}
         {job.requiredSkills && job.requiredSkills.length > 0 ? (
           <View style={styles.card}>
-            <View style={styles.skillsHeaderRow}>
-              <Icon icon={Wrench} size={16} color="#0284c7" />
-              <Text style={styles.sectionHeader}>Required Skills</Text>
-            </View>
-
+            <Text style={styles.sectionHeader}>Required skills</Text>
             <View style={styles.skillsBox}>
               {job.requiredSkills.map((skill: string, index: number) => (
-                <View key={index} style={styles.skillPill}>
+                <View key={index} style={styles.skillChip}>
                   <Text style={styles.skillText}>{skill}</Text>
                 </View>
               ))}
@@ -205,52 +273,75 @@ export default function JobDetailScreen() {
           </View>
         ) : null}
 
-        {/* Status Action Banner */}
-        <View style={styles.actionCard}>
+        {/* Primary Action Area */}
+        <View style={styles.actionArea}>
           {isAssigned ? (
             <TouchableOpacity
-              style={[styles.primaryBtn, styles.startBtn, isSubmitting && styles.btnDisabled]}
+              style={styles.primaryBtn}
               onPress={handleStartJob}
               disabled={isSubmitting}
-              activeOpacity={0.85}
+              activeOpacity={0.8}
             >
-              {isSubmitting ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <View style={styles.btnContent}>
-                  <Icon icon={Play} size={18} color="#ffffff" fill="#ffffff" />
-                  <Text style={styles.btnText}>Start Job (Set In Progress)</Text>
-                </View>
-              )}
+              <Text style={styles.primaryBtnText}>
+                {isSubmitting ? 'Starting job...' : 'Start job'}
+              </Text>
             </TouchableOpacity>
           ) : null}
 
           {isInProgress ? (
             <TouchableOpacity
-              style={[styles.primaryBtn, styles.completeBtn, isSubmitting && styles.btnDisabled]}
-              onPress={handleCompleteJob}
+              style={styles.primaryBtn}
+              onPress={() => setShowCompleteConfirm(true)}
               disabled={isSubmitting}
-              activeOpacity={0.85}
+              activeOpacity={0.8}
             >
-              {isSubmitting ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <View style={styles.btnContent}>
-                  <Icon icon={CheckCircle2} size={20} color="#ffffff" />
-                  <Text style={styles.btnText}>Mark Job as Completed</Text>
-                </View>
-              )}
+              <Text style={styles.primaryBtnText}>
+                {isSubmitting ? 'Completing job...' : 'Complete job'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {(isAssigned || isInProgress) ? (
+            <TouchableOpacity
+              style={styles.blockerTextBtn}
+              onPress={() => setShowBlockerModal(true)}
+              disabled={isSubmitting || submittingBlocker}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.blockerText}>Report a blocker</Text>
             </TouchableOpacity>
           ) : null}
 
           {isCompleted ? (
             <View style={styles.completedNotice}>
-              <Icon icon={Check} size={18} color="#15803d" />
-              <Text style={styles.completedNoticeText}>This job has been completed.</Text>
+              <CheckCircle2 size={18} color={color.done} />
+              <Text style={styles.completedNoticeText}>Job completed</Text>
             </View>
           ) : null}
         </View>
       </ScrollView>
+
+      {/* Complete Confirmation Modal */}
+      <ConfirmModal
+        visible={showCompleteConfirm}
+        title="Complete job"
+        message="Mark this job as completed? This will finalize the service record."
+        confirmText="Complete"
+        cancelText="Cancel"
+        confirmVariant="accent"
+        icon={CheckCircle2}
+        loading={isSubmitting}
+        onConfirm={handleConfirmComplete}
+        onCancel={() => setShowCompleteConfirm(false)}
+      />
+
+      {/* Report Blocker Modal */}
+      <ReportBlockerModal
+        visible={showBlockerModal}
+        loading={submittingBlocker}
+        onClose={() => setShowBlockerModal(false)}
+        onSubmit={handleReportBlocker}
+      />
     </View>
   )
 }
@@ -258,250 +349,199 @@ export default function JobDetailScreen() {
 const styles = StyleSheet.create({
   rootView: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: color.surfaceSunken,
   },
   headerBar: {
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    backgroundColor: color.surfaceSunken,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: color.separator,
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
+    width: 44,
+    height: 44,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: '700',
-    color: '#0f172a',
+    fontWeight: '600',
+    color: color.ink,
+    letterSpacing: -0.2,
   },
   headerRightPlaceholder: {
-    width: 36,
+    width: 44,
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
   },
   content: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  loadingText: {
-    marginTop: 12,
-    color: '#64748b',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  notFoundTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  notFoundSub: {
-    fontSize: 14,
-    color: '#64748b',
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
-  },
-  returnBtn: {
-    marginTop: 18,
-    backgroundColor: '#0284c7',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  returnBtnText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  errorToast: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fef2f2',
-    borderColor: '#fca5a5',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-  },
-  errorIcon: {
-    marginRight: 8,
-  },
-  errorToastText: {
-    color: '#dc2626',
-    fontSize: 13,
-    fontWeight: '500',
-    flex: 1,
+    padding: space.lg,
+    paddingBottom: space.xxxl,
+    gap: space.md,
   },
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 14,
+    backgroundColor: color.surface,
+    borderRadius: radius.card,
+    padding: space.lg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  priorityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  priorityBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    borderColor: color.border,
   },
   title: {
-    fontSize: 19,
-    fontWeight: '800',
-    color: '#0f172a',
-    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: '600',
+    color: color.ink,
+    letterSpacing: -0.3,
     lineHeight: 25,
   },
+  statusSub: {
+    ...type.meta,
+    color: color.ink3,
+    marginTop: 4,
+    marginBottom: space.sm,
+  },
   description: {
-    fontSize: 14,
-    color: '#475569',
-    lineHeight: 22,
+    ...type.body,
+    color: color.ink2,
+    lineHeight: 21,
   },
   sectionHeader: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 12,
+    ...type.label,
+    color: color.ink3,
+    marginBottom: space.sm,
   },
-  skillsHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  detailIcon: {
-    marginRight: 10,
-  },
-  detailLabel: {
-    fontSize: 13,
+  customerName: {
+    fontSize: 17,
     fontWeight: '600',
-    color: '#64748b',
-    width: 90,
+    color: color.ink,
+    letterSpacing: -0.2,
+    marginBottom: space.sm,
   },
-  detailValue: {
-    fontSize: 14,
-    color: '#0f172a',
-    fontWeight: '500',
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: space.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: color.border,
+  },
+  actionRowLast: {
+    borderBottomWidth: 0,
+  },
+  actionValue: {
+    ...type.body,
+    color: color.ink2,
     flex: 1,
+    marginRight: space.sm,
+  },
+  iconActionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.control,
+    backgroundColor: color.accentWash,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   skillsBox: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
+    gap: space.sm,
   },
-  skillPill: {
-    backgroundColor: '#f0f9ff',
-    borderColor: '#bae6fd',
+  skillChip: {
+    backgroundColor: color.surfaceRaised,
+    borderColor: color.border,
     borderWidth: 1,
-    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.md,
     paddingVertical: 6,
-    borderRadius: 20,
   },
   skillText: {
     fontSize: 13,
-    color: '#0284c7',
-    fontWeight: '600',
+    fontWeight: '500',
+    color: color.ink2,
   },
-  actionCard: {
-    marginTop: 8,
+  actionArea: {
+    marginTop: space.sm,
+    gap: space.xs,
   },
   primaryBtn: {
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
+    height: 50,
+    backgroundColor: color.accent,
+    borderRadius: radius.control,
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  startBtn: {
-    backgroundColor: '#0284c7',
-  },
-  completeBtn: {
-    backgroundColor: '#16a34a',
-  },
-  btnDisabled: {
-    opacity: 0.6,
-  },
-  btnContent: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
   },
-  btnText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '800',
+  primaryBtnText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: color.surface,
+  },
+  blockerTextBtn: {
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  blockerText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: color.ink2,
   },
   completedNotice: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#dcfce7',
-    borderColor: '#86efac',
+    gap: space.xs,
+    paddingVertical: space.md,
+    borderRadius: radius.control,
+    backgroundColor: color.surface,
     borderWidth: 1,
-    padding: 16,
-    borderRadius: 14,
+    borderColor: color.done,
   },
   completedNoticeText: {
-    color: '#15803d',
-    fontWeight: '700',
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '600',
+    color: color.done,
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: space.md,
+    backgroundColor: color.accentWash,
+    borderColor: color.accent,
+    borderWidth: 1,
+    borderRadius: radius.control,
+  },
+  successBannerText: {
+    color: color.accent,
+    fontSize: 13,
+    fontWeight: '500',
+    flex: 1,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: space.md,
+    backgroundColor: color.dangerWash,
+    borderColor: color.danger,
+    borderWidth: 1,
+    borderRadius: radius.control,
+  },
+  alertIcon: {
+    marginRight: space.sm,
+  },
+  errorBannerText: {
+    color: color.danger,
+    fontSize: 13,
+    fontWeight: '500',
+    flex: 1,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
   },
 })
+

@@ -1,30 +1,34 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Loader2, RefreshCw, Search, UserCheck } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Loader2, RefreshCw, Search, UserCheck } from 'lucide-react'
 import { CreateJobDrawer, PageHeader, TeamMemberCard, type TeamMember } from '@/components'
 import type { Availability } from '@/components/AvailabilityBadge'
 import { useAuth } from '@/hooks'
 import { jobService } from '@/services/jobs'
 import { cacheService } from '@/services/cache/cacheService'
 import type { Job, UserProfile } from '@/types'
+import { cn } from '@/utils'
+
+const PAGE_SIZE = 10
 
 export function TeamPage() {
   const { profile } = useAuth()
   const [employees, setEmployees] = useState<UserProfile[]>([])
   const [jobs, setJobs] = useState<Job[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
 
-
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedSkill, setSelectedSkill] = useState('Any Skill')
-  const [selectedStatus, setSelectedStatus] = useState('Any Status')
+  const [selectedSkill, setSelectedSkill] = useState('all')
+  const [selectedStatus, setSelectedStatus] = useState<Availability | 'all'>('all')
+  const [currentPage, setCurrentPage] = useState(1)
 
   const refreshTeamData = async () => {
     if (!profile) return
 
     cacheService.invalidate()
-    setIsLoading(true)
+    setIsRefreshing(true)
     setErrorMessage('')
 
     try {
@@ -38,7 +42,7 @@ export function TeamPage() {
     } catch {
       setErrorMessage('Unable to load team members. Please try again.')
     } finally {
-      setIsLoading(false)
+      setIsRefreshing(false)
     }
   }
 
@@ -122,12 +126,14 @@ export function TeamPage() {
 
       return {
         id: emp.id,
+        activeJobCount,
         availability: availabilityLabel,
-        completedJobs: `${completedJobCount} Completed`,
-        currentJobs: activeJobCount === 0 ? '0 Active' : `${activeJobCount} Active`,
+        completedJobCount,
+        completedJobs: `${completedJobCount} completed`,
+        currentJobs: `${activeJobCount} active`,
         initials,
         name,
-        role: emp.role === 'admin' ? 'Administrator' : emp.role === 'manager' ? 'Service Manager' : 'Field Technician',
+        role: emp.role === 'admin' ? 'Administrator' : emp.role === 'manager' ? 'Service manager' : 'Field technician',
         skills: emp.skills || [],
       }
     })
@@ -146,12 +152,12 @@ export function TeamPage() {
       }
 
       // Skill filter matching
-      if (selectedSkill !== 'Any Skill') {
+      if (selectedSkill !== 'all') {
         if (!member.skills.includes(selectedSkill)) return false
       }
 
       // Status filter matching
-      if (selectedStatus !== 'Any Status') {
+      if (selectedStatus !== 'all') {
         if (member.availability !== selectedStatus) return false
       }
 
@@ -159,17 +165,32 @@ export function TeamPage() {
     })
   }, [teamMembers, searchQuery, selectedSkill, selectedStatus])
 
+  const totalPages = Math.max(1, Math.ceil(filteredTeamMembers.length / PAGE_SIZE))
+  const paginatedMembers = useMemo(
+    () => filteredTeamMembers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredTeamMembers, currentPage],
+  )
+
+  const hasActiveFilters = searchQuery.trim().length > 0 || selectedSkill !== 'all' || selectedStatus !== 'all'
+
+  function clearFilters() {
+    setSearchQuery('')
+    setSelectedSkill('all')
+    setSelectedStatus('all')
+    setCurrentPage(1)
+  }
+
   // Handle Export CSV
   const handleExportCSV = () => {
     if (filteredTeamMembers.length === 0) return
 
-    const headers = ['Name', 'Role', 'Availability', 'Active Jobs', 'Completed Jobs', 'Skills']
+    const headers = ['Name', 'Role', 'Availability', 'Active jobs', 'Completed jobs', 'Skills']
     const rows = filteredTeamMembers.map((m) => [
       `"${m.name}"`,
       `"${m.role}"`,
       `"${m.availability}"`,
-      `"${m.currentJobs}"`,
-      `"${m.completedJobs}"`,
+      `"${m.activeJobCount ?? 0}"`,
+      `"${m.completedJobCount ?? 0}"`,
       `"${m.skills.join(', ')}"`,
     ])
 
@@ -186,59 +207,68 @@ export function TeamPage() {
   return (
     <div className="space-y-3">
       <PageHeader
-        title="Team"
         actions={
-          <>
+          <div className="flex items-center gap-2">
             <button
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
-              type="button"
-              onClick={handleExportCSV}
+              className="inline-flex h-9 items-center gap-2 rounded-control border border-wf-border bg-wf-surface px-3 text-[13px] font-medium text-wf-ink-2 shadow-card transition-colors hover:bg-wf-surface-sunken focus:outline-none focus:ring-2 focus:ring-wf-accent/30 disabled:cursor-not-allowed disabled:opacity-40"
               disabled={filteredTeamMembers.length === 0}
+              onClick={handleExportCSV}
+              type="button"
             >
               <Download aria-hidden="true" className="size-4" />
-              Export CSV
+              <span>Export CSV</span>
             </button>
             <button
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
-              type="button"
+              aria-label="Refresh team list"
+              className="inline-flex size-9 items-center justify-center rounded-control border border-wf-border bg-wf-surface text-wf-ink-2 shadow-card transition-colors hover:bg-wf-surface-sunken focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
+              disabled={isRefreshing}
               onClick={refreshTeamData}
-              title="Refresh Team List"
+              type="button"
             >
-              <RefreshCw aria-hidden="true" className="size-4" />
+              <RefreshCw aria-hidden="true" className={cn('size-3.5', isRefreshing && 'animate-spin')} />
             </button>
-          </>
+          </div>
         }
+        title="Team"
       />
 
       {errorMessage ? (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+        <div className="rounded-card border border-wf-danger/30 bg-wf-danger-wash p-3.5 text-xs font-medium text-wf-danger" role="alert">
           {errorMessage}
         </div>
       ) : null}
 
-      <section className="rounded-lg border border-border bg-card p-3">
+      <section aria-label="Team filters" className="rounded-card border border-wf-border bg-wf-surface p-3 shadow-card">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
             <Search
               aria-hidden="true"
-              className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-wf-ink-3"
             />
             <input
-              className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-4 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              aria-label="Find technician by name, role, or skill"
+              className="h-9 w-full rounded-control border border-wf-border bg-wf-surface pl-9 pr-4 text-[13px] text-wf-ink outline-none transition placeholder:text-wf-ink-3 focus:border-wf-accent focus:ring-2 focus:ring-wf-accent/20"
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1)
+              }}
               placeholder="Find technician by name, role, or skill..."
               type="search"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <select
-              className="h-10 min-w-40 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              aria-label="Filter by skill"
+              className="h-9 min-w-40 rounded-control border border-wf-border bg-wf-surface px-3 text-[13px] text-wf-ink outline-none transition hover:border-wf-ink-3 focus:border-wf-accent focus:ring-2 focus:ring-wf-accent/20"
+              onChange={(e) => {
+                setSelectedSkill(e.target.value)
+                setCurrentPage(1)
+              }}
               value={selectedSkill}
-              onChange={(e) => setSelectedSkill(e.target.value)}
             >
-              <option value="Any Skill">Any Skill</option>
+              <option value="all">All skills</option>
               {availableSkills.map((skill) => (
                 <option key={skill} value={skill}>
                   {skill}
@@ -247,73 +277,115 @@ export function TeamPage() {
             </select>
 
             <select
-              className="h-10 min-w-40 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              aria-label="Filter by status"
+              className="h-9 min-w-40 rounded-control border border-wf-border bg-wf-surface px-3 text-[13px] text-wf-ink outline-none transition hover:border-wf-ink-3 focus:border-wf-accent focus:ring-2 focus:ring-wf-accent/20"
+              onChange={(e) => {
+                setSelectedStatus(e.target.value as Availability | 'all')
+                setCurrentPage(1)
+              }}
               value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
             >
-              <option value="Any Status">Any Status</option>
+              <option value="all">All statuses</option>
               <option value="Available">Available</option>
               <option value="Busy">Busy</option>
-              <option value="On Leave">On Leave</option>
+              <option value="On Leave">On leave</option>
             </select>
 
-            {(searchQuery || selectedSkill !== 'Any Skill' || selectedStatus !== 'Any Status') ? (
+            {hasActiveFilters ? (
               <button
-                className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="inline-flex h-9 items-center justify-center rounded-control border border-wf-border bg-wf-surface px-3 text-[13px] font-medium text-wf-ink-3 transition-colors hover:bg-wf-surface-sunken hover:text-wf-ink focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
+                onClick={clearFilters}
                 type="button"
-                onClick={() => {
-                  setSearchQuery('')
-                  setSelectedSkill('Any Skill')
-                  setSelectedStatus('Any Status')
-                }}
               >
-                Clear Filters
+                Clear filters
               </button>
             ) : null}
           </div>
         </div>
       </section>
 
-      <section aria-label="Team members" className="overflow-hidden rounded-lg border border-border bg-card">
+      <section aria-labelledby="team-members-heading" className="overflow-hidden rounded-card border border-wf-border bg-wf-surface shadow-card">
+        <div className="flex items-center justify-between gap-3 border-b border-wf-separator px-4 py-3">
+          <h2 className="text-[17px] font-semibold leading-[24px] text-wf-ink" id="team-members-heading">
+            Team members
+          </h2>
+          <span className="shrink-0 text-[13px] font-medium tabular-nums text-wf-ink-3">
+            {filteredTeamMembers.length} member{filteredTeamMembers.length === 1 ? '' : 's'}
+          </span>
+        </div>
+
         {isLoading ? (
-          <div className="flex items-center justify-center p-12 text-sm text-muted-foreground">
-            <Loader2 className="mr-2 size-5 animate-spin text-primary" />
-            Loading team roster from Firestore...
+          <div className="flex items-center justify-center p-12 text-[13px] text-wf-ink-3">
+            <Loader2 className="mr-2 size-4 animate-spin text-wf-accent" />
+            Loading team roster...
           </div>
         ) : filteredTeamMembers.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 text-center">
-            <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground mb-3">
-              <UserCheck className="size-6" />
+            <div className="mb-3 flex size-10 items-center justify-center rounded-full bg-wf-surface-sunken text-wf-ink-3">
+              <UserCheck className="size-5" />
             </div>
-            <h3 className="text-base font-semibold text-foreground">No Team Members Found</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <h3 className="text-[15px] font-semibold text-wf-ink">No team members found</h3>
+            <p className="mt-1 text-[13px] text-wf-ink-3">
               {teamMembers.length === 0
                 ? 'No active employee profiles found in this organization.'
                 : 'No technicians match your current search and filter criteria.'}
             </p>
-            {teamMembers.length > 0 ? (
+            {hasActiveFilters ? (
               <button
-                onClick={() => {
-                  setSearchQuery('')
-                  setSelectedSkill('Any Skill')
-                  setSelectedStatus('Any Status')
-                }}
-                className="mt-4 rounded-md border border-border bg-card px-4 py-2 text-xs font-medium text-foreground hover:bg-muted"
+                className="mt-4 inline-flex h-8 items-center justify-center rounded-control border border-wf-border bg-wf-surface px-3 text-[13px] font-medium text-wf-ink-2 shadow-card hover:bg-wf-surface-sunken focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
+                onClick={clearFilters}
                 type="button"
               >
-                Reset Filters
+                Reset filters
               </button>
             ) : null}
           </div>
         ) : (
-          filteredTeamMembers.map((member) => (
-            <TeamMemberCard
-              key={member.id || member.name}
-              {...member}
-              onSchedule={() => setIsCreateDrawerOpen(true)}
-            />
-          ))
+          <div className="divide-y divide-wf-separator">
+            {paginatedMembers.map((member) => (
+              <TeamMemberCard
+                key={member.id || member.name}
+                {...member}
+                onSchedule={() => setIsCreateDrawerOpen(true)}
+              />
+            ))}
+          </div>
         )}
+
+        {!isLoading && filteredTeamMembers.length > 0 ? (
+          <div className="flex flex-col gap-3 border-t border-wf-separator bg-wf-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between text-[13px] text-wf-ink-3">
+            <span className="tabular-nums">
+              Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredTeamMembers.length)} of {filteredTeamMembers.length} members
+            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-[13px] font-medium text-wf-ink tabular-nums">
+                Page {currentPage} of {totalPages}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  aria-label="Previous page"
+                  className="inline-flex h-8 items-center justify-center rounded-control border border-wf-border bg-wf-surface px-2.5 text-[13px] font-medium text-wf-ink-2 shadow-card transition-colors hover:bg-wf-surface-sunken disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  type="button"
+                >
+                  <ChevronLeft aria-hidden="true" className="size-4" />
+                  <span className="sr-only sm:not-sr-only sm:ml-1">Previous</span>
+                </button>
+                <button
+                  aria-label="Next page"
+                  className="inline-flex h-8 items-center justify-center rounded-control border border-wf-border bg-wf-surface px-2.5 text-[13px] font-medium text-wf-ink-2 shadow-card transition-colors hover:bg-wf-surface-sunken disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  type="button"
+                >
+                  <span className="sr-only sm:not-sr-only sm:mr-1">Next</span>
+                  <ChevronRight aria-hidden="true" className="size-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <CreateJobDrawer
@@ -324,4 +396,5 @@ export function TeamPage() {
     </div>
   )
 }
+
 

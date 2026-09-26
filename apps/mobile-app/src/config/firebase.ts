@@ -24,32 +24,44 @@ const expoExtra =
 const firebaseConfig = {
   apiKey:
     (expoExtra as any).EXPO_PUBLIC_FIREBASE_API_KEY ||
-    'AIzaSyDQAp1SEwqNjCyQ330vdFDTHNPdxM364PM',
+    process.env.EXPO_PUBLIC_FIREBASE_API_KEY ||
+    '',
   authDomain:
     (expoExtra as any).EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ||
-    'workflow-p.firebaseapp.com',
+    process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ||
+    '',
   projectId:
     (expoExtra as any).EXPO_PUBLIC_FIREBASE_PROJECT_ID ||
-    'workflow-p',
+    process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ||
+    '',
   storageBucket:
     (expoExtra as any).EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ||
-    'workflow-p.firebasestorage.app',
+    process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+    '',
   messagingSenderId:
     (expoExtra as any).EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ||
-    '237326635633',
+    process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ||
+    '',
   appId:
     (expoExtra as any).EXPO_PUBLIC_FIREBASE_APP_ID ||
-    '1:237326635633:web:28d51e7a6df23dd39001d0',
+    process.env.EXPO_PUBLIC_FIREBASE_APP_ID ||
+    '',
 }
+
 
 const isInitialApp = getApps().length === 0
 
 export const firebaseApp = isInitialApp ? initializeApp(firebaseConfig) : getApp()
 
+const authPersistence =
+  Platform.OS === 'web'
+    ? undefined
+    : typeof getReactNativePersistence === 'function'
+    ? getReactNativePersistence(AsyncStorage)
+    : undefined
+
 export const firebaseAuth = isInitialApp
-  ? initializeAuth(firebaseApp, {
-      persistence: getReactNativePersistence(AsyncStorage),
-    })
+  ? initializeAuth(firebaseApp, authPersistence ? { persistence: authPersistence } : undefined)
   : getAuth(firebaseApp)
 
 export const firestore = getFirestore(firebaseApp)
@@ -59,16 +71,22 @@ const useFirebaseEmulators =
   (expoExtra as any).EXPO_PUBLIC_USE_FIREBASE_EMULATORS === 'true'
 
 if (useFirebaseEmulators) {
+  const hostUri = Constants.expoConfig?.hostUri
   const debuggerHost =
-    typeof (Constants.manifest as any)?.debuggerHost === 'string'
+    typeof hostUri === 'string'
+      ? hostUri.split(':')[0]
+      : typeof (Constants.manifest as any)?.debuggerHost === 'string'
       ? (Constants.manifest as any).debuggerHost.split(':')[0]
       : undefined
   const emulatorHost =
     (expoExtra as any).EXPO_PUBLIC_FIREBASE_EMULATOR_HOST ||
+    process.env.EXPO_PUBLIC_FIREBASE_EMULATOR_HOST ||
     debuggerHost ||
     '127.0.0.1'
   const firebaseEmulatorHost =
-    Platform.OS === 'android' ? '10.0.2.2' : emulatorHost
+    Platform.OS === 'android' && emulatorHost === '127.0.0.1'
+      ? '10.0.2.2'
+      : emulatorHost
 
   connectAuthEmulator(firebaseAuth, `http://${firebaseEmulatorHost}:9099`, {
     disableWarnings: true,

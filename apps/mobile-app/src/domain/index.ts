@@ -9,7 +9,12 @@ export type {
   JobPriority,
   JobStatus,
   UserProfile,
+  Incident,
+  IncidentCategory,
+  IncidentStatus,
 } from './models'
+
+export { INCIDENT_CATEGORY_LABELS } from './models'
 
 export {
   ALLOWED_STATUS_TRANSITIONS,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Check, Loader2, Sparkles, X } from 'lucide-react'
-import { StatusBadge } from '@/components'
+import { PriorityBadge } from '@/components'
 import { useAuth } from '@/hooks'
 import { jobService } from '@/services/jobs'
 import { ASSIGNMENT_OVERRIDE_REASONS, assignmentRecommendationService } from '@/services/recommendations'
@@ -39,13 +39,23 @@ export function QuickAssignModal({
       if (!job || !profile) return
 
       try {
-        const [res, emps] = await Promise.all([
-          assignmentRecommendationService.generateAssignmentRecommendations(profile, profile.organizationId, job.id),
-          jobService.listAssignableEmployees(profile, profile.organizationId),
-        ])
+        let rec: AssignmentRecommendation | null = null
+        let emps: UserProfile[] = []
+
+        if (job.status === 'open') {
+          const [res, assignableEmps] = await Promise.all([
+            assignmentRecommendationService
+              .generateAssignmentRecommendations(profile, profile.organizationId, job.id)
+              .catch(() => ({ recommendation: null })),
+            jobService.listAssignableEmployees(profile, profile.organizationId),
+          ])
+          rec = res.recommendation
+          emps = assignableEmps
+        } else {
+          emps = await jobService.listAssignableEmployees(profile, profile.organizationId)
+        }
 
         if (isMounted) {
-          const rec = res.recommendation
           setRecommendation(rec)
           setEmployees(emps)
           if (rec && rec.candidates.length > 0) {
@@ -81,7 +91,20 @@ export function QuickAssignModal({
     setErrorMessage('')
 
     try {
-      if (recommendation) {
+      if (job.status === 'assigned') {
+        const result = await jobService.updateAssignedEmployees(
+          profile,
+          job.id,
+          profile.organizationId,
+          [employeeId],
+        )
+        onAssigned(result.job)
+      } else if (
+        recommendation &&
+        recommendation.status === 'generated' &&
+        recommendation.candidates &&
+        recommendation.candidates.length > 0
+      ) {
         const isTopMatch = recommendation.candidates[0]?.employeeId === employeeId
         const reason = isTopMatch ? undefined : (overrideReason || 'Manager preference')
         const result = await assignmentRecommendationService.decideAssignmentRecommendation(
@@ -90,7 +113,7 @@ export function QuickAssignModal({
           {
             decision: isTopMatch ? 'accepted' : 'overridden',
             overrideReason: reason,
-            overrideNote: isTopMatch ? undefined : (overrideNote.trim() || undefined),
+            overrideNote: isTopMatch || reason !== 'Other' ? undefined : (overrideNote.trim() || undefined),
             recommendationId: recommendation.id,
             selectedEmployeeId: employeeId,
           },
@@ -141,11 +164,9 @@ export function QuickAssignModal({
           <div className="flex items-start justify-between">
             <div>
               <h3 className="font-semibold text-foreground text-sm">{job.title}</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">{job.customerName} • {job.serviceAddress || job.location || 'Location N/A'}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{job.customerName}, {job.serviceAddress || job.location || 'Location N/A'}</p>
             </div>
-            <StatusBadge tone={job.priority === 'Urgent' || job.priority === 'High' ? 'danger' : 'warning'}>
-              {`${job.priority} Priority`}
-            </StatusBadge>
+            <PriorityBadge priority={job.priority} />
           </div>
         </div>
 

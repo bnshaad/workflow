@@ -77,18 +77,18 @@ export function Header({ onOpenNavigation, onOpenCreateJob }: HeaderProps) {
   }
 
   return (
-    <header className="z-40 flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-5 lg:px-6">
+    <header className="z-40 flex h-14 shrink-0 items-center justify-between border-b border-wf-border bg-wf-surface px-4 sm:px-5 lg:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <button
           aria-label="Open navigation menu"
-          className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 md:hidden"
+          className="inline-flex size-9 items-center justify-center rounded-control text-wf-ink-3 transition hover:bg-wf-surface-sunken hover:text-wf-ink focus:outline-none focus:ring-2 focus:ring-wf-accent/30 md:hidden"
           onClick={onOpenNavigation}
           type="button"
         >
           <Menu aria-hidden="true" className="size-5" />
         </button>
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">
+          <p className="truncate text-sm font-medium text-wf-ink">
             {pageLabel}
           </p>
         </div>
@@ -98,12 +98,12 @@ export function Header({ onOpenNavigation, onOpenCreateJob }: HeaderProps) {
         {showCreateJob ? (
           <button
             aria-label="Create job"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 sm:px-3"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-control bg-wf-accent px-3 text-sm font-medium text-white transition-colors hover:bg-wf-accent-press focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
             onClick={onOpenCreateJob}
             type="button"
           >
             <Plus aria-hidden="true" className="size-4" />
-            <span className="hidden sm:inline">Create Job</span>
+            <span className="hidden sm:inline">Create job</span>
           </button>
         ) : null}
 
@@ -111,26 +111,26 @@ export function Header({ onOpenNavigation, onOpenCreateJob }: HeaderProps) {
           <button
             aria-expanded={isMenuOpen}
             aria-haspopup="menu"
-            className="flex max-w-[260px] items-center gap-2 rounded-md border border-transparent bg-card p-1 pr-2 text-sm font-medium text-foreground transition-colors hover:border-border hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="flex max-w-[260px] items-center gap-2 rounded-control border border-transparent bg-wf-surface p-1 pr-2 text-sm font-medium text-wf-ink transition-colors hover:border-wf-border hover:bg-wf-surface-sunken focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
             onClick={() => setIsMenuOpen((current) => !current)}
             type="button"
           >
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-control bg-wf-surface-sunken text-wf-ink-3">
               <UserCircle aria-hidden="true" className="size-[18px]" />
             </span>
             {loading ? (
-              <span className="hidden h-4 w-28 rounded-full bg-muted sm:inline" />
+              <span className="hidden h-4 w-28 rounded-full bg-wf-surface-sunken sm:inline" />
             ) : (
               <span className="hidden min-w-0 text-left sm:block">
-                <span className="block truncate leading-4">{displayName}</span>
-                <span className="block text-[11px] font-normal leading-3 text-muted-foreground">
+                <span className="block truncate leading-4 text-wf-ink">{displayName}</span>
+                <span className="block text-[11px] font-normal leading-3 text-wf-ink-3">
                   {roleLabel}
                 </span>
               </span>
             )}
             <ChevronDown
               aria-hidden="true"
-              className={`hidden size-4 text-muted-foreground transition sm:block ${
+              className={`hidden size-4 text-wf-ink-3 transition sm:block ${
                 isMenuOpen ? 'rotate-180' : ''
               }`}
             />
@@ -138,63 +138,63 @@ export function Header({ onOpenNavigation, onOpenCreateJob }: HeaderProps) {
 
           {isMenuOpen ? (
             <div
-              className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-border bg-card py-2 shadow-lg"
+              className="absolute right-0 mt-2 w-64 overflow-hidden rounded-sheet border border-wf-border bg-wf-surface py-2 shadow-card"
               role="menu"
             >
               <div className="flex items-center gap-2 px-3 pb-2 pt-1">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-primary">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-wf-surface-sunken text-wf-accent">
                   <UserCircle aria-hidden="true" className="size-5" />
                 </span>
                 <div className="min-w-0">
                   {loading ? (
                     <div className="space-y-1.5">
-                      <div className="h-4 w-36 rounded-full bg-muted" />
-                      <div className="h-3 w-20 rounded-full bg-muted" />
+                      <div className="h-4 w-36 rounded-full bg-wf-surface-sunken" />
+                      <div className="h-3 w-20 rounded-full bg-wf-surface-sunken" />
                     </div>
                   ) : (
                     <>
-                      <p className="truncate text-sm font-medium text-foreground">
+                      <p className="truncate text-sm font-medium text-wf-ink">
                         {displayName}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-wf-ink-3">
                         {roleLabel}
                       </p>
                     </>
                   )}
                 </div>
               </div>
-              <div className="my-1 border-t border-border" />
+              <div className="my-1 border-t border-wf-border" />
               <Link
-                className="flex items-center gap-2 px-3 py-2 text-sm text-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-wf-ink transition hover:bg-wf-surface-sunken focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
                 onClick={() => setIsMenuOpen(false)}
                 role="menuitem"
                 to="/settings"
               >
-                <UserCircle aria-hidden="true" className="size-4" />
-                <span>Profile & Settings</span>
+                <UserCircle aria-hidden="true" className="size-4 text-wf-ink-3" />
+                <span>Profile & settings</span>
               </Link>
 
               {showSettingsLink ? (
                 <Link
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-wf-ink transition hover:bg-wf-surface-sunken focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
                   onClick={() => setIsMenuOpen(false)}
                   role="menuitem"
                   to="/settings"
                 >
-                  <Settings aria-hidden="true" className="size-4" />
+                  <Settings aria-hidden="true" className="size-4 text-wf-ink-3" />
                   Settings
                 </Link>
               ) : null}
-              <div className="my-1 border-t border-border" />
+              <div className="my-1 border-t border-wf-border" />
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-destructive transition hover:bg-destructive/5 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-wf-danger transition hover:bg-wf-danger-wash focus:outline-none focus:ring-2 focus:ring-wf-accent/30 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isSigningOut}
                 onClick={handleSignOut}
                 role="menuitem"
                 type="button"
               >
                 <LogOut aria-hidden="true" className="size-4" />
-                {isSigningOut ? 'Signing out...' : 'Sign Out'}
+                {isSigningOut ? 'Signing out...' : 'Sign out'}
               </button>
             </div>
           ) : null}
@@ -202,7 +202,7 @@ export function Header({ onOpenNavigation, onOpenCreateJob }: HeaderProps) {
       </div>
 
       {signOutError.length > 0 ? (
-        <div className="fixed right-6 top-20 rounded-lg border border-destructive/30 bg-card px-4 py-3 text-sm text-destructive shadow-lg">
+        <div className="fixed right-6 top-20 rounded-control border border-wf-danger/30 bg-wf-surface px-4 py-3 text-sm text-wf-danger shadow-card">
           {signOutError}
         </div>
       ) : null}
@@ -216,17 +216,17 @@ function formatRole(role: string) {
 
 function getPageLabel(pathname: string) {
   if (pathname === '/jobs/create') {
-    return 'Create Job'
+    return 'Create job'
   }
 
   if (pathname.startsWith('/jobs/')) {
-    return 'Job Details'
+    return 'Job details'
   }
 
   const routeLabels: Record<string, string> = {
     '/analytics': 'Reports',
     '/assignments': 'Assignments',
-    '/dashboard': 'Overview',
+    '/dashboard': 'Dashboard',
     '/jobs': 'Jobs',
     '/settings': 'Settings',
     '/team': 'Team',

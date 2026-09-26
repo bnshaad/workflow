@@ -13,8 +13,22 @@ import {
   type DocumentData,
 } from 'firebase/firestore'
 import { canAssignWorker } from '@/permissions'
-import { requireActiveProfile, requireTenantAccess } from '@/services/common'
+import {
+  readBoolean,
+  readNumber,
+  readNumberOrNull,
+  readOptionalString,
+  readOptionalTimestamp,
+  readString,
+  readStringArray,
+  readStringOrNull,
+  readTimestamp,
+  readTimestampOrNull,
+  requireActiveProfile,
+  requireTenantAccess,
+} from '@/services/common'
 import { firestore } from '@/services/firestore'
+import { cacheService } from '@/services/cache/cacheService'
 import {
   JobStatuses,
   type AssignmentRecommendation,
@@ -72,6 +86,8 @@ export type DecideAssignmentRecommendationResult = {
 type RecommendationEmployee = UserProfile & {
   availabilityKnown: boolean
   isUnavailable: boolean
+  serviceZone?: string
+  location?: string
 }
 
 export class AssignmentRecommendationError extends Error {
@@ -113,7 +129,7 @@ export const assignmentRecommendationService: AssignmentRecommendationService = 
       )
     }
 
-    return runTransaction(firestore, async (transaction) => {
+    const result = await runTransaction(firestore, async (transaction) => {
       const recommendationReference = doc(
         firestore,
         RECOMMENDATIONS_COLLECTION,
@@ -242,8 +258,8 @@ export const assignmentRecommendationService: AssignmentRecommendationService = 
         overrideReason: validation.normalizedOverrideReason,
         recommendedEmployeeId,
         recommendationCriteriaSnapshot:
-          recommendedCandidate?.scoreBreakdown ?? null,
-        recommendationScoreSnapshot: recommendedCandidate?.totalScore ?? null,
+          recommendedCandidate?.scoreBreakdown ?? {},
+        recommendationScoreSnapshot: recommendedCandidate?.totalScore ?? 0,
         selectedEmployeeId: selectedEmployee.id,
         status: input.decision,
         updatedAt: timestamp,
@@ -310,6 +326,12 @@ export const assignmentRecommendationService: AssignmentRecommendationService = 
         recommendation: updatedRecommendation,
       }
     })
+
+    cacheService.invalidate('jobs')
+    cacheService.invalidate('dashboard')
+    cacheService.invalidate(`job:${result.job.id}`)
+
+    return result
   },
 
   async generateAssignmentRecommendations(profile, organizationId, jobId) {
@@ -609,6 +631,8 @@ function mapUserProfile(data: DocumentData): RecommendationEmployee {
     displayName: readString(data, 'displayName', 'Workflow employee'),
     role: data.role === Roles.Employee ? Roles.Employee : Roles.Manager,
     skills: readStringArray(data.skills),
+    serviceZone: readOptionalString(data.serviceZone),
+    location: readOptionalString(data.location),
     availability: availabilityInfo.value,
     availabilityKnown: availabilityInfo.known,
     isUnavailable: availabilityInfo.isUnavailable,
@@ -620,51 +644,7 @@ function mapUserProfile(data: DocumentData): RecommendationEmployee {
   }
 }
 
-function readString(data: DocumentData, key: string, fallback = '') {
-  const value = data[key]
 
-  return typeof value === 'string' ? value : fallback
-}
-
-function readStringOrNull(value: unknown) {
-  return typeof value === 'string' ? value : null
-}
-
-function readStringArray(value: unknown) {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : []
-}
-
-function readBoolean(data: DocumentData, key: string) {
-  return typeof data[key] === 'boolean' ? data[key] : false
-}
-
-function readNumber(data: DocumentData, key: string) {
-  return typeof data[key] === 'number' && Number.isFinite(data[key])
-    ? data[key]
-    : 0
-}
-
-function readNumberOrNull(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
-function readTimestamp(value: unknown) {
-  return value instanceof Timestamp ? value : Timestamp.fromMillis(0)
-}
-
-function readOptionalTimestamp(value: unknown) {
-  return value instanceof Timestamp ? value : undefined
-}
-
-function readTimestampOrNull(value: unknown) {
-  return value instanceof Timestamp ? value : null
-}
-
-function readOptionalString(value: unknown) {
-  return typeof value === 'string' ? value : undefined
-}
 
 function readJobStatus(value: unknown): JobStatus {
   return validateJobStatus(value) ? value : JobStatuses.Draft

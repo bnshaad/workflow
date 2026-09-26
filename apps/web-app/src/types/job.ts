@@ -91,6 +91,7 @@ export type CreateJobInput = Pick<
   | 'attachments'
 > & {
   dueDate: Date | null
+  status?: JobStatus
 }
 
 export type CreateJobValidationInput = CreateJobInput &

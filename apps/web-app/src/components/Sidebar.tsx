@@ -34,7 +34,7 @@ type NavGroup = {
 
 const navigationGroups: NavGroup[] = [
   {
-    category: 'MENU',
+    category: 'menu',
     items: [
       {
         label: 'Dashboard',
@@ -55,7 +55,7 @@ const navigationGroups: NavGroup[] = [
         canView: canViewTeam,
       },
       {
-        label: 'Settings & Reports',
+        label: 'Settings & reports',
         to: '/settings',
         icon: Settings,
         canView: canAccessSettings,
@@ -136,7 +136,7 @@ export function Sidebar({
 
   return (
     <>
-      <aside className="fixed left-0 top-0 z-50 hidden h-screen w-[240px] flex-col border-r border-sidebar-border bg-sidebar px-3.5 py-4 md:flex">
+      <aside className="fixed left-0 top-0 z-50 hidden h-screen w-[240px] flex-col border-r border-wf-border bg-wf-surface px-3.5 py-4 md:flex">
         <SidebarContent profile={profile} onOpenCreateJob={onOpenCreateJob} onSignOut={handleSignOut} />
       </aside>
 
@@ -144,14 +144,14 @@ export function Sidebar({
         <div className="fixed inset-0 z-50 md:hidden" role="presentation">
           <button
             aria-label="Close navigation menu"
-            className="absolute inset-0 bg-foreground/20 backdrop-blur-xs"
+            className="absolute inset-0 bg-wf-ink/20 backdrop-blur-xs"
             onClick={onMobileClose}
             type="button"
           />
           <aside
             aria-label="Mobile navigation"
             aria-modal="true"
-            className="relative flex h-full w-[min(320px,85vw)] flex-col border-r border-sidebar-border bg-sidebar px-3.5 py-4 shadow-xl"
+            className="relative flex h-full w-[min(320px,85vw)] flex-col border-r border-wf-border bg-wf-surface px-3.5 py-4 shadow-card"
             ref={mobileDialogRef}
             role="dialog"
           >
@@ -159,7 +159,7 @@ export function Sidebar({
               <BrandMark />
               <button
                 aria-label="Close navigation menu"
-                className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="inline-flex size-8 items-center justify-center rounded-control text-wf-ink-3 transition hover:bg-wf-surface-sunken hover:text-wf-ink focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
                 onClick={onMobileClose}
                 type="button"
               >
@@ -191,7 +191,7 @@ function SidebarContent({
 }) {
   return (
     <>
-      <div className="mb-5 rounded-xl border border-border/80 bg-muted/40 p-2.5">
+      <div className="mb-5 rounded-card border border-wf-border bg-wf-surface-raised p-2.5">
         <BrandMark />
       </div>
 
@@ -205,14 +205,14 @@ function SidebarContent({
 function BrandMark() {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground shadow-xs">
+      <div className="flex size-8 items-center justify-center rounded-control bg-wf-accent text-sm font-semibold text-white">
         W
       </div>
       <div>
-        <p className="text-[14px] font-bold tracking-tight text-foreground leading-4">
+        <p className="text-[14px] font-semibold tracking-tight text-wf-ink leading-4">
           Workflow
         </p>
-        <p className="text-[11px] font-medium text-muted-foreground">Field Operations</p>
+        <p className="text-[11px] font-normal text-wf-ink-3">Field operations</p>
       </div>
     </div>
   )
@@ -240,10 +240,10 @@ function SidebarNavigation({
               <NavLink
                 className={({ isActive }) =>
                   cn(
-                    'group relative flex min-h-9 items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-all focus:outline-none focus:ring-2 focus:ring-primary/30',
+                    'group relative flex min-h-9 items-center gap-3 rounded-control px-3 py-2 text-[13px] transition-colors focus:outline-none focus:ring-2 focus:ring-wf-accent/30',
                     isActive
-                      ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground'
-                      : 'font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+                      ? 'bg-wf-accent-wash font-semibold text-wf-accent'
+                      : 'font-normal text-wf-ink-2 hover:bg-wf-surface-sunken hover:text-wf-ink',
                   )
                 }
                 end={item.to !== '/jobs'}
@@ -258,8 +258,8 @@ function SidebarNavigation({
                       className={cn(
                         'size-[18px] shrink-0 transition-colors',
                         isActive
-                          ? 'text-primary'
-                          : 'text-muted-foreground group-hover:text-foreground',
+                          ? 'text-wf-accent'
+                          : 'text-wf-ink-3 group-hover:text-wf-ink',
                       )}
                     />
                     <span>{item.label}</span>
@@ -283,7 +283,7 @@ function SidebarFooter({
   onOpenCreateJob?: () => void
   onSignOut: () => void
 }) {
-  const displayName = profile?.displayName ?? 'Workflow Manager'
+  const displayName = profile?.displayName ?? 'Workflow manager'
   const email = profile?.email ?? 'operations@workflow.example'
   const initials = displayName
     .split(' ')
@@ -293,40 +293,39 @@ function SidebarFooter({
     .join('')
 
   return (
-    <div className="mt-auto border-t border-sidebar-border pt-3 space-y-2.5">
+    <div className="mt-auto border-t border-wf-border pt-3 space-y-2.5">
       {profile && canCreateJob(profile) ? (
         <button
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2 text-xs font-semibold text-primary-foreground shadow-xs hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="flex w-full items-center gap-2.5 rounded-control px-3 py-2 text-[13px] font-medium text-wf-ink-2 hover:bg-wf-surface-sunken hover:text-wf-ink transition-colors focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
           onClick={onOpenCreateJob}
           type="button"
         >
-          <Plus aria-hidden="true" className="size-4" />
-          <span>Create Job</span>
+          <Plus aria-hidden="true" className="size-4 text-wf-ink-3" />
+          <span>Create job</span>
         </button>
       ) : null}
 
-
       <div className="flex items-center gap-2.5 px-2 py-1">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-foreground">
-          {initials || <UserCircle className="size-5 text-muted-foreground" />}
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-wf-surface-sunken text-xs font-semibold text-wf-ink">
+          {initials || <UserCircle className="size-5 text-wf-ink-3" />}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-semibold text-foreground leading-4">
+          <p className="truncate text-xs font-semibold text-wf-ink leading-4">
             {displayName}
           </p>
-          <p className="truncate text-[10px] text-muted-foreground">
+          <p className="truncate text-[10px] text-wf-ink-3">
             {email}
           </p>
         </div>
       </div>
       <button
         aria-label="Sign out"
-        className="flex w-full items-center justify-center gap-2 rounded-lg border border-border/80 bg-card py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
+        className="flex w-full items-center justify-center gap-2 rounded-control border border-wf-border bg-wf-surface py-1.5 text-xs font-medium text-wf-ink-3 hover:bg-wf-surface-sunken hover:text-wf-danger transition-colors focus:outline-none focus:ring-2 focus:ring-wf-accent/30"
         onClick={onSignOut}
         type="button"
       >
         <LogOut aria-hidden="true" className="size-3.5" />
-        Logout
+        Sign out
       </button>
     </div>
   )

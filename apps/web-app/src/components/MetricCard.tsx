@@ -1,25 +1,12 @@
 import type { ComponentType, SVGProps } from 'react'
 import { cn } from '@/utils'
 
-type MetricCardProps = {
-  icon: ComponentType<SVGProps<SVGSVGElement>>
+export interface MetricCardProps {
+  icon?: ComponentType<SVGProps<SVGSVGElement>>
   label: string
   tone?: 'default' | 'primary' | 'success' | 'danger'
   value: string
-}
-
-const valueTone = {
-  danger: 'text-rose-600',
-  default: 'text-foreground',
-  primary: 'text-blue-600',
-  success: 'text-emerald-600',
-}
-
-const iconTone = {
-  danger: 'text-rose-600 bg-rose-50',
-  default: 'text-muted-foreground bg-muted',
-  primary: 'text-blue-600 bg-blue-50',
-  success: 'text-emerald-600 bg-emerald-50',
+  className?: string
 }
 
 export function MetricCard({
@@ -27,21 +14,32 @@ export function MetricCard({
   label,
   tone = 'default',
   value,
+  className,
 }: MetricCardProps) {
+  // Only Needs Attention with value > 0 renders in danger; otherwise neutral ink per Section 9.3
+  const isExceptionalDanger = tone === 'danger' && value !== '0' && value !== ''
+
   return (
-    <article className="min-w-0 rounded-xl border border-border bg-card p-4 shadow-2xs">
+    <article
+      className={cn(
+        'min-w-0 rounded-card border border-wf-border bg-wf-surface p-4 shadow-card',
+        className,
+      )}
+    >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="text-[13px] font-normal leading-[18px] text-wf-ink-3">
           {label}
         </p>
-        <span className={cn('inline-flex size-7 shrink-0 items-center justify-center rounded-lg', iconTone[tone])}>
-          <Icon aria-hidden="true" className="size-3.5" />
-        </span>
+        {Icon ? (
+          <span className="text-wf-ink-3 shrink-0">
+            <Icon aria-hidden="true" className="size-4" />
+          </span>
+        ) : null}
       </div>
       <p
         className={cn(
-          'mt-3 text-2xl font-bold tracking-tight',
-          valueTone[tone],
+          'mt-2 text-[28px] font-semibold leading-[34px] tracking-tight tabular-nums',
+          isExceptionalDanger ? 'text-wf-danger' : 'text-wf-ink',
         )}
       >
         {value}

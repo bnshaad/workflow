@@ -63,6 +63,40 @@ test('tie-breaking is stable and no unavailable employee is ranked', () => {
   assert.equal(candidates[0].totalScore, candidates[1].totalScore)
 })
 
+test('spatial service zone scoring grants exact, adjacent, and distant scores', () => {
+  const jobInNorth = {
+    location: 'North Zone Workshop',
+    serviceZone: 'North Zone',
+    requiredSkills: ['AC Repair'],
+  }
+
+  const candidates = rankAssignmentCandidates(
+    jobInNorth,
+    [
+      { ...employee('emp-north', 'North Tech', 'available', ['AC Repair']), serviceZone: 'North Zone' },
+      { ...employee('emp-downtown', 'Downtown Tech', 'available', ['AC Repair']), serviceZone: 'Downtown' },
+      { ...employee('emp-south', 'South Tech', 'available', ['AC Repair']), serviceZone: 'South Zone' },
+    ],
+    [],
+  )
+
+  assert.equal(candidates.length, 3)
+  // emp-north has exact match (15 pts location)
+  assert.equal(candidates[0].employeeId, 'emp-north')
+  assert.equal(candidates[0].scoreBreakdown.locationRelevance, 15)
+  assert.match(candidates[0].explanationReasons.join(' '), /primary zone matches job location/)
+
+  // emp-downtown is adjacent to North Zone (8 pts location)
+  assert.equal(candidates[1].employeeId, 'emp-downtown')
+  assert.equal(candidates[1].scoreBreakdown.locationRelevance, 8)
+  assert.match(candidates[1].explanationReasons.join(' '), /adjacent zone/)
+
+  // emp-south is distant (3 pts location)
+  assert.equal(candidates[2].employeeId, 'emp-south')
+  assert.equal(candidates[2].scoreBreakdown.locationRelevance, 3)
+  assert.match(candidates[2].explanationReasons.join(' '), /distant zone/)
+})
+
 function employee(id, displayName, availability, skills) {
   return {
     availability,

@@ -6,7 +6,7 @@ export type JobStatus =
   | 'completed'
   | 'cancelled'
 
-export type JobPriority = 'low' | 'medium' | 'high' | 'urgent'
+export type JobPriority = 'Low' | 'Medium' | 'High' | 'Urgent'
 
 export interface JobAttachment {
   contentType: string
@@ -84,14 +84,16 @@ export interface JobActivity {
 }
 
 export interface UserProfile {
-  availability: 'available' | 'busy' | 'leave'
+  availability: 'available' | 'busy' | 'leave' | 'Available' | 'Busy' | 'Leave'
   createdAt: unknown
   email: string
   id: string
   isActive: boolean
-  name: string
+  name?: string
+  displayName?: string
   organizationId: string
   role: 'admin' | 'manager' | 'employee'
   skills: string[]
   updatedAt: unknown
 }
+

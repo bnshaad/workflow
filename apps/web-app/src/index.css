@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import './styles/tokens.css';
+
+@config "../tailwind.config.ts";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -37,6 +40,28 @@
   --radius-md: calc(var(--radius) - 0.0625rem);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 0.25rem);
+
+  --color-wf-ink: var(--wf-ink);
+  --color-wf-ink-2: var(--wf-ink-2);
+  --color-wf-ink-3: var(--wf-ink-3);
+  --color-wf-separator: var(--wf-separator);
+  --color-wf-border: var(--wf-border);
+  --color-wf-surface: var(--wf-surface);
+  --color-wf-surface-sunken: var(--wf-surface-sunken);
+  --color-wf-surface-raised: var(--wf-surface-raised);
+  --color-wf-accent: var(--wf-accent);
+  --color-wf-accent-press: var(--wf-accent-press);
+  --color-wf-accent-wash: var(--wf-accent-wash);
+  --color-wf-danger: var(--wf-danger);
+  --color-wf-danger-wash: var(--wf-danger-wash);
+  --color-wf-warn: var(--wf-warn);
+  --color-wf-done: var(--wf-done);
+
+  --radius-control: var(--wf-r-control);
+  --radius-card: var(--wf-r-card);
+  --radius-sheet: var(--wf-r-sheet);
+
+  --shadow-card: var(--wf-shadow-card);
 }
 
 :root {

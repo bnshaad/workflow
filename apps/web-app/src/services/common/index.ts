@@ -1,6 +1,9 @@
 export {
   readBoolean,
   readNumber,
+  readNumberOrNull,
+  readOptionalString,
+  readOptionalTimestamp,
   readString,
   readStringArray,
   readStringOrNull,
@@ -8,9 +11,11 @@ export {
   readTimestamp,
   readTimestampOrNull,
   readTimestampOrUndefined,
+  toJsDate,
 } from './documentReaders'
 export {
   requireActiveProfile,
   requireAuthenticatedProfile,
   requireTenantAccess,
 } from './serviceGuards'
+

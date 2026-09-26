@@ -70,7 +70,7 @@ test('dashboard attention classification remains deterministic and job-specific'
   )
 
   const dashboardSource = source('pages/DashboardPage.tsx')
-  assert.match(dashboardSource, /to=\{`\/jobs\/\$\{job\.id\}`\}/)
+  assert.match(dashboardSource, /setSelectedDrawerJobId/)
   assert.match(dashboardSource, /summary\?\.operationalJobs/)
   assert.doesNotMatch(dashboardSource, /jobService\.listJobs/)
   assert.match(dashboardSource, /getGeneratedRecommendationJobIds/)
@@ -100,10 +100,10 @@ test('primary routes and responsive create action remain available', () => {
   assert.match(routesSource, /path="\/assignments" element=\{<JobsPage \/>\}/)
   assert.match(routesSource, /path="\/analytics" element=\{<AnalyticsPage \/>\}/)
   assert.match(headerSource, /aria-label="Create job"/)
-  assert.match(headerSource, /<span className="hidden sm:inline">Create Job<\/span>/)
-  assert.match(sidebarSource, /label: 'Overview'/)
+  assert.match(headerSource, /<span className="hidden sm:inline">Create [Jj]ob<\/span>/)
+  assert.match(sidebarSource, /label: 'Dashboard'/)
   assert.doesNotMatch(sidebarSource, /SidebarPrimaryAction/)
-  assert.match(source('pages/AnalyticsPage.tsx'), /title="Reports"/)
+  assert.match(source('pages/AnalyticsPage.tsx'), /title="Reports & Evaluation"/)
 })
 
 test('recommendation decisions still use the existing persistence flow', () => {

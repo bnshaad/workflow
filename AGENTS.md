@@ -114,6 +114,21 @@ Never:
 
 ---
 
+# Absolute Secrets & API Key Protection Rules (STRICT MANDATE)
+
+Never:
+• Hardcode API keys, secret tokens, private keys, database passwords, or service account credentials anywhere in code, configuration, or fallbacks.
+• Commit `.env`, `.env.*` (except `.env.example`), private keys, or service account JSON files to Git.
+• Leave fallback string values containing real API keys in client or server code.
+
+Always:
+• Use environment variables (`import.meta.env.*`, `process.env.*`, `EXPO_PUBLIC_*`) for API keys and configuration.
+• Verify `.gitignore` contains explicit patterns ignoring `.env*`, `*.key`, `*.pem`, `*credentials*.json`, and `*secret*`.
+• Store secrets securely in secret managers or local environment files (`.env.local`).
+
+
+---
+
 # UI Rules
 
 The design has already been approved.

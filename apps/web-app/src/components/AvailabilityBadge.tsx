@@ -2,32 +2,34 @@ import { cn } from '@/utils'
 
 export type Availability = 'Available' | 'Busy' | 'On Leave'
 
-type AvailabilityBadgeProps = {
+export interface AvailabilityBadgeProps {
   availability: Availability
+  className?: string
 }
 
-const availabilityClass = {
-  Available: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600',
-  Busy: 'border-primary/20 bg-primary/10 text-primary',
-  'On Leave': 'border-amber-500/20 bg-amber-500/10 text-amber-700',
+const dotClass: Record<Availability, string> = {
+  Available: 'bg-wf-done',
+  Busy: 'bg-wf-ink-3',
+  'On Leave': 'bg-wf-warn',
 }
 
-const dotClass = {
-  Available: 'bg-emerald-500',
-  Busy: 'bg-primary',
-  'On Leave': 'bg-amber-500',
+const textClass: Record<Availability, string> = {
+  Available: 'text-wf-ink-2',
+  Busy: 'text-wf-ink-3',
+  'On Leave': 'text-wf-warn',
 }
 
-export function AvailabilityBadge({ availability }: AvailabilityBadgeProps) {
+export function AvailabilityBadge({ availability, className }: AvailabilityBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em]',
-        availabilityClass[availability],
+        'inline-flex items-center gap-1.5 text-[13px] font-medium leading-[18px]',
+        textClass[availability],
+        className,
       )}
     >
-      <span className={cn('size-2 rounded-full', dotClass[availability])} />
-      {availability}
+      <span aria-hidden="true" className={cn('size-2 rounded-full shrink-0', dotClass[availability])} />
+      <span>{availability}</span>
     </span>
   )
 }

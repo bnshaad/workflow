@@ -454,12 +454,40 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Future incidents rules:
-    // - Rules will require sameOrganization(resource.data.organizationId).
-    // - Employee mobile writes will be limited to issues for assigned jobs.
-    // - Admin and Manager will resolve incidents from the web portal.
+    // Incidents rules:
+    // - Rules require sameOrganization(resource.data.organizationId).
+    // - Employee mobile writes are limited to issues for assigned jobs.
+    // - Admin and Manager can read and resolve incidents from the web portal.
     match /incidents/{incidentId} {
-      allow read, write: if false;
+      allow create: if (
+        isEmployee()
+          && sameOrganization(request.resource.data.organizationId)
+          && hasStandardBusinessFields(request.resource.data)
+          && request.resource.data.id == incidentId
+          && request.resource.data.reportedByUserId == request.auth.uid
+          && employeeCanAccessJobId(request.resource.data.jobId)
+          && request.resource.data.status == 'open'
+      ) || (
+        canManageWebJobs()
+          && sameOrganization(request.resource.data.organizationId)
+          && hasStandardBusinessFields(request.resource.data)
+          && request.resource.data.id == incidentId
+      );
+
+      allow read: if (
+        sameOrganization(resource.data.organizationId)
+          && (canManageWebJobs() || resource.data.reportedByUserId == request.auth.uid)
+      );
+
+      allow update: if (
+        canManageWebJobs()
+          && sameOrganization(resource.data.organizationId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.organizationId == resource.data.organizationId
+          && request.resource.data.updatedAt is timestamp
+      );
+
+      allow delete: if false;
     }
 
     // Future auditLogs rules:

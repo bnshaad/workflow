@@ -1,4 +1,5 @@
-import type { Job, JobStatus } from '../models/job'
+import type { Job, JobStatus } from '../models/job.js'
+
 
 export const ALLOWED_STATUS_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
   draft: ['open', 'cancelled'],
