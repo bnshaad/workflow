@@ -426,7 +426,7 @@ service cloud.firestore {
     match /actionProposals/{proposalId} {
       allow get, list: if canManageWebJobs()
         && resource.data.isActive == true
-        && resource.data.requestedBy == request.auth.uid
+        && (resource.data.requestedBy == request.auth.uid || resource.data.source == 'whatsapp')
         && sameOrganization(resource.data.organizationId);
       allow create: if canManageWebJobs()
         && hasStandardBusinessFields(request.resource.data)

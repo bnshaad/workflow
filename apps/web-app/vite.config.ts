@@ -7,6 +7,7 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    host: true,
     port: 3000,
     strictPort: false,
   },

@@ -18,16 +18,22 @@ type ProposalConfirmationInput = {
   payloadHashMatches: boolean
   requestedBy: unknown
   resultJobId: unknown
+  source?: unknown
   status: unknown
 }
 
 export function evaluateProposalConfirmation(
   input: ProposalConfirmationInput,
 ): ProposalConfirmationDecision {
-  if (
-    input.requestedBy !== input.callerUserId ||
-    input.organizationId !== input.callerOrganizationId
-  ) {
+  if (input.organizationId !== input.callerOrganizationId) {
+    return {
+      code: 'permission-denied',
+      kind: 'rejected',
+      message: 'The proposal does not belong to this user.',
+    }
+  }
+
+  if (input.source !== 'whatsapp' && input.requestedBy !== input.callerUserId) {
     return {
       code: 'permission-denied',
       kind: 'rejected',

@@ -84,6 +84,30 @@ test('rejects wrong owner, tenant, unsupported action, and terminal proposals', 
   )
 })
 
+test('allows any manager in the same organization to confirm a whatsapp proposal', () => {
+  assert.deepEqual(
+    evaluateProposalConfirmation({
+      ...validInput(),
+      callerUserId: 'manager-b',
+      requestedBy: 'system',
+      source: 'whatsapp',
+    }),
+    { kind: 'claim' },
+  )
+
+  assert.equal(
+    evaluateProposalConfirmation({
+      ...validInput(),
+      callerOrganizationId: 'org-b',
+      callerUserId: 'manager-b',
+      organizationId: 'org-a',
+      requestedBy: 'system',
+      source: 'whatsapp',
+    }).code,
+    'permission-denied',
+  )
+})
+
 test('classifies definite and uncertain execution failures safely', () => {
   assert.equal(failureStatusForExecution(true), 'failed')
   assert.equal(failureStatusForExecution(false), 'reconciliation_required')

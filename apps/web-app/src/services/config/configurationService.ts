@@ -68,6 +68,8 @@ export const configurationService: ConfigurationService = {
           : [],
         jobTypes: Array.isArray(data.jobTypes) ? data.jobTypes : [],
         ahpProfiles: data.ahpProfiles ?? {},
+        defaultStrategy: data.defaultStrategy ?? 'ahp-topsis-v1',
+        defaultAhpProfile: data.defaultAhpProfile ?? 'Standard',
         updatedAt: data.updatedAt ?? Timestamp.now(),
       }
     }

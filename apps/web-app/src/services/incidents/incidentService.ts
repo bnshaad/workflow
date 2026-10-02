@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDocs,
+  onSnapshot,
   query,
   Timestamp,
   updateDoc,
@@ -37,6 +38,36 @@ export class IncidentService {
     return snapshot.docs.map((d) => d.data() as Incident)
   }
 
+  subscribeToJobIncidents(
+    profile: UserProfile,
+    jobId: string,
+    organizationId: string,
+    onIncidents: (incidents: Incident[]) => void,
+    onError?: (error: Error) => void
+  ): () => void {
+    requireActiveProfile(profile)
+    requireTenantAccess(profile, organizationId)
+
+    const incidentsRef = collection(firestore, 'incidents')
+    const q = query(
+      incidentsRef,
+      where('organizationId', '==', organizationId),
+      where('jobId', '==', jobId),
+      where('isActive', '==', true)
+    )
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const incidents = snapshot.docs.map((d) => d.data() as Incident)
+        onIncidents(incidents)
+      },
+      (error) => {
+        if (onError) onError(error)
+      }
+    )
+  }
+
   async getOpenIncidents(
     profile: UserProfile,
     organizationId: string
@@ -54,6 +85,35 @@ export class IncidentService {
 
     const snapshot = await getDocs(q)
     return snapshot.docs.map((d) => d.data() as Incident)
+  }
+
+  subscribeToOpenIncidents(
+    profile: UserProfile,
+    organizationId: string,
+    onIncidents: (incidents: Incident[]) => void,
+    onError?: (error: Error) => void
+  ): () => void {
+    requireActiveProfile(profile)
+    requireTenantAccess(profile, organizationId)
+
+    const incidentsRef = collection(firestore, 'incidents')
+    const q = query(
+      incidentsRef,
+      where('organizationId', '==', organizationId),
+      where('status', '==', 'open'),
+      where('isActive', '==', true)
+    )
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const incidents = snapshot.docs.map((d) => d.data() as Incident)
+        onIncidents(incidents)
+      },
+      (error) => {
+        if (onError) onError(error)
+      }
+    )
   }
 
   async resolveIncident(
@@ -81,3 +141,4 @@ export class IncidentService {
 }
 
 export const incidentService = new IncidentService()
+

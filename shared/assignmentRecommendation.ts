@@ -115,7 +115,7 @@ function rankViaWeightedSum(
     .sort((a, b) => b.totalScore - a.totalScore || a.employeeName.localeCompare(b.employeeName))
     .slice(0, ASSIGNMENT_TOP_CANDIDATE_LIMIT)
     .map((candidate, index) => {
-      const normalizedScore = candidate.totalScore / 100
+      const normalizedScore = Math.min(1, Math.max(0, candidate.totalScore / 100))
       const confidence = deriveConfidenceBucket(normalizedScore)
       return {
         ...candidate,
@@ -148,7 +148,7 @@ function rankViaAhpTopsis(
       candidate: rawScores,
       // Raw features normalized to 0..1 scale
       vector: [
-        rawScores.scoreBreakdown.skillMatch / 35,
+        rawScores.scoreBreakdown.skillMatch / 30,
         rawScores.scoreBreakdown.availability / 25,
         rawScores.scoreBreakdown.workload / 20,
         rawScores.scoreBreakdown.locationRelevance / 15,
@@ -328,7 +328,7 @@ function scoreSkillMatch(requiredSkills: string[], employeeSkills: string[]) {
     normalizedEmployeeSkills.includes(requiredSkill),
   )
   const score = Math.round(
-    (matchedSkills.length / normalizedRequiredSkills.length) * 35,
+    (matchedSkills.length / normalizedRequiredSkills.length) * 30,
   )
 
   return {

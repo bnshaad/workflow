@@ -1,6 +1,7 @@
 import type { TenantDocument } from './common'
 
-export type AssignmentAlgorithmVersion = 'rule-based-v1'
+export type AssignmentAlgorithmVersion = 'rule-based-v1' | 'ahp-topsis-v1'
+export type AhpProfileName = 'Standard' | 'Emergency Repair' | 'Commercial Maintenance'
 export type AssignmentRecommendationMode = 'ai_recommendation'
 export type AssignmentRecommendationStatus =
   | 'accepted'
@@ -31,10 +32,14 @@ export type AssignmentRecommendationCandidate = {
   rank: number
   scoreBreakdown: AssignmentScoreBreakdown
   totalScore: number
+  closenessScore?: number
+  confidenceBucket?: 'High' | 'Medium' | 'Low'
+  requiresManualReview?: boolean
 }
 
 export interface AssignmentRecommendation extends TenantDocument {
   algorithmVersion: AssignmentAlgorithmVersion
+  ahpProfile?: AhpProfileName | null
   assignmentMode: AssignmentRecommendationMode
   candidates: AssignmentRecommendationCandidate[]
   decidedAt?: TenantDocument['createdAt']
@@ -51,3 +56,4 @@ export interface AssignmentRecommendation extends TenantDocument {
   selectedEmployeeId?: string | null
   status: AssignmentRecommendationStatus
 }
+

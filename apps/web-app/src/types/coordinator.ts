@@ -106,11 +106,13 @@ export interface ProposedAction<TPayload> {
   resultJobId: string | null
   requestedBy: string
   requiresConfirmation: true
+  source?: 'manual' | 'coordinator' | 'whatsapp'
   status: ActionProposalStatus
   summary: string
   updatedAt: string
   version: number
   warnings: string[]
+  whatsappMetadata?: import('./whatsapp').WhatsAppProposalMetadata
 }
 
 export type ActionProposalExecutionResult = {

@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  MessageSquare,
   MoreVertical,
   RefreshCcw,
   Search,
@@ -19,18 +20,24 @@ import {
   PageHeader,
   PriorityBadge,
   QuickAssignModal,
+  RequestsTab,
   StatusBadge,
+  WhatsAppPhoneSimulator,
+  WhatsAppReviewDrawer,
 } from '@/components'
 
 import { JOB_PRIORITY_OPTIONS } from '@/constants/jobConstants'
 import { useAuth } from '@/hooks'
 import { toJsDate } from '@/services/common'
 import { jobService } from '@/services/jobs'
+import { whatsappDemoService } from '@/services/whatsapp/whatsappDemoService'
 import {
   JOB_STATUS_LABELS,
   type Job,
   type JobPriority,
   type JobStatus,
+  type ProposedAction,
+  type ProposedCreateJobPayload,
   type UserProfile,
 } from '@/types'
 import {
@@ -79,6 +86,16 @@ export function JobsPage() {
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
 
+  const isRequestsTabFromUrl =
+    searchParams.get('tab') === 'whatsapp' ||
+    searchParams.get('view') === 'whatsapp-requests'
+  const [activeMainTabState, setActiveMainTabState] = useState<'jobs' | 'requests' | null>(null)
+  const activeMainTab = activeMainTabState ?? (isRequestsTabFromUrl ? 'requests' : 'jobs')
+
+  const [isSimulatorOpen, setIsSimulatorOpen] = useState(false)
+  const [selectedProposal, setSelectedProposal] = useState<ProposedAction<ProposedCreateJobPayload> | null>(null)
+
+
   const handleJobQuickAssigned = (updatedJob: Job) => {
     setJobs((prevJobs) =>
       prevJobs.map((j) => (j.id === updatedJob.id ? updatedJob : j))
@@ -118,51 +135,47 @@ export function JobsPage() {
   )
 
   useEffect(() => {
+    if (!profile) return
     let isMounted = true
 
-    async function loadJobs() {
-      if (!profile) return
+    jobService
+      .listAssignableEmployees(profile, profile.organizationId)
+      .then((loadedEmployees) => {
+        if (isMounted) setEmployees(loadedEmployees)
+      })
+      .catch((error: unknown) => {
+        if (import.meta.env.DEV) {
+          console.error('Failed to load employee display names.', error)
+        }
+      })
 
-      setIsLoading(true)
-      setErrorMessage('')
-
-      try {
-        const [loadedJobs, loadedEmployees] = await Promise.all([
-          jobService.listJobs(profile, profile.organizationId),
-          jobService
-            .listAssignableEmployees(profile, profile.organizationId)
-            .catch((error: unknown) => {
-              if (import.meta.env.DEV) {
-                console.error('Failed to load employee display names.', error)
-              }
-              return []
-            }),
-        ])
-
+    const unsubscribe = jobService.subscribeToJobs(
+      profile,
+      profile.organizationId,
+      (loadedJobs) => {
         if (isMounted) {
           setJobs(loadedJobs)
-          setEmployees(loadedEmployees)
+          setIsLoading(false)
         }
-      } catch (error) {
+      },
+      (error) => {
         if (import.meta.env.DEV) {
-          console.error('Failed to load jobs list.', error)
+          console.error('Failed to subscribe to jobs list.', error)
         }
-
         if (isMounted) {
           setErrorMessage('Unable to load jobs. Please try again.')
+          setIsLoading(false)
         }
-      } finally {
-        if (isMounted) setIsLoading(false)
-      }
-    }
+      },
+    )
 
-    void loadJobs()
     return () => {
       isMounted = false
+      unsubscribe()
     }
   }, [profile])
 
-  // Background sync: silent auto-refresh when tab gains focus or every 20s
+  // Silent sync on tab visibility or focus
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && profile) {
@@ -172,16 +185,9 @@ export function JobsPage() {
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleVisibilityChange)
 
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible' && profile) {
-        void handleRefresh(true, true)
-      }
-    }, 20000)
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleVisibilityChange)
-      clearInterval(interval)
     }
   }, [profile, handleRefresh])
 
@@ -288,7 +294,57 @@ export function JobsPage() {
         title={isAssignmentsView ? 'Assignments' : 'Jobs'}
       />
 
-      <section aria-label="Job filters" className="rounded-card border border-wf-border bg-wf-surface p-3 shadow-card space-y-3">
+      <div className="flex border-b border-wf-border gap-6">
+        <button
+          className={cn(
+            'pb-2.5 text-[13px] font-medium border-b-2 transition-colors -mb-px flex items-center gap-2',
+            activeMainTab === 'jobs'
+              ? 'border-wf-ink text-wf-ink font-semibold'
+              : 'border-transparent text-wf-ink-3 hover:text-wf-ink hover:border-wf-border',
+          )}
+          onClick={() => {
+            setActiveMainTabState('jobs')
+            const nextParams = new URLSearchParams(searchParams)
+            nextParams.delete('tab')
+            if (nextParams.get('view') === 'whatsapp-requests') nextParams.delete('view')
+            setSearchParams(nextParams, { replace: true })
+          }}
+          type="button"
+        >
+          <span>Jobs Directory</span>
+        </button>
+
+        <button
+          className={cn(
+            'pb-2.5 text-[13px] font-medium border-b-2 transition-colors -mb-px flex items-center gap-2',
+            activeMainTab === 'requests'
+              ? 'border-wf-ink text-wf-ink font-semibold'
+              : 'border-transparent text-wf-ink-3 hover:text-wf-ink hover:border-wf-border',
+          )}
+          onClick={() => {
+            setActiveMainTabState('requests')
+            const nextParams = new URLSearchParams(searchParams)
+            nextParams.set('tab', 'whatsapp')
+            setSearchParams(nextParams, { replace: true })
+          }}
+          type="button"
+        >
+          <MessageSquare className="size-3.5 text-wf-ink-3" />
+          <span>Incoming Requests</span>
+          <span className="rounded-full bg-wf-surface-sunken border border-wf-border px-1.5 py-0.5 text-[10px] font-medium text-wf-ink-2">
+            WhatsApp
+          </span>
+        </button>
+      </div>
+
+      {activeMainTab === 'requests' ? (
+        <RequestsTab
+          onOpenSimulator={() => setIsSimulatorOpen(true)}
+          onSelectProposal={(p) => setSelectedProposal(p)}
+        />
+      ) : (
+        <>
+          <section aria-label="Job filters" className="rounded-card border border-wf-border bg-wf-surface p-3 shadow-card space-y-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
             <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-wf-ink-3" />
@@ -490,6 +546,8 @@ export function JobsPage() {
           </div>
         </div>
       </section>
+        </>
+      )}
 
       <QuickAssignModal
         isOpen={Boolean(quickAssignJob)}
@@ -509,6 +567,38 @@ export function JobsPage() {
         isOpen={isCreateDrawerOpen}
         onClose={() => setIsCreateDrawerOpen(false)}
         onJobCreated={handleJobCreated}
+      />
+
+      <WhatsAppPhoneSimulator
+        isOpen={isSimulatorOpen}
+        onClose={() => setIsSimulatorOpen(false)}
+        onProposalCreated={async (newProposalId) => {
+          setIsSimulatorOpen(false)
+          setActiveMainTabState('requests')
+          const nextParams = new URLSearchParams(searchParams)
+          nextParams.set('tab', 'whatsapp')
+          setSearchParams(nextParams, { replace: true })
+          if (newProposalId && profile) {
+            const list = await whatsappDemoService.listWhatsAppProposals(profile)
+            const created = list.find((p) => p.proposalId === newProposalId)
+            if (created) {
+              setSelectedProposal(created)
+            }
+          }
+        }}
+      />
+
+      <WhatsAppReviewDrawer
+        key={selectedProposal?.proposalId || 'none'}
+        isOpen={Boolean(selectedProposal)}
+        onClose={() => setSelectedProposal(null)}
+        onConfirmed={async (jobId) => {
+          setSelectedProposal(null)
+          setActiveMainTabState('jobs')
+          await handleRefresh(true)
+          setSelectedDrawerJobId(jobId)
+        }}
+        proposal={selectedProposal}
       />
     </div>
   )

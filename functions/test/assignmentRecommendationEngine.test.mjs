@@ -32,8 +32,8 @@ test('rule-based-v1 preserves deterministic ranking and grounded reasons', () =>
       totalScore,
     })),
     [
-      { employeeId: 'employee-a', rank: 1, totalScore: 80 },
-      { employeeId: 'employee-b', rank: 2, totalScore: 73 },
+      { employeeId: 'employee-a', rank: 1, totalScore: 75 },
+      { employeeId: 'employee-b', rank: 2, totalScore: 68 },
     ],
   )
   assert.match(candidates[0].explanationReasons.join(' '), /Matched 1 of 1/)

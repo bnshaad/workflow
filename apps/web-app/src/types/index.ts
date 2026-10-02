@@ -12,6 +12,7 @@ export type {
 export { JobPriorities, JOB_PRIORITY_VALUES } from './jobPriority'
 export type { JobPriority } from './jobPriority'
 export type {
+  AhpProfileName,
   AssignmentAlgorithmVersion,
   AssignmentOverrideReason,
   AssignmentRecommendation,
@@ -59,3 +60,5 @@ export type {
   UrgentUnassignedJob,
   WorkloadSnapshot,
 } from './coordinator'
+
+export * from './whatsapp'

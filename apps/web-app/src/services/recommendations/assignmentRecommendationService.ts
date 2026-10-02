@@ -52,8 +52,11 @@ import {
 } from './assignmentRecommendationDecisionRules'
 import {
   ASSIGNMENT_ALGORITHM_VERSION,
+  ASSIGNMENT_ALGORITHM_VERSIONS,
   isEligibleRecommendationEmployee,
   rankAssignmentCandidates,
+  type AhpProfileName,
+  type DecisionEngineConfig,
 } from '../../../../../shared/assignmentRecommendation.ts'
 
 const JOBS_COLLECTION = 'jobs'
@@ -107,6 +110,7 @@ export interface AssignmentRecommendationService {
     profile: UserProfile,
     organizationId: string,
     jobId: string,
+    config?: DecisionEngineConfig,
   ): Promise<GenerateAssignmentRecommendationsResult>
   getGeneratedRecommendationJobIds(
     profile: UserProfile,
@@ -334,7 +338,7 @@ export const assignmentRecommendationService: AssignmentRecommendationService = 
     return result
   },
 
-  async generateAssignmentRecommendations(profile, organizationId, jobId) {
+  async generateAssignmentRecommendations(profile, organizationId, jobId, config) {
     const activeProfile = requireActiveProfile(profile)
     requireTenantAccess(activeProfile, organizationId)
     requireJobId(jobId)
@@ -351,12 +355,17 @@ export const assignmentRecommendationService: AssignmentRecommendationService = 
       readHistoricalJobs(organizationId),
     ])
     const candidates: AssignmentRecommendationCandidate[] =
-      rankAssignmentCandidates(job, employees, historicalJobs)
+      rankAssignmentCandidates(job, employees, historicalJobs, config)
     const timestamp = Timestamp.now()
     const recommendationReference = doc(
       collection(firestore, RECOMMENDATIONS_COLLECTION),
     )
     const auditLogReference = doc(collection(firestore, AUDIT_LOGS_COLLECTION))
+    const algorithmVersion = config?.strategy ?? ALGORITHM_VERSION
+    const ahpProfile =
+      algorithmVersion === ASSIGNMENT_ALGORITHM_VERSIONS.AHP_TOPSIS
+        ? (config?.ahpProfile ?? 'Standard')
+        : null
     const recommendation: AssignmentRecommendation = {
       id: recommendationReference.id,
       organizationId,
@@ -366,7 +375,8 @@ export const assignmentRecommendationService: AssignmentRecommendationService = 
       jobId: job.id,
       generatedBy: activeProfile.id,
       generatedAt: timestamp,
-      algorithmVersion: ALGORITHM_VERSION,
+      algorithmVersion,
+      ahpProfile,
       assignmentMode: 'ai_recommendation',
       candidates,
       status: 'generated',
@@ -382,7 +392,7 @@ export const assignmentRecommendationService: AssignmentRecommendationService = 
       entityId: job.id,
       entityType: 'job',
       metadata: {
-        algorithmVersion: ALGORITHM_VERSION,
+        algorithmVersion,
         assignmentMode: 'ai_recommendation',
         candidateCount: candidates.length,
         jobId: job.id,
@@ -487,9 +497,9 @@ async function readOpenJob(organizationId: string, jobId: string) {
     throw new AssignmentRecommendationError('Job not found.')
   }
 
-  if (job.status !== JobStatuses.Open) {
+  if (job.status !== JobStatuses.Open && job.status !== JobStatuses.Assigned) {
     throw new AssignmentRecommendationError(
-      'Recommendations can only be generated for open jobs.',
+      'Recommendations can only be generated for open or assigned jobs.',
     )
   }
 
@@ -550,9 +560,10 @@ function mapAssignmentRecommendation(
     generatedBy: readString(data, 'generatedBy'),
     generatedAt: readTimestamp(data.generatedAt),
     algorithmVersion:
-      data.algorithmVersion === ALGORITHM_VERSION
-        ? ALGORITHM_VERSION
-        : ALGORITHM_VERSION,
+      data.algorithmVersion === ASSIGNMENT_ALGORITHM_VERSIONS.AHP_TOPSIS
+        ? ASSIGNMENT_ALGORITHM_VERSIONS.AHP_TOPSIS
+        : ASSIGNMENT_ALGORITHM_VERSIONS.WEIGHTED,
+    ahpProfile: (readOptionalString(data.ahpProfile) as AhpProfileName | null) ?? null,
     assignmentMode: 'ai_recommendation',
     candidates,
     status: readRecommendationStatus(data.status),
@@ -582,6 +593,14 @@ function mapAssignmentRecommendationCandidate(
     rank: readNumber(data, 'rank'),
     scoreBreakdown: readScoreBreakdown(data.scoreBreakdown),
     totalScore: readNumber(data, 'totalScore'),
+    closenessScore: readNumberOrNull(data.closenessScore) ?? undefined,
+    confidenceBucket: readOptionalString(data.confidenceBucket) as
+      | AssignmentRecommendationCandidate['confidenceBucket']
+      | undefined,
+    requiresManualReview:
+      typeof data.requiresManualReview === 'boolean'
+        ? data.requiresManualReview
+        : undefined,
   }
 }
 

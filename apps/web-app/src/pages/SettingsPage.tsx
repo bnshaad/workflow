@@ -30,8 +30,13 @@ import { cn } from '@/utils'
 import { AnalyticsPage } from './AnalyticsPage'
 import {
   buildDefaultOrganizationConfiguration,
+  DEFAULT_AHP_PROFILES,
   type OrganizationConfiguration,
 } from '../../../../shared/configuration.ts'
+import type {
+  AhpProfileName,
+  AssignmentAlgorithmVersion,
+} from '../../../../shared/assignmentRecommendation.ts'
 
 function SettingsSection({
   children,
@@ -95,7 +100,8 @@ export function SettingsPage() {
   const [successMessage, setSuccessMessage] = useState('')
 
   const [newSkillInput, setNewSkillInput] = useState('')
-  const [selectedAhpProfileKey, setSelectedAhpProfileKey] = useState('standard')
+  const [selectedStrategy, setSelectedStrategy] = useState<AssignmentAlgorithmVersion>('ahp-topsis-v1')
+  const [selectedAhpProfile, setSelectedAhpProfile] = useState<AhpProfileName>('Standard')
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
 
   const refreshSettingsData = async () => {
@@ -122,6 +128,12 @@ export function SettingsPage() {
       setTeamUsers(allUsers)
       setAuditLogs(fetchedAuditLogs)
       setConfig(fetchedConfig)
+      if (fetchedConfig.defaultStrategy) {
+        setSelectedStrategy(fetchedConfig.defaultStrategy)
+      }
+      if (fetchedConfig.defaultAhpProfile) {
+        setSelectedAhpProfile(fetchedConfig.defaultAhpProfile)
+      }
     } catch {
       setErrorMessage('Unable to load settings data. Please try again.')
     } finally {
@@ -156,6 +168,12 @@ export function SettingsPage() {
           setTeamUsers(allUsers)
           setAuditLogs(fetchedAuditLogs)
           setConfig(fetchedConfig)
+          if (fetchedConfig.defaultStrategy) {
+            setSelectedStrategy(fetchedConfig.defaultStrategy)
+          }
+          if (fetchedConfig.defaultAhpProfile) {
+            setSelectedAhpProfile(fetchedConfig.defaultAhpProfile)
+          }
         }
       } catch {
         if (isMounted) {
@@ -223,6 +241,31 @@ export function SettingsPage() {
       setSuccessMessage(`Removed skill "${skillToRemove}".`)
     } catch {
       setErrorMessage('Failed to remove skill.')
+    } finally {
+      setIsSavingConfig(false)
+    }
+  }
+
+  const handleSaveMatchingStrategy = async () => {
+    if (!profile || !config) return
+
+    setIsSavingConfig(true)
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    try {
+      const updated = await configurationService.updateOrganizationConfiguration(
+        profile,
+        profile.organizationId,
+        {
+          defaultStrategy: selectedStrategy,
+          defaultAhpProfile: selectedAhpProfile,
+        },
+      )
+      setConfig(updated)
+      setSuccessMessage('Dispatch recommendation strategy saved successfully.')
+    } catch {
+      setErrorMessage('Failed to update recommendation strategy.')
     } finally {
       setIsSavingConfig(false)
     }
@@ -475,25 +518,143 @@ export function SettingsPage() {
                   </div>
                 </div>
 
-                <details className="group border-t border-wf-border pt-3">
-                  <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-wf-ink-3 hover:text-wf-ink transition-colors">
-                    Advanced matching strategy
-                  </summary>
-                  <div className="mt-3 space-y-2">
-                    <select
-                      value={selectedAhpProfileKey}
-                      onChange={(e) => setSelectedAhpProfileKey(e.target.value)}
-                      className="h-9 w-full max-w-md rounded-control border border-wf-border bg-wf-surface px-3 text-xs text-wf-ink outline-none focus:border-wf-accent focus:ring-1 focus:ring-wf-accent/20"
-                    >
-                      <option value="standard">Standard strategy (balanced skill and availability)</option>
-                      <option value="emergency_repair">Emergency strategy (prioritize immediate availability)</option>
-                      <option value="commercial_maintenance">Specialized maintenance (prioritize high skill and performance)</option>
-                    </select>
-                    <p className="text-xs text-wf-ink-3">
-                      Tune how the recommendation engine ranks workers when assigning jobs.
+                <div className="border-t border-wf-border pt-4 space-y-4">
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-wf-ink-3">
+                      Dispatch decision engine
+                    </h3>
+                    <p className="mt-0.5 text-xs text-wf-ink-2">
+                      Configure the default scoring model and sensitivity profile used when recommending technicians.
                     </p>
                   </div>
-                </details>
+
+                  <div className="space-y-3">
+                    <label className="block text-xs font-medium text-wf-ink">
+                      Scoring strategy
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStrategy('ahp-topsis-v1')}
+                        className={cn(
+                          'flex flex-col text-left p-3 rounded-card border transition-colors',
+                          selectedStrategy === 'ahp-topsis-v1'
+                            ? 'border-wf-accent bg-wf-accent-wash/30 text-wf-ink'
+                            : 'border-wf-border bg-wf-surface hover:bg-wf-surface-sunken text-wf-ink-2'
+                        )}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-semibold text-wf-ink">AHP-TOPSIS</span>
+                          {selectedStrategy === 'ahp-topsis-v1' && (
+                            <span className="text-[11px] font-medium text-wf-accent">Active</span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[11px] text-wf-ink-2 leading-relaxed">
+                          Multi-criteria decision making with AHP criteria weighting and TOPSIS vector closeness ranking.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStrategy('rule-based-v1')}
+                        className={cn(
+                          'flex flex-col text-left p-3 rounded-card border transition-colors',
+                          selectedStrategy === 'rule-based-v1'
+                            ? 'border-wf-accent bg-wf-accent-wash/30 text-wf-ink'
+                            : 'border-wf-border bg-wf-surface hover:bg-wf-surface-sunken text-wf-ink-2'
+                        )}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-semibold text-wf-ink">Weighted sum</span>
+                          {selectedStrategy === 'rule-based-v1' && (
+                            <span className="text-[11px] font-medium text-wf-accent">Active</span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[11px] text-wf-ink-2 leading-relaxed">
+                          Classic additive scoring across trade skills, availability, and active workload.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {selectedStrategy === 'ahp-topsis-v1' && (
+                    <div className="space-y-3 pt-1">
+                      <label className="block text-xs font-medium text-wf-ink">
+                        Default sensitivity profile
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-w-xl">
+                        {(['Standard', 'Emergency Repair', 'Commercial Maintenance'] as AhpProfileName[]).map(
+                          (profileName) => {
+                            const isSelected = selectedAhpProfile === profileName
+                            const weights = DEFAULT_AHP_PROFILES[profileName]
+
+                            return (
+                              <button
+                                key={profileName}
+                                type="button"
+                                onClick={() => setSelectedAhpProfile(profileName)}
+                                className={cn(
+                                  'flex flex-col text-left p-2.5 rounded-control border transition-colors',
+                                  isSelected
+                                    ? 'border-wf-accent bg-wf-accent-wash/30'
+                                    : 'border-wf-border bg-wf-surface hover:bg-wf-surface-sunken'
+                                )}
+                              >
+                                <span className="text-xs font-medium text-wf-ink">{profileName}</span>
+                                <span className="mt-1 text-[10px] text-wf-ink-3">
+                                  Skill {Math.round(weights.skillMatch * 100)}% · Avail {Math.round(weights.availability * 100)}%
+                                </span>
+                              </button>
+                            )
+                          }
+                        )}
+                      </div>
+
+                      <div className="rounded-card border border-wf-border bg-wf-surface-sunken p-3 max-w-xl text-xs space-y-2">
+                        <span className="font-medium text-wf-ink text-[11px]">
+                          Criteria weight distribution ({selectedAhpProfile})
+                        </span>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                          <div className="rounded-control border border-wf-border bg-wf-surface p-2">
+                            <p className="text-[10px] text-wf-ink-3">Trade skills</p>
+                            <p className="text-xs font-semibold text-wf-ink">
+                              {Math.round(DEFAULT_AHP_PROFILES[selectedAhpProfile].skillMatch * 100)}%
+                            </p>
+                          </div>
+                          <div className="rounded-control border border-wf-border bg-wf-surface p-2">
+                            <p className="text-[10px] text-wf-ink-3">Availability</p>
+                            <p className="text-xs font-semibold text-wf-ink">
+                              {Math.round(DEFAULT_AHP_PROFILES[selectedAhpProfile].availability * 100)}%
+                            </p>
+                          </div>
+                          <div className="rounded-control border border-wf-border bg-wf-surface p-2">
+                            <p className="text-[10px] text-wf-ink-3">Workload</p>
+                            <p className="text-xs font-semibold text-wf-ink">
+                              {Math.round(DEFAULT_AHP_PROFILES[selectedAhpProfile].workload * 100)}%
+                            </p>
+                          </div>
+                          <div className="rounded-control border border-wf-border bg-wf-surface p-2">
+                            <p className="text-[10px] text-wf-ink-3">Performance</p>
+                            <p className="text-xs font-semibold text-wf-ink">
+                              {Math.round(DEFAULT_AHP_PROFILES[selectedAhpProfile].performance * 100)}%
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveMatchingStrategy()}
+                      disabled={isSavingConfig}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-control bg-wf-accent px-3.5 text-xs font-medium text-white hover:bg-wf-accent-hover disabled:opacity-50 transition-colors"
+                    >
+                      {isSavingConfig ? 'Saving...' : 'Save dispatch strategy'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </SettingsSection>
           ) : null}

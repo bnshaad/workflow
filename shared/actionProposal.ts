@@ -1,3 +1,10 @@
+import type { WhatsAppProposalMetadata } from './whatsappIntake.js'
+
+export const PROPOSAL_SOURCES = ['manual', 'coordinator', 'whatsapp'] as const
+export type ProposalSource = (typeof PROPOSAL_SOURCES)[number]
+
+export type { WhatsAppProposalMetadata }
+
 export const ACTION_PROPOSAL_STATUSES = [
   'prepared',
   'confirmed',

@@ -22,4 +22,5 @@ export { PriorityBadge } from './PriorityBadge'
 export type { PriorityBadgeProps } from './PriorityBadge'
 export { ErrorBoundary } from './common/ErrorBoundary'
 export * from './ui'
+export * from './whatsapp'
 

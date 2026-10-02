@@ -3,11 +3,18 @@ import {
   CheckCircle2,
   ClipboardList,
   ListFilter,
+  MessageSquare,
   RefreshCcw,
   UserPlus,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { CreateJobDrawer, JobDetailsDrawer, LoadingSkeleton, MetricCard, QuickAssignModal } from '@/components'
+import {
+  CreateJobDrawer,
+  JobDetailsDrawer,
+  LoadingSkeleton,
+  MetricCard,
+  QuickAssignModal,
+} from '@/components'
 
 import { useAuth } from '@/hooks'
 import { toJsDate } from '@/services/common'
@@ -19,7 +26,9 @@ import {
   type RecentDashboardActivity,
 } from '@/services/dashboard'
 import { jobService } from '@/services/jobs'
+import { incidentService } from '@/services/incidents/incidentService'
 import { assignmentRecommendationService } from '@/services/recommendations'
+import { whatsappDemoService } from '@/services/whatsapp/whatsappDemoService'
 import { type Job } from '@/types'
 import { cn, getJobAttentionReason, sortOperationalJobs } from '@/utils'
 import type {
@@ -45,6 +54,7 @@ export function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [generatedRecommendationJobIds, setGeneratedRecommendationJobIds] =
     useState<Set<string> | null>(null)
+  const [pendingWhatsAppCount, setPendingWhatsAppCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
   const [operationsError, setOperationsError] = useState('')
@@ -87,14 +97,23 @@ export function DashboardPage() {
       isFetchingRef.current = true
       if (!silent) setIsRefreshing(true)
       try {
-        const [dashboardSummary, recommendationJobIds] = await Promise.all([
+        const [dashboardSummary, recommendationJobIds, waProposals] = await Promise.all([
           getDashboardSummary(profile, profile.organizationId, { bypassCache }),
           assignmentRecommendationService
             .getGeneratedRecommendationJobIds(profile, profile.organizationId)
             .catch(() => null),
+          whatsappDemoService
+            .listWhatsAppProposals(profile)
+            .catch(() => []),
         ])
         setSummary(dashboardSummary)
         setGeneratedRecommendationJobIds(recommendationJobIds)
+        const pendingCount = waProposals.filter(
+          (p) =>
+            p.whatsappMetadata?.threadState === 'pending_review' ||
+            p.whatsappMetadata?.threadState === 'drafting',
+        ).length
+        setPendingWhatsAppCount(pendingCount)
       } catch {
         // ignore
       } finally {
@@ -115,7 +134,7 @@ export function DashboardPage() {
       setErrorMessage('')
 
       try {
-        const [dashboardSummary, recommendationJobIds] = await Promise.all([
+        const [dashboardSummary, recommendationJobIds, waProposals] = await Promise.all([
           getDashboardSummary(profile, profile.organizationId),
           assignmentRecommendationService
             .getGeneratedRecommendationJobIds(profile, profile.organizationId)
@@ -125,11 +144,20 @@ export function DashboardPage() {
               }
               return null
             }),
+          whatsappDemoService
+            .listWhatsAppProposals(profile)
+            .catch(() => []),
         ])
 
         if (isMounted) {
           setSummary(dashboardSummary)
           setGeneratedRecommendationJobIds(recommendationJobIds)
+          const pendingCount = waProposals.filter(
+            (p) =>
+              p.whatsappMetadata?.threadState === 'pending_review' ||
+              p.whatsappMetadata?.threadState === 'drafting',
+          ).length
+          setPendingWhatsAppCount(pendingCount)
         }
       } catch (error) {
         if (import.meta.env.DEV) console.error('Dashboard failed to load.', error)
@@ -149,7 +177,43 @@ export function DashboardPage() {
     }
   }, [profile])
 
-  // Background sync: silent auto-refresh when tab gains focus or every 20s
+  // Live sync: Firestore real-time listener for jobs and open incidents
+  useEffect(() => {
+    if (!profile) return
+
+    const unsubJobs = jobService.subscribeToJobs(
+      profile,
+      profile.organizationId,
+      () => {
+        void handleRefresh(true, true)
+      },
+      (error) => {
+        if (import.meta.env.DEV) {
+          console.error('Failed to subscribe to live dashboard jobs.', error)
+        }
+      },
+    )
+
+    const unsubIncidents = incidentService.subscribeToOpenIncidents(
+      profile,
+      profile.organizationId,
+      () => {
+        void handleRefresh(true, true)
+      },
+      (error) => {
+        if (import.meta.env.DEV) {
+          console.error('Failed to subscribe to live dashboard incidents.', error)
+        }
+      },
+    )
+
+    return () => {
+      unsubJobs()
+      unsubIncidents()
+    }
+  }, [profile, handleRefresh])
+
+  // Focus check when tab gains focus
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && profile) {
@@ -159,16 +223,9 @@ export function DashboardPage() {
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleVisibilityChange)
 
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible' && profile) {
-        void handleRefresh(true, true)
-      }
-    }, 20000)
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleVisibilityChange)
-      clearInterval(interval)
     }
   }, [profile, handleRefresh])
 
@@ -279,6 +336,33 @@ export function DashboardPage() {
           <div className="grid gap-4 lg:grid-cols-12">
             {/* Left Column (Main Queues — 8 Cols) */}
             <div className="space-y-3.5 lg:col-span-8">
+              {/* WhatsApp Intake Banner if pending requests */}
+              {pendingWhatsAppCount > 0 ? (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-card border border-emerald-200 bg-emerald-50/70 p-3.5 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-emerald-100 text-emerald-700">
+                      <MessageSquare className="size-5" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-950">
+                        {pendingWhatsAppCount} WhatsApp {pendingWhatsAppCount === 1 ? 'request' : 'requests'} pending review
+                      </p>
+                      <p className="text-xs text-emerald-800">
+                        Incoming customer messages drafted by Gemini with technician match recommendations.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    <Link
+                      to="/jobs?tab=whatsapp"
+                      className="rounded-control bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-800 transition-colors inline-block"
+                    >
+                      Review Requests
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
+
               <NeedsAttention
                 jobs={attentionJobs}
                 onQuickAssign={handleQuickAssignOpJob}

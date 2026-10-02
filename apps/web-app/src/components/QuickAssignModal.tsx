@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Check, Loader2, Sparkles, X } from 'lucide-react'
+import { AlertCircle, Check, Loader2, Sparkles, X } from 'lucide-react'
 import { PriorityBadge } from '@/components'
 import { useAuth } from '@/hooks'
 import { jobService } from '@/services/jobs'
 import { ASSIGNMENT_OVERRIDE_REASONS, assignmentRecommendationService } from '@/services/recommendations'
+import { configurationService } from '@/services/config/configurationService'
 import type { AssignmentOverrideReason, AssignmentRecommendation, AssignmentRecommendationCandidate, Job, UserProfile } from '@/types'
 import { summarizeCandidateExplanation } from '@/utils'
 
@@ -43,9 +44,18 @@ export function QuickAssignModal({
         let emps: UserProfile[] = []
 
         if (job.status === 'open') {
+          const orgConfig = await configurationService
+            .getOrganizationConfiguration(profile, profile.organizationId)
+            .catch(() => null)
+          const strategy = orgConfig?.defaultStrategy ?? 'ahp-topsis-v1'
+          const ahpProfile = orgConfig?.defaultAhpProfile ?? 'Standard'
+
           const [res, assignableEmps] = await Promise.all([
             assignmentRecommendationService
-              .generateAssignmentRecommendations(profile, profile.organizationId, job.id)
+              .generateAssignmentRecommendations(profile, profile.organizationId, job.id, {
+                strategy,
+                ahpProfile: strategy === 'ahp-topsis-v1' ? ahpProfile : undefined,
+              })
               .catch(() => ({ recommendation: null })),
             jobService.listAssignableEmployees(profile, profile.organizationId),
           ])
@@ -238,7 +248,7 @@ export function QuickAssignModal({
                           className="text-[11px] font-semibold text-primary hover:underline"
                           onClick={() => setShowWhyMatch((prev) => !prev)}
                         >
-                          {showWhyMatch ? 'Hide score breakdown ▲' : 'Why this candidate? ▾'}
+                          {showWhyMatch ? 'Hide score breakdown' : 'Why this candidate?'}
                         </button>
 
                         {showWhyMatch && (
@@ -263,8 +273,9 @@ export function QuickAssignModal({
                 })}
               </div>
             ) : (
-              <div className="p-4 border border-dashed border-border rounded-lg text-center text-xs text-muted-foreground">
-                ⚠️ No high-confidence AI candidate matches found. Select a technician manually below.
+              <div className="flex items-center justify-center gap-2 p-4 border border-dashed border-border rounded-lg text-center text-xs text-muted-foreground">
+                <AlertCircle className="size-4 text-amber-600 shrink-0" />
+                <span>No high-confidence AI candidate matches found. Select a technician manually below.</span>
               </div>
             )}
 

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
+  CheckCircle2,
   RefreshCcw,
   Sparkles,
+  UserPlus,
   X,
 } from 'lucide-react'
 
@@ -20,6 +22,8 @@ import {
   type Incident,
 } from '@/services/incidents/incidentService'
 import {
+  type AhpProfileName,
+  type AssignmentAlgorithmVersion,
   type AssignmentRecommendation,
   type AssignmentRecommendationCandidate,
   type AssignmentOverrideReason,
@@ -28,6 +32,7 @@ import {
   type JobActivity,
   type UserProfile,
 } from '@/types'
+import { configurationService } from '@/services/config/configurationService'
 
 import { cn, summarizeCandidateExplanation } from '@/utils'
 
@@ -51,6 +56,9 @@ export function JobDetailsDrawer({
   const [recommendation, setRecommendation] = useState<AssignmentRecommendation | null>(null)
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [isResolvingIncident, setIsResolvingIncident] = useState(false)
+  const [isResolutionModalOpen, setIsResolutionModalOpen] = useState(false)
+  const [resolutionNotes, setResolutionNotes] = useState('')
+  const [selectedIncidentToResolve, setSelectedIncidentToResolve] = useState<Incident | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [actionErrorMessage, setActionErrorMessage] = useState('')
@@ -64,16 +72,22 @@ export function JobDetailsDrawer({
   const [showWhyMatch, setShowWhyMatch] = useState(false)
   const [isActivityExpanded, setIsActivityExpanded] = useState(false)
   const [isOpeningDraft, setIsOpeningDraft] = useState(false)
+  const [strategy, setStrategy] = useState<AssignmentAlgorithmVersion>('ahp-topsis-v1')
+  const [ahpProfile, setAhpProfile] = useState<AhpProfileName>('Standard')
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        onClose()
+        if (isResolutionModalOpen) {
+          setIsResolutionModalOpen(false)
+        } else {
+          onClose()
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  }, [isOpen, onClose, isResolutionModalOpen])
 
   const loadJobData = useCallback(async () => {
     if (!profile || !jobId || !isOpen) {
@@ -111,9 +125,24 @@ export function JobDetailsDrawer({
       setAssignableEmployees(loadedEmployees)
       setIncidents(loadedIncidents)
 
-      if (loadedJob.status === 'open' || loadedJob.status === 'assigned') {
-        assignmentRecommendationService
-          .generateAssignmentRecommendations(profile, profile.organizationId, loadedJob.id)
+      if (loadedJob.status === 'open') {
+        configurationService
+          .getOrganizationConfiguration(profile, profile.organizationId)
+          .then((orgConfig) => {
+            const initStrategy = orgConfig.defaultStrategy ?? 'ahp-topsis-v1'
+            const initProfile = orgConfig.defaultAhpProfile ?? 'Standard'
+            setStrategy(initStrategy)
+            setAhpProfile(initProfile)
+            return assignmentRecommendationService.generateAssignmentRecommendations(
+              profile,
+              profile.organizationId,
+              loadedJob.id,
+              {
+                strategy: initStrategy,
+                ahpProfile: initStrategy === 'ahp-topsis-v1' ? initProfile : undefined,
+              },
+            )
+          })
           .then((recResult) => {
             setRecommendation(recResult.recommendation)
           })
@@ -132,11 +161,7 @@ export function JobDetailsDrawer({
     if (!isOpen || !jobId || !profile) return
     let isMounted = true
 
-    async function fetchJob() {
-      const currentProfile = profile
-      const currentJobId = jobId
-      if (!currentProfile || !currentJobId) return
-
+    async function initializeDrawer() {
       setIsLoading(true)
       setErrorMessage('')
       setActionErrorMessage('')
@@ -147,56 +172,105 @@ export function JobDetailsDrawer({
       setSelectedOverrideEmployeeId('')
       setOverrideReason('')
       setOverrideNote('')
-      setIncidents([])
+      setIsResolutionModalOpen(false)
+      setResolutionNotes('')
+      setSelectedIncidentToResolve(null)
+    }
 
-      try {
-        const [loadedJob, loadedActivities, loadedEmployees, loadedIncidents] = await Promise.all([
-          jobService.getJob(currentProfile, currentJobId, currentProfile.organizationId, { bypassCache: true }),
-          jobService.getJobActivities(currentProfile, currentJobId, currentProfile.organizationId),
-          jobService.listAssignableEmployees(currentProfile, currentProfile.organizationId),
-          incidentService.getIncidentsByJob(currentProfile, currentJobId, currentProfile.organizationId),
-        ])
+    void initializeDrawer()
 
+    // Load static auxiliary data
+    jobService
+      .getJobActivities(profile, jobId, profile.organizationId)
+      .then((loadedActivities) => {
+        if (isMounted) setActivities(loadedActivities)
+      })
+      .catch(() => {})
+
+    jobService
+      .listAssignableEmployees(profile, profile.organizationId)
+      .then((loadedEmployees) => {
+        if (isMounted) setAssignableEmployees(loadedEmployees)
+      })
+      .catch(() => {})
+
+    // Subscribe to live Job document
+    const unsubJob = jobService.subscribeToJob(
+      profile,
+      jobId,
+      profile.organizationId,
+      (liveJob) => {
         if (!isMounted) return
-
-        if (!loadedJob) {
+        if (!liveJob) {
           setErrorMessage('Job not found.')
           setJob(null)
+          setIsLoading(false)
           return
         }
 
-        setJob(loadedJob)
-        setActivities(loadedActivities)
-        setAssignableEmployees(loadedEmployees)
-        setIncidents(loadedIncidents)
+        setJob(liveJob)
+        setIsLoading(false)
 
-        if (loadedJob.status === 'open' || loadedJob.status === 'assigned') {
-          assignmentRecommendationService
-            .generateAssignmentRecommendations(currentProfile, currentProfile.organizationId, loadedJob.id)
+        if (liveJob.status === 'open') {
+          configurationService
+            .getOrganizationConfiguration(profile, profile.organizationId)
+            .then((orgConfig) => {
+              const initStrategy = orgConfig.defaultStrategy ?? 'ahp-topsis-v1'
+              const initProfile = orgConfig.defaultAhpProfile ?? 'Standard'
+              if (isMounted) {
+                setStrategy(initStrategy)
+                setAhpProfile(initProfile)
+              }
+              return assignmentRecommendationService.generateAssignmentRecommendations(
+                profile,
+                profile.organizationId,
+                liveJob.id,
+                {
+                  strategy: initStrategy,
+                  ahpProfile: initStrategy === 'ahp-topsis-v1' ? initProfile : undefined,
+                },
+              )
+            })
             .then((recResult) => {
               if (isMounted) {
                 setRecommendation(recResult.recommendation)
               }
             })
-            .catch(() => {
-              // fallback silent
-            })
+            .catch(() => {})
         }
-      } catch {
+      },
+      (error) => {
         if (isMounted) {
+          if (import.meta.env.DEV) {
+            console.error('Failed to subscribe to job.', error)
+          }
           setErrorMessage('Unable to load job details.')
-        }
-      } finally {
-        if (isMounted) {
           setIsLoading(false)
         }
-      }
-    }
+      },
+    )
 
-    void fetchJob()
+    // Subscribe to live Incidents for this job
+    const unsubIncidents = incidentService.subscribeToJobIncidents(
+      profile,
+      jobId,
+      profile.organizationId,
+      (liveIncidents) => {
+        if (isMounted) {
+          setIncidents(liveIncidents)
+        }
+      },
+      (error) => {
+        if (import.meta.env.DEV) {
+          console.error('Failed to subscribe to incidents.', error)
+        }
+      },
+    )
 
     return () => {
       isMounted = false
+      unsubJob()
+      unsubIncidents()
     }
   }, [isOpen, jobId, profile])
 
@@ -207,8 +281,21 @@ export function JobDetailsDrawer({
     )
   }, [job, assignableEmployees])
 
-  const handleGenerateRecommendation = async () => {
+  const handleGenerateRecommendation = async (
+    targetStrategy?: AssignmentAlgorithmVersion,
+    targetProfile?: AhpProfileName,
+  ) => {
     if (!profile || !job) return
+    if (job.status !== 'open' && !overrideMode && job.status !== 'assigned') {
+      setActionErrorMessage('Open or reassign this job to enable worker recommendations.')
+      return
+    }
+    const activeStrategy = targetStrategy ?? strategy
+    const activeProfile = targetProfile ?? ahpProfile
+
+    if (targetStrategy) setStrategy(targetStrategy)
+    if (targetProfile) setAhpProfile(targetProfile)
+
     setIsGeneratingRecommendation(true)
     setActionErrorMessage('')
 
@@ -217,6 +304,10 @@ export function JobDetailsDrawer({
         profile,
         profile.organizationId,
         job.id,
+        {
+          strategy: activeStrategy,
+          ahpProfile: activeStrategy === 'ahp-topsis-v1' ? activeProfile : undefined,
+        },
       )
       setRecommendation(result.recommendation)
     } catch {
@@ -233,7 +324,30 @@ export function JobDetailsDrawer({
     setActionSuccessMessage('')
 
     try {
-      if (recommendation && recommendation.status === 'generated') {
+      if (job.status === 'assigned') {
+        const result = await jobService.updateAssignedEmployees(
+          profile,
+          job.id,
+          profile.organizationId,
+          [candidate.employeeId],
+        )
+        setJob(result.job)
+        setOverrideMode(false)
+        setActionSuccessMessage(`Successfully reassigned ${candidate.employeeName}.`)
+        if (onJobUpdated) onJobUpdated(result.job)
+
+        if (openIncidents.length > 0) {
+          try {
+            await incidentService.resolveIncident(profile, {
+              incidentId: openIncidents[0].id,
+              organizationId: job.organizationId,
+              resolutionNotes: `Job reassigned to ${candidate.employeeName} by dispatcher via Smart match.`,
+            })
+          } catch {
+            // non-fatal
+          }
+        }
+      } else if (recommendation && recommendation.status === 'generated') {
         const result = await assignmentRecommendationService.decideAssignmentRecommendation(
           profile,
           profile.organizationId,
@@ -289,6 +403,20 @@ export function JobDetailsDrawer({
         setOverrideMode(false)
         setActionSuccessMessage('Technician reassigned successfully.')
         if (onJobUpdated) onJobUpdated(result.job)
+
+        if (openIncidents.length > 0) {
+          try {
+            const newEmployee = assignableEmployees.find((e) => e.id === selectedOverrideEmployeeId)
+            const newName = newEmployee?.displayName || 'replacement technician'
+            await incidentService.resolveIncident(profile, {
+              incidentId: openIncidents[0].id,
+              organizationId: job.organizationId,
+              resolutionNotes: `Job reassigned to ${newName} by dispatcher.`,
+            })
+          } catch {
+            // non-fatal
+          }
+        }
       } else if (
         recommendation &&
         recommendation.status === 'generated' &&
@@ -386,7 +514,7 @@ export function JobDetailsDrawer({
     }
   }
 
-  async function handleResolveIncident(incidentId: string) {
+  async function handleResolveIncident(incidentId: string, notes?: string) {
     if (!profile || !job) return
     setIsResolvingIncident(true)
     setActionErrorMessage('')
@@ -396,14 +524,16 @@ export function JobDetailsDrawer({
       await incidentService.resolveIncident(profile, {
         incidentId,
         organizationId: job.organizationId,
+        resolutionNotes: notes,
       })
-      const updatedIncidents = await incidentService.getIncidentsByJob(
-        profile,
-        job.id,
-        profile.organizationId,
+      setActionSuccessMessage(
+        notes && notes.trim()
+          ? `Field blocker resolved: "${notes.trim()}".`
+          : 'Field blocker marked as resolved.',
       )
-      setIncidents(updatedIncidents)
-      setActionSuccessMessage('Field blocker marked as resolved.')
+      setIsResolutionModalOpen(false)
+      setResolutionNotes('')
+      setSelectedIncidentToResolve(null)
     } catch {
       setActionErrorMessage('Failed to resolve field blocker.')
     } finally {
@@ -478,33 +608,70 @@ export function JobDetailsDrawer({
             <>
               {/* Active Field Blocker Alert Banner (Decision first: sits above everything else) */}
               {openIncidents.length > 0 ? (
-                <div className="rounded-card border border-wf-danger/30 bg-wf-danger-wash p-4 space-y-2.5">
+                <div className="rounded-card border border-wf-danger/30 bg-wf-danger-wash p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-2.5">
                       <AlertTriangle className="size-4 text-wf-danger shrink-0 mt-0.5" />
                       <div>
-                        <h4 className="text-sm font-semibold text-wf-danger">
-                          Active field blocker flagged
-                        </h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-semibold text-wf-danger">
+                            Active field blocker flagged
+                          </h4>
+                          <span className="rounded-control bg-wf-danger/10 px-2 py-0.5 text-[11px] font-medium text-wf-danger">
+                            Requires manager action
+                          </span>
+                        </div>
                         <p className="text-xs text-wf-danger/90 mt-0.5">
                           Reported by <span className="font-medium">{openIncidents[0].reportedByUserName}</span>: {INCIDENT_CATEGORY_LABELS[openIncidents[0].category] || openIncidents[0].category}
                         </p>
                         {openIncidents[0].description ? (
-                          <p className="text-xs text-wf-danger/80 mt-1.5 rounded-control border border-wf-danger/20 bg-wf-surface/70 p-2 italic">
+                          <p className="text-xs text-wf-danger/80 mt-1.5 rounded-control border border-wf-danger/20 bg-wf-surface/80 p-2 italic">
                             "{openIncidents[0].description}"
                           </p>
                         ) : null}
                       </div>
                     </div>
+                  </div>
 
+                  {/* Guided Resolution Actions */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-wf-danger/20">
                     <button
                       type="button"
                       disabled={isResolvingIncident}
-                      onClick={() => handleResolveIncident(openIncidents[0].id)}
-                      className="shrink-0 rounded-control border border-wf-danger/40 bg-wf-surface px-3 py-1.5 text-xs font-medium text-wf-danger hover:bg-wf-danger-wash disabled:opacity-50 transition-colors"
+                      onClick={() => {
+                        setSelectedIncidentToResolve(openIncidents[0])
+                        setResolutionNotes('')
+                        setIsResolutionModalOpen(true)
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-control bg-wf-danger px-3 py-1.5 text-xs font-medium text-white hover:bg-wf-danger/90 disabled:opacity-50 transition-colors shadow-xs"
                     >
-                      {isResolvingIncident ? 'Resolving...' : 'Mark resolved'}
+                      <CheckCircle2 className="size-3.5" />
+                      Clear blocker & resume
                     </button>
+
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOverrideMode(true)
+                          setOverrideReason('Recommended employee unavailable')
+                          setOverrideNote(
+                            `Reassigned due to field blocker: ${
+                              openIncidents[0]?.category
+                                ? (INCIDENT_CATEGORY_LABELS[openIncidents[0].category] || openIncidents[0].category)
+                                : ''
+                            }${openIncidents[0]?.description ? ` - ${openIncidents[0].description}` : ''}`,
+                          )
+                          if (!recommendation) {
+                            void handleGenerateRecommendation()
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-control border border-wf-danger/40 bg-wf-surface px-3 py-1.5 text-xs font-medium text-wf-danger hover:bg-wf-danger-wash transition-colors"
+                      >
+                        <UserPlus className="size-3.5" />
+                        Reassign technician
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : null}
@@ -538,7 +705,7 @@ export function JobDetailsDrawer({
                         className="inline-flex h-8 items-center justify-center rounded-control border border-wf-border bg-wf-surface px-3 text-xs font-medium text-wf-ink-2 hover:bg-wf-surface-sunken hover:text-wf-ink transition-colors"
                         onClick={() => {
                           setOverrideMode(true)
-                          if (job.status === 'open' && !recommendation) {
+                          if (!recommendation) {
                             void handleGenerateRecommendation()
                           }
                         }}
@@ -603,13 +770,62 @@ export function JobDetailsDrawer({
                       <button
                         className="inline-flex h-8 items-center gap-1.5 rounded-control border border-wf-border bg-wf-surface px-3 text-xs font-medium text-wf-ink-2 hover:bg-wf-surface-sunken hover:text-wf-ink disabled:opacity-50 transition-colors"
                         disabled={isGeneratingRecommendation}
-                        onClick={handleGenerateRecommendation}
+                        onClick={() => void handleGenerateRecommendation()}
                         type="button"
                       >
                         {isGeneratingRecommendation ? 'Scoring...' : recommendation ? 'Refresh match' : 'Smart match'}
                       </button>
                     )}
                   </div>
+
+                  {/* Decision Strategy & Profile Switcher */}
+                  {(job.status === 'open' || overrideMode || job.status === 'assigned') && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-wf-border bg-wf-surface-sunken p-2 text-xs">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[11px] font-medium text-wf-ink-3 pr-1">Model:</span>
+                        <button
+                          type="button"
+                          onClick={() => void handleGenerateRecommendation('ahp-topsis-v1', ahpProfile)}
+                          className={cn(
+                            'h-7 rounded-control px-2.5 text-[11px] font-medium transition-colors',
+                            strategy === 'ahp-topsis-v1'
+                              ? 'bg-wf-surface text-wf-ink shadow-xs border border-wf-border font-semibold'
+                              : 'text-wf-ink-2 hover:text-wf-ink hover:bg-wf-surface/60'
+                          )}
+                        >
+                          AHP-TOPSIS
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleGenerateRecommendation('rule-based-v1')}
+                          className={cn(
+                            'h-7 rounded-control px-2.5 text-[11px] font-medium transition-colors',
+                            strategy === 'rule-based-v1'
+                              ? 'bg-wf-surface text-wf-ink shadow-xs border border-wf-border font-semibold'
+                              : 'text-wf-ink-2 hover:text-wf-ink hover:bg-wf-surface/60'
+                          )}
+                        >
+                          Weighted sum
+                        </button>
+                      </div>
+
+                      {strategy === 'ahp-topsis-v1' && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-[11px] font-medium text-wf-ink-3 pr-1">Profile:</span>
+                          <select
+                            value={ahpProfile}
+                            onChange={(e) => void handleGenerateRecommendation('ahp-topsis-v1', e.target.value as AhpProfileName)}
+                            disabled={isGeneratingRecommendation}
+                            className="h-7 rounded-control border border-wf-border bg-wf-surface px-2 text-[11px] font-medium text-wf-ink outline-none focus:border-wf-accent"
+                          >
+                            <option value="Standard">Standard (balanced)</option>
+                            <option value="Emergency Repair">Emergency repair</option>
+                            <option value="Commercial Maintenance">Commercial maintenance</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {recommendation ? (
                     !topCandidate || recommendation.candidates.length === 0 ? (
@@ -644,28 +860,34 @@ export function JobDetailsDrawer({
                             <>
                               <div className="flex items-start justify-between">
                                 <div>
-                                  <span
-                                    className={cn(
-                                      'inline-block rounded-control px-2 py-0.5 text-[11px] font-medium',
-                                      isLowConfidence
-                                        ? 'border border-wf-warn/30 bg-wf-warn-wash text-wf-warn'
-                                        : 'border border-wf-border bg-wf-surface text-wf-ink-2'
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span
+                                      className={cn(
+                                        'inline-block rounded-control px-2 py-0.5 text-[11px] font-medium',
+                                        isLowConfidence
+                                          ? 'border border-wf-warn/30 bg-wf-warn-wash text-wf-warn'
+                                          : 'border border-wf-border bg-wf-surface text-wf-ink-2'
+                                      )}
+                                    >
+                                      {summary.confidenceBadgeText}
+                                    </span>
+                                    {recommendation.algorithmVersion === 'ahp-topsis-v1' && (
+                                      <span className="inline-block rounded-control border border-wf-accent/30 bg-wf-accent-wash/40 px-2 py-0.5 text-[10px] font-medium text-wf-accent">
+                                        TOPSIS · {recommendation.ahpProfile || 'Standard'}
+                                      </span>
                                     )}
-                                  >
-                                    {summary.confidenceBadgeText}
-                                  </span>
+                                  </div>
                                   <h4 className="mt-1 text-base font-semibold text-wf-ink">
                                     {topCandidate.employeeName}
                                   </h4>
                                   <p className="mt-0.5 text-xs text-wf-ink-2 leading-relaxed">
                                     {isLowConfidence
-                                      ? `Low calculated match score (${Math.round(topCandidate.totalScore * 100)}%). Review trade skills or select an alternative.`
+                                      ? `Low calculated match score (${summary.displayScoreText}). Review trade skills or select an alternative.`
                                       : primaryReason}
                                   </p>
                                 </div>
                               </div>
-
-                              {job.status === 'open' && (
+                               {(job.status === 'open' || overrideMode || job.status === 'assigned') && (
                                 <div className="pt-2 flex flex-col gap-2 sm:flex-row">
                                   <button
                                     className="flex-1 inline-flex h-9 items-center justify-center gap-1.5 rounded-control bg-wf-accent px-3 text-xs font-medium text-white hover:bg-wf-accent-hover disabled:opacity-50 transition-colors"
@@ -673,14 +895,16 @@ export function JobDetailsDrawer({
                                     onClick={() => void handleAcceptRecommendation(topCandidate)}
                                     type="button"
                                   >
-                                    Assign {topCandidate.employeeName}
+                                    {job.status === 'assigned'
+                                      ? `Reassign to ${topCandidate.employeeName}`
+                                      : `Assign ${topCandidate.employeeName}`}
                                   </button>
                                   <button
                                     className="inline-flex h-9 items-center justify-center rounded-control border border-wf-border bg-wf-surface px-3 text-xs font-medium text-wf-ink-2 hover:bg-wf-surface-sunken hover:text-wf-ink transition-colors"
                                     onClick={() => setOverrideMode(!overrideMode)}
                                     type="button"
                                   >
-                                    Choose other
+                                    {overrideMode ? 'Manual selector' : 'Choose other'}
                                   </button>
                                 </div>
                               )}
@@ -696,21 +920,112 @@ export function JobDetailsDrawer({
                                 </button>
 
                                 {showWhyMatch && (
-                                  <div className="mt-2 rounded-control border border-wf-border bg-wf-surface p-2.5 space-y-2 text-xs">
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-medium text-wf-ink-3">Calculated match score</span>
-                                      <span className="rounded-control border border-wf-border bg-wf-surface-sunken px-2 py-0.5 text-xs font-mono tabular-nums text-wf-ink">
+                                  <div className="mt-2.5 rounded-control border border-wf-border bg-wf-surface p-3 space-y-3 text-xs">
+                                    <div className="flex items-center justify-between border-b border-wf-border pb-2">
+                                      <div>
+                                        <span className="font-semibold text-wf-ink text-xs">
+                                          {recommendation.algorithmVersion === 'ahp-topsis-v1' ? 'TOPSIS relative closeness score' : 'Calculated match score'}
+                                        </span>
+                                        <p className="text-[10px] text-wf-ink-3">
+                                          {recommendation.algorithmVersion === 'ahp-topsis-v1'
+                                            ? `C* = ${topCandidate.closenessScore ?? (topCandidate.totalScore / 100).toFixed(2)} (${summary.displayScoreText})`
+                                            : summary.displayScoreText}
+                                        </p>
+                                      </div>
+                                      <span className="rounded-control border border-wf-border bg-wf-surface-sunken px-2 py-0.5 text-xs font-mono font-semibold tabular-nums text-wf-ink">
                                         {summary.displayScoreText}
                                       </span>
                                     </div>
-                                    <ul className="space-y-1 text-xs text-wf-ink-2">
-                                      {summary.highlights.map((r) => (
-                                        <li className="flex items-center gap-2" key={r}>
-                                          <span className="size-1.5 rounded-full bg-wf-ink-3 shrink-0" />
-                                          {r}
-                                        </li>
-                                      ))}
-                                    </ul>
+
+                                    {/* Criteria Radar / Breakdown Progress Bars */}
+                                    <div className="space-y-2">
+                                      <span className="text-[10px] font-medium uppercase tracking-wider text-wf-ink-3">
+                                        Evaluation criteria breakdown
+                                      </span>
+                                      
+                                      {/* Skill Match */}
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between text-[11px]">
+                                          <span className="text-wf-ink-2">Trade skill match</span>
+                                          <span className="font-mono text-wf-ink font-medium">{topCandidate.scoreBreakdown.skillMatch} / 30</span>
+                                        </div>
+                                        <div className="h-1.5 w-full rounded-full bg-wf-surface-sunken overflow-hidden">
+                                          <div
+                                            className="h-full rounded-full bg-wf-accent"
+                                            style={{ width: `${Math.min(100, Math.round((topCandidate.scoreBreakdown.skillMatch / 30) * 100))}%` }}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Availability */}
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between text-[11px]">
+                                          <span className="text-wf-ink-2">Schedule availability</span>
+                                          <span className="font-mono text-wf-ink font-medium">{topCandidate.scoreBreakdown.availability} / 25</span>
+                                        </div>
+                                        <div className="h-1.5 w-full rounded-full bg-wf-surface-sunken overflow-hidden">
+                                          <div
+                                            className="h-full rounded-full bg-wf-accent"
+                                            style={{ width: `${Math.min(100, Math.round((topCandidate.scoreBreakdown.availability / 25) * 100))}%` }}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Workload */}
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between text-[11px]">
+                                          <span className="text-wf-ink-2">Workload capacity</span>
+                                          <span className="font-mono text-wf-ink font-medium">{topCandidate.scoreBreakdown.workload} / 20</span>
+                                        </div>
+                                        <div className="h-1.5 w-full rounded-full bg-wf-surface-sunken overflow-hidden">
+                                          <div
+                                            className="h-full rounded-full bg-wf-accent"
+                                            style={{ width: `${Math.min(100, Math.round((topCandidate.scoreBreakdown.workload / 20) * 100))}%` }}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Location */}
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between text-[11px]">
+                                          <span className="text-wf-ink-2">Location relevance</span>
+                                          <span className="font-mono text-wf-ink font-medium">{topCandidate.scoreBreakdown.locationRelevance} / 15</span>
+                                        </div>
+                                        <div className="h-1.5 w-full rounded-full bg-wf-surface-sunken overflow-hidden">
+                                          <div
+                                            className="h-full rounded-full bg-wf-accent"
+                                            style={{ width: `${Math.min(100, Math.round((topCandidate.scoreBreakdown.locationRelevance / 15) * 100))}%` }}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Performance */}
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between text-[11px]">
+                                          <span className="text-wf-ink-2">Historical performance</span>
+                                          <span className="font-mono text-wf-ink font-medium">{topCandidate.scoreBreakdown.performance} / 10</span>
+                                        </div>
+                                        <div className="h-1.5 w-full rounded-full bg-wf-surface-sunken overflow-hidden">
+                                          <div
+                                            className="h-full rounded-full bg-wf-accent"
+                                            style={{ width: `${Math.min(100, Math.round((topCandidate.scoreBreakdown.performance / 10) * 100))}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Highlights */}
+                                    <div className="border-t border-wf-border pt-2 space-y-1">
+                                      <span className="text-[10px] font-medium text-wf-ink-3">Key factors:</span>
+                                      <ul className="space-y-1 text-xs text-wf-ink-2">
+                                        {summary.highlights.map((r) => (
+                                          <li className="flex items-center gap-2" key={r}>
+                                            <span className="size-1.5 rounded-full bg-wf-ink-3 shrink-0" />
+                                            {r}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -724,14 +1039,27 @@ export function JobDetailsDrawer({
                       <p className="text-xs text-wf-ink-2">
                         Select <strong>Smart match</strong> to score and find the best available technician for this job.
                       </p>
-                      {canEdit && !overrideMode && (
-                        <button
-                          className="inline-flex h-8 items-center justify-center rounded-control border border-wf-border bg-wf-surface px-3 text-xs font-medium text-wf-ink-2 hover:bg-wf-surface-sunken hover:text-wf-ink transition-colors"
-                          onClick={() => setOverrideMode(true)}
-                          type="button"
-                        >
-                          Select technician manually
-                        </button>
+                      {canEdit && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="inline-flex h-8 items-center gap-1.5 rounded-control bg-wf-accent px-3 text-xs font-medium text-white hover:bg-wf-accent-hover disabled:opacity-50 transition-colors shadow-xs"
+                            disabled={isGeneratingRecommendation}
+                            onClick={() => void handleGenerateRecommendation()}
+                            type="button"
+                          >
+                            <Sparkles className="size-3.5" />
+                            {isGeneratingRecommendation ? 'Scoring...' : 'Smart match'}
+                          </button>
+                          {!overrideMode && (
+                            <button
+                              className="inline-flex h-8 items-center justify-center rounded-control border border-wf-border bg-wf-surface px-3 text-xs font-medium text-wf-ink-2 hover:bg-wf-surface-sunken hover:text-wf-ink transition-colors"
+                              onClick={() => setOverrideMode(true)}
+                              type="button"
+                            >
+                              Select technician manually
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
@@ -761,11 +1089,14 @@ export function JobDetailsDrawer({
                         value={selectedOverrideEmployeeId}
                       >
                         <option value="">Select technician</option>
-                        {assignableEmployees.map((emp) => (
-                          <option key={emp.id} value={emp.id}>
-                            {emp.displayName} ({emp.skills.join(', ') || 'General'})
-                          </option>
-                        ))}
+                        {assignableEmployees.map((emp) => {
+                          const isBlockedTech = openIncidents.some((inc) => inc.reportedByUserId === emp.id)
+                          return (
+                            <option key={emp.id} value={emp.id} disabled={isBlockedTech}>
+                              {emp.displayName} ({emp.skills.join(', ') || 'General'}{isBlockedTech ? ' - Blocked technician' : ''})
+                            </option>
+                          )
+                        })}
                       </select>
 
                       <select
@@ -883,6 +1214,71 @@ export function JobDetailsDrawer({
           ) : null}
         </div>
       </div>
+
+      {/* Clear Blocker Guided Modal Dialog */}
+      {isResolutionModalOpen && selectedIncidentToResolve && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-card border border-wf-border bg-wf-surface p-5 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-7 items-center justify-center rounded-control bg-wf-done-wash text-wf-done border border-wf-done/30">
+                  <CheckCircle2 className="size-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-wf-ink">
+                    Clear field blocker
+                  </h3>
+                  <p className="text-xs text-wf-ink-3">
+                    Resume technician workflow on this job
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsResolutionModalOpen(false)}
+                className="size-7 rounded-control text-wf-ink-3 hover:bg-wf-surface-sunken hover:text-wf-ink flex items-center justify-center transition-colors"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-wf-ink">
+                Resolution notes for field technician
+              </label>
+              <textarea
+                rows={3}
+                value={resolutionNotes}
+                onChange={(e) => setResolutionNotes(e.target.value)}
+                placeholder="E.g. Access gate code provided (4821), or customer confirmed on site..."
+                className="w-full rounded-control border border-wf-border bg-wf-surface p-2.5 text-xs text-wf-ink outline-none focus:border-wf-accent focus:ring-1 focus:ring-wf-accent/20 placeholder:text-wf-ink-3 resize-none"
+              />
+              <p className="text-[11px] text-wf-ink-3">
+                These notes will be logged in the incident record and visible to the field technician on mobile.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-wf-border">
+              <button
+                type="button"
+                onClick={() => setIsResolutionModalOpen(false)}
+                disabled={isResolvingIncident}
+                className="rounded-control border border-wf-border bg-wf-surface px-3 py-1.5 text-xs font-medium text-wf-ink-2 hover:bg-wf-surface-sunken hover:text-wf-ink transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isResolvingIncident}
+                onClick={() => void handleResolveIncident(selectedIncidentToResolve.id, resolutionNotes)}
+                className="inline-flex items-center gap-1.5 rounded-control bg-wf-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-wf-accent-hover disabled:opacity-50 transition-colors shadow-xs"
+              >
+                {isResolvingIncident ? 'Resolving...' : 'Confirm resolution'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

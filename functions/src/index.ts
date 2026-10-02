@@ -66,3 +66,61 @@ export const draftJobFromRequest = onCall(
   },
   (request) => modelHandlers().draftJobFromRequest(request),
 )
+
+import { requireTrustedManager } from './auth/requireTrustedManager.js'
+import {
+  handleSimulateWhatsAppMessage,
+  handleRejectWhatsAppProposal,
+  handleSendWhatsAppClarification,
+  handleListWhatsAppProposals,
+} from './whatsapp/whatsappIntakeService.js'
+
+export const simulateWhatsAppMessage = onCall(
+  {
+    region: 'asia-south1',
+    secrets: [geminiApiKey],
+    timeoutSeconds: 15,
+  },
+  async (request) => {
+    const caller = await requireTrustedManager(request)
+    return handleSimulateWhatsAppMessage(
+      caller,
+      request.data as any,
+      readGeminiApiKey(),
+    )
+  },
+)
+
+export const rejectWhatsAppProposal = onCall(
+  {
+    region: 'asia-south1',
+    timeoutSeconds: 10,
+  },
+  async (request) => {
+    const caller = await requireTrustedManager(request)
+    return handleRejectWhatsAppProposal(caller, request.data as any)
+  },
+)
+
+export const sendWhatsAppClarification = onCall(
+  {
+    region: 'asia-south1',
+    timeoutSeconds: 10,
+  },
+  async (request) => {
+    const caller = await requireTrustedManager(request)
+    return handleSendWhatsAppClarification(caller, request.data as any)
+  },
+)
+
+export const listWhatsAppProposals = onCall(
+  {
+    region: 'asia-south1',
+    timeoutSeconds: 10,
+  },
+  async (request) => {
+    const caller = await requireTrustedManager(request)
+    return handleListWhatsAppProposals(caller)
+  },
+)
+

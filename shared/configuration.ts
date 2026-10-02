@@ -1,4 +1,7 @@
-import type { AhpProfileName } from './assignmentRecommendation.js'
+import type {
+  AhpProfileName,
+  AssignmentAlgorithmVersion,
+} from './assignmentRecommendation.js'
 
 export type JobTypeCategory = 'hvac' | 'plumbing' | 'electrical' | 'handyman' | 'general'
 
@@ -21,6 +24,8 @@ export type AhpCriteriaWeights = {
 export type OrganizationConfiguration = {
   ahpProfiles: Record<AhpProfileName, AhpCriteriaWeights>
   availableSkills: string[]
+  defaultAhpProfile?: AhpProfileName
+  defaultStrategy?: AssignmentAlgorithmVersion
   id: string
   isActive: boolean
   jobTypes: JobTypeConfig[]
@@ -104,6 +109,8 @@ export function buildDefaultOrganizationConfiguration(
     availableSkills: [...DEFAULT_AVAILABLE_SKILLS],
     jobTypes: [...DEFAULT_JOB_TYPES],
     ahpProfiles: { ...DEFAULT_AHP_PROFILES },
+    defaultStrategy: 'ahp-topsis-v1',
+    defaultAhpProfile: 'Standard',
     updatedAt: updatedAtTimestamp,
   }
 }

@@ -1,3 +1,4 @@
+export const PROPOSAL_SOURCES = ['manual', 'coordinator', 'whatsapp'];
 export const ACTION_PROPOSAL_STATUSES = [
     'prepared',
     'confirmed',

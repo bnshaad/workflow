@@ -45,6 +45,11 @@ const UnauthorizedPage = lazy(() =>
     default: m.UnauthorizedPage,
   })),
 )
+const WhatsAppStandaloneSimulatorPage = lazy(() =>
+  import('@/pages/WhatsAppStandaloneSimulatorPage').then((m) => ({
+    default: m.WhatsAppStandaloneSimulatorPage,
+  })),
+)
 
 function RouteLoadingFallback() {
   return (
@@ -68,6 +73,14 @@ export function AppRoutes() {
           element={<ProfileSetupRequiredPage />}
         />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
+        <Route
+          path="/demo/whatsapp"
+          element={<WhatsAppStandaloneSimulatorPage />}
+        />
+        <Route
+          path="/demo/phone"
+          element={<WhatsAppStandaloneSimulatorPage />}
+        />
 
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>

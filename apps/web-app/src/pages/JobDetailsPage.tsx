@@ -13,6 +13,7 @@ import {
   Search,
   Sparkles,
   UserRound,
+  X,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { StatusBadge } from '@/components'
@@ -25,6 +26,7 @@ import {
   ASSIGNMENT_OVERRIDE_REASONS,
   assignmentRecommendationService,
 } from '@/services/recommendations'
+import { configurationService } from '@/services/config/configurationService'
 import { jobService } from '@/services/jobs'
 import {
   type AssignmentRecommendation,
@@ -391,11 +393,21 @@ export function JobDetailsPage() {
     setRecommendationErrorMessage('')
 
     try {
+      const orgConfig = await configurationService
+        .getOrganizationConfiguration(profile, job.organizationId)
+        .catch(() => null)
+      const strategy = orgConfig?.defaultStrategy ?? 'ahp-topsis-v1'
+      const ahpProfile = orgConfig?.defaultAhpProfile ?? 'Standard'
+
       const result =
         await assignmentRecommendationService.generateAssignmentRecommendations(
           profile,
           job.organizationId,
           job.id,
+          {
+            strategy,
+            ahpProfile: strategy === 'ahp-topsis-v1' ? ahpProfile : undefined,
+          },
         )
 
       setRecommendation(result.recommendation)
@@ -1001,8 +1013,9 @@ export function JobDetailsPage() {
                 onClick={() => setIsEditModalOpen(false)}
                 className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                 type="button"
+                aria-label="Close edit modal"
               >
-                ✕
+                <X className="size-4" />
               </button>
             </div>
 

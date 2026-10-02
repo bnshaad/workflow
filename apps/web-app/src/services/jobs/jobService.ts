@@ -4,6 +4,7 @@ import {
   getDoc,
   getDocs,
   limit as limitResults,
+  onSnapshot,
   orderBy,
   query,
   Timestamp,
@@ -73,6 +74,20 @@ export interface JobService {
     organizationId: string,
     options?: ListJobsOptions,
   ): Promise<Job[]>
+  subscribeToJobs(
+    profile: UserProfile,
+    organizationId: string,
+    onJobs: (jobs: Job[]) => void,
+    onError?: (error: Error) => void,
+    options?: ListJobsOptions,
+  ): () => void
+  subscribeToJob(
+    profile: UserProfile,
+    jobId: string,
+    organizationId: string,
+    onJob: (job: Job | null) => void,
+    onError?: (error: Error) => void,
+  ): () => void
   listAssignedJobs(
     profile: UserProfile,
     organizationId: string,
@@ -359,6 +374,57 @@ export const jobService: JobService = {
 
     cacheService.set(cacheKey, jobs)
     return jobs
+  },
+
+  subscribeToJobs(profile, organizationId, onJobs, onError, options) {
+    requireTenantAccess(profile, organizationId)
+    const limitVal = options?.limit ?? DEFAULT_JOBS_LIMIT
+
+    const jobsQuery = query(
+      collection(firestore, JOBS_COLLECTION),
+      where('organizationId', '==', organizationId),
+      where('isActive', '==', true),
+      orderBy('createdAt', 'desc'),
+      limitResults(limitVal),
+    )
+
+    return onSnapshot(
+      jobsQuery,
+      (snapshot) => {
+        const jobs = snapshot.docs
+          .map((jobDocument) => mapJob(jobDocument.id, jobDocument.data()))
+          .sort((firstJob, secondJob) => secondJob.createdAt.toMillis() - firstJob.createdAt.toMillis())
+          .slice(0, limitVal)
+        onJobs(jobs)
+      },
+      (error) => {
+        if (onError) onError(error)
+      },
+    )
+  },
+
+  subscribeToJob(profile, jobId, organizationId, onJob, onError) {
+    requireTenantAccess(profile, organizationId)
+    const jobDocRef = doc(firestore, JOBS_COLLECTION, jobId)
+
+    return onSnapshot(
+      jobDocRef,
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          onJob(null)
+          return
+        }
+        const job = mapJob(snapshot.id, snapshot.data())
+        if (!job.isActive || job.organizationId !== organizationId) {
+          onJob(null)
+          return
+        }
+        onJob(job)
+      },
+      (error) => {
+        if (onError) onError(error)
+      },
+    )
   },
 
   async listAssignedJobs(profile, organizationId, options) {

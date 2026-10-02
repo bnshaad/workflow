@@ -119,8 +119,7 @@ export function CreateJobPage() {
     setIsDraftPreviewExpanded(false)
   }
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const submitJob = async (status: 'open' | 'draft' = 'open') => {
     setErrorMessage('')
     setIsSubmitting(true)
 
@@ -141,6 +140,7 @@ export function CreateJobPage() {
       requiredSkills: parseSkillIds(formState.requiredSkillIds),
       dueDate: formState.dueDate ? new Date(formState.dueDate) : null,
       attachments: [],
+      status,
     }
 
     try {
@@ -149,12 +149,19 @@ export function CreateJobPage() {
     } catch (error) {
       if (error instanceof JobValidationError) {
         setErrorMessage(error.message)
+      } else if (error instanceof Error) {
+        setErrorMessage(error.message)
       } else {
         setErrorMessage('Unable to create the job. Please try again.')
       }
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await submitJob('open')
   }
 
   return (
@@ -578,17 +585,27 @@ export function CreateJobPage() {
             <p className="text-sm font-medium text-destructive">{errorMessage}</p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Jobs are created as drafts until status management moves them forward.
+              New jobs are published as Open and immediately ready for technician assignment.
             </p>
           )}
-          <button
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-            type="submit"
-          >
-            <Save aria-hidden="true" className="size-4" />
-            {isSubmitting ? 'Creating...' : 'Create Job'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isSubmitting}
+              onClick={() => void submitJob('draft')}
+              type="button"
+            >
+              Save as Draft
+            </button>
+            <button
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isSubmitting}
+              type="submit"
+            >
+              <Save aria-hidden="true" className="size-4" />
+              {isSubmitting ? 'Creating...' : 'Create & Open Job'}
+            </button>
+          </div>
         </div>
       </form>
     </div>
