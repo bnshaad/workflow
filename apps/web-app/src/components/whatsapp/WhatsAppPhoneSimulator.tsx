@@ -219,15 +219,15 @@ export function WhatsAppPhoneSimulator({
 
   // Content of the phone simulator itself
   const phoneFrame = (
-    <div className="relative flex flex-col w-full max-w-[380px] h-[660px] max-h-[90vh] rounded-[44px] border-[10px] border-slate-900 bg-slate-900 shadow-2xl overflow-hidden select-none">
-      {/* Top Dynamic Island Notch */}
-      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 flex h-5 w-28 items-center justify-between rounded-full bg-black px-2.5">
+    <div className="relative flex flex-col w-full max-w-[390px] h-[680px] max-h-[92vh] sm:rounded-[44px] sm:border-[10px] sm:border-slate-900 sm:bg-slate-900 sm:shadow-2xl overflow-hidden rounded-2xl border border-wf-border shadow-lg select-none">
+      {/* Top Dynamic Island Notch (desktop view) */}
+      <div className="hidden sm:flex absolute top-2 left-1/2 -translate-x-1/2 z-40 h-5 w-28 items-center justify-between rounded-full bg-black px-2.5">
         <span className="size-2 rounded-full bg-slate-800" />
         <span className="size-2.5 rounded-full bg-slate-900 border border-slate-700/50" />
       </div>
 
       {/* Screen Area */}
-      <div className="relative flex flex-1 flex-col overflow-hidden rounded-[34px] bg-[#EFEAE2]">
+      <div className="relative flex flex-1 flex-col overflow-hidden sm:rounded-[34px] rounded-xl bg-[#EFEAE2]">
         {/* Status Bar */}
         <div className="flex h-10 items-end justify-between px-6 pb-1 text-[11px] font-semibold text-slate-800 bg-[#008069] text-white/90">
           <span>09:41</span>
@@ -399,29 +399,35 @@ export function WhatsAppPhoneSimulator({
           </div>
         ) : null}
 
-        {/* Bottom Input Controls */}
+        {/* Bottom Input Controls with Multi-Line Textarea */}
         <div className="border-t border-slate-200 bg-[#F0F2F5] p-2">
-          <form className="flex items-center gap-1.5" onSubmit={handleSendMessage}>
+          <form className="flex items-end gap-1.5" onSubmit={handleSendMessage}>
             <button
               aria-label="Attach file"
-              className="rounded-full p-2 text-slate-600 hover:bg-slate-200/80 transition-colors"
+              className="rounded-full p-2 text-slate-600 hover:bg-slate-200/80 transition-colors mb-0.5 shrink-0"
               type="button"
             >
               <Paperclip className="size-4" />
             </button>
 
-            <div className="relative flex-1">
-              <input
-                className="w-full rounded-full border border-slate-300 bg-white py-2 pl-3.5 pr-8 text-xs text-[#111B21] placeholder:text-slate-400 focus:border-[#008069] focus:outline-none"
+            <div className="relative flex-1 min-w-0">
+              <textarea
+                className="w-full resize-none rounded-2xl border border-slate-300 bg-white py-2 pl-3.5 pr-8 text-xs leading-relaxed text-[#111B21] placeholder:text-slate-400 focus:border-[#008069] focus:outline-none min-h-[38px] max-h-32 overflow-y-auto block shadow-2xs"
                 disabled={isSubmitting}
                 onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    void handleSendMessage()
+                  }
+                }}
                 placeholder="Type a message..."
-                type="text"
+                rows={Math.min(4, Math.max(2, (inputText.match(/\n/g) || []).length + 1, Math.ceil(inputText.length / 28)))}
                 value={inputText}
               />
               <button
                 aria-label="Voice note"
-                className="absolute right-2 top-2 text-slate-500 hover:text-slate-800"
+                className="absolute right-2.5 bottom-2 text-slate-500 hover:text-slate-800 transition-colors"
                 type="button"
               >
                 <Mic className="size-3.5" />
@@ -431,7 +437,7 @@ export function WhatsAppPhoneSimulator({
             <button
               aria-label="Send message"
               className={cn(
-                'flex size-9 items-center justify-center rounded-full bg-[#008069] text-white shadow-sm transition-transform active:scale-95',
+                'flex size-9 items-center justify-center rounded-full bg-[#008069] text-white shadow-sm transition-transform active:scale-95 shrink-0 mb-0.5',
                 isSubmitting && 'opacity-60 cursor-not-allowed',
               )}
               disabled={isSubmitting || !inputText.trim()}
